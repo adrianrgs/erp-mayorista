@@ -1,0 +1,64 @@
+// FASE 1: Definición de Tipos (TypeScript)
+// ERP Módulo de Producto (Extranet Hotelera)
+
+export enum RegimenAlimentacion {
+  SOLO_HABITACION = "Solo Habitación",
+  DESAYUNO = "Desayuno",
+  MEDIA_PENSION = "Media Pensión",
+  TODO_INCLUIDO = "Todo Incluido"
+}
+
+export enum PropertyStatus {
+  ACTIVO = "Activo",
+  INACTIVO = "Inactivo"
+}
+
+export enum TipoCobro {
+  POR_HABITACION = "Por Habitación",
+  POR_PERSONA = "Por Persona"
+}
+
+export interface Property {
+  id: string;
+  nombre: string;
+  pais: string;
+  estado: string; // Estado de ubicación (ej. Nueva Esparta, Falcón, etc. en Venezuela)
+  ciudad: string;
+  categoria: number; // Estrellas (ej. 1-5)
+  status: PropertyStatus;
+  politicasGenerales: string;
+  imagen?: string; // Para visualización elegante de la galería
+  supplierName?: string; // Nombre de proveedor mayorista
+}
+
+export interface RoomType {
+  id: string;
+  property_id: string;
+  nombre: string; // ej. Habitación Standard Doble, Familiar, Suite Executive
+  regimenAlimentacion: RegimenAlimentacion; // Régimen alimenticio asociado a la habitación
+  capacidadMax: number;
+  ocupacionBase?: number;
+}
+
+export interface RatePlan {
+  id: string;
+  property_id: string;
+  roomType_id: string; // Tipo de habitación ligada
+  nombrePromocion: string; // ej. "Temporada Alta", "Temporada Baja", "Promo Escapada"
+  fechaInicio: string; // YYYY-MM-DD
+  fechaFin: string; // YYYY-MM-DD
+  tipoCobro: TipoCobro; // "Por Habitación" o "Por Persona"
+  tarifaBase: number;
+  tarifaExtraAdulto: number;
+  tarifaExtraNino: number;
+  politicasCancelacion: string;
+  mercado: 'NACIONAL' | 'INTERNACIONAL';
+}
+
+export interface StopSale {
+  id: string;
+  property_id: string;
+  fechaInicio: string; // YYYY-MM-DD
+  fechaFin: string; // YYYY-MM-DD
+  motivo?: string;
+}

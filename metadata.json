@@ -1,0 +1,6 @@
+{
+  "name": "ERP Mayorista de Turismo",
+  "description": "Cascarón de navegación y layout modular de la Fase 0 para un ERP de agencia de viajes mayorista.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
