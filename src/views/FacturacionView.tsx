@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Reservation, FinancialInvoice, ServiceItem, B2BClient, ServiceType } from "../types";
+import { Reservation, FinancialInvoice, ServiceItem, B2BClient, ServiceType, PayableObligation, ProviderStatement } from "../types";
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
 import { 
   FileCheck, 
@@ -41,6 +41,8 @@ interface FacturacionViewProps {
   ratePlans: RatePlan[];
   detailedProperties: Property[];
   onUpdateClient?: (updated: B2BClient) => void;
+  onAddPayableObligation?: (obligation: PayableObligation) => void;
+  onAddProviderStatement?: (statement: ProviderStatement) => void;
 }
 
 export default function FacturacionView({ 
@@ -52,7 +54,9 @@ export default function FacturacionView({
   roomTypes,
   ratePlans,
   detailedProperties,
-  onUpdateClient
+  onUpdateClient,
+  onAddPayableObligation,
+  onAddProviderStatement
 }: FacturacionViewProps) {
   const [search, setSearch] = useState("");
   const [selectedResId, setSelectedResId] = useState<string | null>(null);
@@ -498,6 +502,42 @@ export default function FacturacionView({
       servicios: updatedServices
     };
     onUpdateReservation(updatedRes);
+
+    // SIDE-EFFECT: Auto-generate Payable Obligation & Provider Statement (Libro Mayor)
+    const netCost = pendingServices.reduce((sum, s) => sum + s.precioNeto, 0);
+    const matchedProp = detailedProperties.find(p => p.nombre === activeRes.hotelName);
+    const providerName = matchedProp?.supplierName || activeRes.hotelName || "Proveedor General";
+
+    if (netCost > 0) {
+      if (onAddPayableObligation) {
+        const newObligation: PayableObligation = {
+          id: `PAY-${Math.floor(5000 + Math.random() * 4999)}`,
+          dueDate: activeRes.checkIn,
+          providerName: providerName,
+          serviceDetail: pendingServices.map(s => s.descripcion).join(", "),
+          locatorId: activeRes.id,
+          netCost: netCost,
+          paidAmount: 0.00,
+          status: "Pendiente",
+          date: new Date().toISOString().split("T")[0],
+          currency: "USD"
+        };
+        onAddPayableObligation(newObligation);
+      }
+
+      if (onAddProviderStatement) {
+        const newStatement: ProviderStatement = {
+          id: `DOC-FAC-${Math.floor(3000 + Math.random() * 6999)}`,
+          providerName: providerName,
+          date: new Date().toISOString().split("T")[0],
+          type: "Factura Recibida",
+          amount: netCost,
+          reference: `FAC-${activeRes.id}`,
+          status: "Pendiente"
+        };
+        onAddProviderStatement(newStatement);
+      }
+    }
 
     const invoiceStatus = isCredit ? "Facturado" : "Pagado";
     const receiptAmount = activeRes.comprobanteMonto || 0;

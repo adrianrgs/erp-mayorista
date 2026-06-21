@@ -79,6 +79,10 @@ export default function App() {
     setPayableObligations(prev => prev.map(o => o.id === updated.id ? updated : o));
   };
 
+  const handleAddPayableObligation = (newObligation: PayableObligation) => {
+    setPayableObligations(prev => [newObligation, ...prev]);
+  };
+
   const handleAddStatement = (newDoc: ProviderStatement) => {
     setProviderStatements(prev => [newDoc, ...prev]);
   };
@@ -598,18 +602,20 @@ export default function App() {
                     />
                   )}
                   {currentSection === ProjectView.FACTURACION && (
-                    <FacturacionView 
-                      reservations={reservations} 
-                      invoices={invoices}
-                      onUpdateReservation={handleUpdateReservation}
-                      onAddInvoice={handleAddInvoice}
-                      clients={clients}
-                      roomTypes={roomTypes}
-                      ratePlans={ratePlans}
-                      detailedProperties={detailedProperties}
-                      onUpdateClient={handleUpdateClient}
-                    />
-                  )}
+                     <FacturacionView 
+                       reservations={reservations} 
+                       invoices={invoices}
+                       onUpdateReservation={handleUpdateReservation}
+                       onAddInvoice={handleAddInvoice}
+                       clients={clients}
+                       roomTypes={roomTypes}
+                       ratePlans={ratePlans}
+                       detailedProperties={detailedProperties}
+                       onUpdateClient={handleUpdateClient}
+                       onAddPayableObligation={handleAddPayableObligation}
+                       onAddProviderStatement={handleAddStatement}
+                     />
+                   )}
                 {currentSection === ProjectView.VUELOS && (
                   <VuelosView 
                     flights={flights} 

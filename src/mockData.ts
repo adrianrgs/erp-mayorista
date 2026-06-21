@@ -10,7 +10,9 @@ import {
   ServiceType,
   ServiceItem,
   FleetVehicle,
-  FleetDriver
+  FleetDriver,
+  PayableObligation,
+  ProviderStatement
 } from "./types";
 import { Property, RoomType, RatePlan, StopSale, PropertyStatus, RegimenAlimentacion, TipoCobro } from "./types/producto";
 
@@ -1045,12 +1047,10 @@ export const initialPayableObligations: PayableObligation[] = [
     serviceDetail: "Habitación Standard Doble - 7 Noches - Lidotel Margarita",
     locatorId: "RES-8892",
     netCost: 840.00,
-    paidAmount: 840.00,
-    status: "Pagado Total",
+    paidAmount: 0.00,
+    status: "Pendiente",
     date: "2026-06-01",
-    paymentMethod: "Transferencia Bancaria",
-    reference: "TR-PROV-882910",
-    notes: "Factura completamente saldada al cierre de release.",
+    notes: "Neto pendiente de liquidación tras cobro de agencia.",
     currency: "USD"
   },
   {
