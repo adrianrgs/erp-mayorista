@@ -169,7 +169,8 @@ export default function CuentasPorPagarView({
       status: nextStatus,
       paymentMethod: paymentForm.method,
       reference: paymentForm.reference || `REF-PAG-${Math.floor(100000 + Math.random() * 900000)}`,
-      notes: paymentForm.notes || undefined
+      notes: paymentForm.notes || undefined,
+      attachedFile: paymentForm.attachedFile || activeObligationForPayment.attachedFile || undefined
     };
     onUpdateObligation(updated);
 

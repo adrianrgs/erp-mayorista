@@ -599,6 +599,8 @@ export default function App() {
                       detailedProperties={detailedProperties}
                       roomTypes={roomTypes}
                       ratePlans={ratePlans}
+                      invoices={invoices}
+                      payableObligations={payableObligations}
                     />
                   )}
                   {currentSection === ProjectView.FACTURACION && (

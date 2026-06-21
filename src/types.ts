@@ -203,6 +203,7 @@ export interface PayableObligation {
   notes?: string;
   date?: string;
   currency?: string;
+  attachedFile?: string;
 }
 
 export interface ProviderStatement {

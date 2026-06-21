@@ -36,7 +36,7 @@ import {
   Send,
   Clock
 } from "lucide-react";
-import { FinancialInvoice } from "../types";
+import { FinancialInvoice, PayableObligation } from "../types";
 
 interface ReservasViewProps {
   reservations: Reservation[];
@@ -48,6 +48,8 @@ interface ReservasViewProps {
   detailedProperties: Property[];
   roomTypes: RoomType[];
   ratePlans: RatePlan[];
+  invoices: FinancialInvoice[];
+  payableObligations: PayableObligation[];
 }
 
 // Helper to calculate pricing for an individual room
@@ -112,7 +114,9 @@ export default function ReservasView({
   onAddInvoice,
   detailedProperties,
   roomTypes,
-  ratePlans
+  ratePlans,
+  invoices,
+  payableObligations
 }: ReservasViewProps) {
   // Navigation inside the module:
   // 1: List (dashboard), 2: Expediente (details), 3: Crear Expediente (Cart), 4: Configurar Servicio
@@ -123,6 +127,36 @@ export default function ReservasView({
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("Todas");
   const [sortBy, setSortBy] = useState<"ultimas" | "checkin">("ultimas");
+
+  // --- VISOR DE COMPROBANTE MODAL STATES ---
+  const [showProvReceiptModal, setShowProvReceiptModal] = useState(false);
+  const [selectedObligationForReceipt, setSelectedObligationForReceipt] = useState<PayableObligation | null>(null);
+
+  // --- HELPERS TO RESOLVE PAYMENT STATUSES ---
+  const getClientPaymentStatus = (resId: string) => {
+    const resInvoices = (invoices || []).filter(inv => inv.clientName.includes(`Localizador ${resId}`) && inv.type === "Cobro");
+    if (resInvoices.length === 0) return { status: "Sin Facturar", color: "text-zinc-550 bg-zinc-50 border-zinc-200" };
+    const allPaid = resInvoices.every(inv => inv.status === "Pagado");
+    const anyPaid = resInvoices.some(inv => inv.status === "Pagado");
+    if (allPaid) return { status: "Cobrado Total", color: "text-emerald-700 bg-emerald-50 border-emerald-250 font-extrabold" };
+    if (anyPaid) return { status: "Cobrado Parcial", color: "text-blue-700 bg-blue-50 border-blue-200 font-bold" };
+    return { status: "Pendiente Cobro", color: "text-amber-700 bg-amber-50 border-amber-250 font-bold" };
+  };
+
+  const getProviderPaymentStatus = (resId: string) => {
+    const obligation = (payableObligations || []).find(o => o.locatorId === resId);
+    if (!obligation) return { status: "No Emitido", color: "text-zinc-550 bg-zinc-50 border-zinc-200", obligation: null };
+    if (obligation.status === "Pagado Total") {
+      return { status: "Pagado", color: "text-emerald-700 bg-emerald-50 border-emerald-250 font-extrabold", obligation };
+    }
+    if (obligation.status === "Pagado Parcial") {
+      return { status: "Abono Parcial", color: "text-blue-700 bg-blue-50 border-blue-200 font-bold", obligation };
+    }
+    if (obligation.status === "Vencido") {
+      return { status: "Vencido", color: "text-red-750 bg-red-50 border-red-200 font-black animate-pulse", obligation };
+    }
+    return { status: "Pendiente Pago", color: "text-amber-700 bg-amber-50 border-amber-250 font-bold", obligation };
+  };
 
   // --- SEND TO BILLING MODAL STATES ---
   const [showSendBillingModal, setShowSendBillingModal] = useState(false);
@@ -1213,14 +1247,16 @@ export default function ReservasView({
                     <th className="p-4">Servicios</th>
                     <th className="p-4 text-right">Total PVP</th>
                     <th className="p-4">Agencia B2B</th>
-                    <th className="p-4">Estatus</th>
+                    <th className="p-4">Estatus Reserva</th>
+                    <th className="p-4 text-center">Cobro B2B</th>
+                    <th className="p-4 text-center">Pago Proveedor</th>
                     <th className="p-4 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
                   {filteredAndSorted.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-zinc-400 italic">
+                      <td colSpan={11} className="p-8 text-center text-zinc-400 italic">
                         No se encontraron expedientes de reserva.
                       </td>
                     </tr>
@@ -1257,6 +1293,40 @@ export default function ReservasView({
                           <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border inline-flex items-center gap-1 ${getStatusBadge(r.status)}`}>
                             ● {r.status}
                           </span>
+                        </td>
+                        <td className="p-4 text-center">
+                          {(() => {
+                            const cPay = getClientPaymentStatus(r.id);
+                            return (
+                              <span className={`px-2 py-0.5 rounded text-[8.5px] uppercase tracking-wider border font-bold ${cPay.color}`}>
+                                {cPay.status}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
+                          {(() => {
+                            const pPay = getProviderPaymentStatus(r.id);
+                            return (
+                              <div className="flex items-center justify-center gap-1.5">
+                                <span className={`px-2 py-0.5 rounded text-[8.5px] uppercase tracking-wider border font-bold ${pPay.color}`}>
+                                  {pPay.status}
+                                </span>
+                                {pPay.obligation?.attachedFile && (
+                                  <button
+                                    title="Descargar/Ver Soporte de Pago de Tesorería"
+                                    onClick={() => {
+                                      setSelectedObligationForReceipt(pPay.obligation);
+                                      setShowProvReceiptModal(true);
+                                    }}
+                                    className="p-1 hover:bg-zinc-150 rounded text-zinc-600 transition-colors cursor-pointer"
+                                  >
+                                    <Download className="w-3.5 h-3.5 text-emerald-600" />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="p-4 text-center" onClick={e => e.stopPropagation()}>
                           <button
@@ -1758,6 +1828,68 @@ export default function ReservasView({
                   </div>
                 )}
               </div>
+
+              {/* Liquidación a Proveedores */}
+              {(() => {
+                const pPay = getProviderPaymentStatus(activeRes.id);
+                return (
+                  <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-3 shadow-xs text-left">
+                    <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block text-zinc-650">Liquidación a Proveedores</h4>
+                    {pPay.obligation ? (
+                      <div className="space-y-2.5 text-xs font-semibold">
+                        <div className="flex justify-between text-zinc-550">
+                          <span>Proveedor Legal:</span>
+                          <span className="text-zinc-900 font-extrabold">{pPay.obligation.providerName}</span>
+                        </div>
+                        <div className="flex justify-between text-zinc-550 font-mono">
+                          <span>Costo Neto:</span>
+                          <span className="text-zinc-900">${pPay.obligation.netCost.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                        </div>
+                        <div className="flex justify-between text-zinc-550 font-mono">
+                          <span>Importe Abonado:</span>
+                          <span className="text-emerald-700">${pPay.obligation.paidAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                        </div>
+                        <div className="flex justify-between border-t border-zinc-100 pt-2 text-zinc-555 font-mono">
+                          <span>Saldo Pendiente:</span>
+                          <span className={`font-black text-xs ${(pPay.obligation.netCost - pPay.obligation.paidAmount) > 0 ? "text-red-650" : "text-zinc-400"}`}>
+                            ${(pPay.obligation.netCost - pPay.obligation.paidAmount).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center border-t border-zinc-100 pt-2.5">
+                          <span>Estatus Pago:</span>
+                          <span className={`px-2 py-0.5 rounded text-[8.5px] uppercase tracking-wider border font-bold ${pPay.color}`}>
+                            {pPay.status}
+                          </span>
+                        </div>
+                        {pPay.obligation.attachedFile && (
+                          <div className="border-t border-zinc-100 pt-2.5 space-y-2">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Soporte de Tesorería</span>
+                            <div className="p-2 bg-zinc-50 border border-zinc-200 rounded flex items-center justify-between">
+                              <span className="font-mono text-[10.5px] text-zinc-700 truncate max-w-[180px] font-bold" title={pPay.obligation.attachedFile}>
+                                {pPay.obligation.attachedFile}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedObligationForReceipt(pPay.obligation);
+                                  setShowProvReceiptModal(true);
+                                }}
+                                className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-[9.5px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs flex items-center gap-1"
+                              >
+                                <Download className="w-3.5 h-3.5" /> Ver Soporte
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-550 text-[11px] rounded font-semibold leading-relaxed">
+                        No hay obligaciones de costo neto emitidas en Cuentas por Pagar para este expediente. Asegúrese de enviar a facturar y aprobar la reserva.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -4027,6 +4159,142 @@ export default function ReservasView({
                 <span>Confirmar & Enviar</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL DETALLE DE COMPROBANTE PROVEEDOR --- */}
+      {showProvReceiptModal && selectedObligationForReceipt && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in font-sans">
+          <div className="bg-white rounded-lg w-full max-w-lg shadow-2xl overflow-hidden animate-scale-up border border-zinc-200">
+            
+            {/* Modal Header */}
+            <div className="bg-zinc-950 text-white px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <h4 className="font-extrabold text-sm uppercase tracking-wider">Comprobante de Pago a Proveedor</h4>
+                  <p className="text-[10px] text-zinc-400 font-medium">Auditoría y Soporte de Egreso - Tesorería</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProvReceiptModal(false);
+                  setSelectedObligationForReceipt(null);
+                }}
+                className="p-1 hover:bg-zinc-900 rounded text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-5 text-left text-xs">
+              
+              {/* Receipt Preview card */}
+              <div className="bg-zinc-900 text-zinc-100 rounded-lg p-5 border border-zinc-800 font-mono shadow-md relative overflow-hidden">
+                {/* Decorative background watermark */}
+                <div className="absolute right-0 bottom-0 translate-x-4 translate-y-4 opacity-5 rotate-12">
+                  <CheckCircle2 className="w-48 h-48" />
+                </div>
+
+                <div className="flex justify-between border-b border-zinc-850 pb-2 mb-3 items-center">
+                  <span className="text-[9.5px] uppercase font-black text-zinc-500 tracking-wider">Foratour ERP - Comprobante de Egreso</span>
+                  <span className="text-[10.5px] font-black text-emerald-400">{selectedObligationForReceipt.id}</span>
+                </div>
+
+                <div className="space-y-2 font-semibold">
+                  <div className="grid grid-cols-3">
+                    <span className="text-zinc-550 text-[10px] uppercase">Beneficiario:</span>
+                    <span className="col-span-2 font-bold text-white uppercase text-[11px] truncate">{selectedObligationForReceipt.providerName}</span>
+                  </div>
+                  <div className="grid grid-cols-3">
+                    <span className="text-zinc-550 text-[10px] uppercase">Localizador:</span>
+                    <span className="col-span-2 font-bold text-white text-[11px]">{selectedObligationForReceipt.locatorId}</span>
+                  </div>
+                  <div className="grid grid-cols-3">
+                    <span className="text-zinc-550 text-[10px] uppercase">Importe Neto:</span>
+                    <span className="col-span-2 font-bold text-zinc-100 text-[11.5px]">${selectedObligationForReceipt.netCost.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                  </div>
+                  <div className="grid grid-cols-3">
+                    <span className="text-zinc-550 text-[10px] uppercase">Método Pago:</span>
+                    <span className="col-span-2 font-bold text-zinc-100 text-[11px]">{selectedObligationForReceipt.paymentMethod || "Transferencia Bancaria"}</span>
+                  </div>
+                  <div className="grid grid-cols-3">
+                    <span className="text-zinc-550 text-[10px] uppercase">Nro Operación:</span>
+                    <span className="col-span-2 font-bold text-emerald-400 text-[11.5px] tracking-wide select-all">{selectedObligationForReceipt.reference || "N/A"}</span>
+                  </div>
+                  {selectedObligationForReceipt.date && (
+                    <div className="grid grid-cols-3">
+                      <span className="text-zinc-555 text-[10px] uppercase">Fecha Emisión:</span>
+                      <span className="col-span-2 font-bold text-zinc-200 text-[11px]">{formatDate(selectedObligationForReceipt.date)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {selectedObligationForReceipt.notes && (
+                  <div className="border-t border-zinc-850 pt-2.5 mt-3 text-[10px] text-zinc-400 italic">
+                    Notas: {selectedObligationForReceipt.notes}
+                  </div>
+                )}
+              </div>
+
+              {/* Support file reference */}
+              <div className="space-y-1.5 bg-zinc-50 border border-zinc-200 p-4 rounded">
+                <span className="text-[10px] uppercase font-bold text-zinc-455 block">Archivo Adjunto de Tesorería</span>
+                <div className="flex items-center justify-between bg-white border border-zinc-200 rounded p-2.5">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-zinc-450" />
+                    <div>
+                      <span className="font-bold text-zinc-800 block text-[11px]">{selectedObligationForReceipt.attachedFile || "soporte_pago.pdf"}</span>
+                      <span className="text-[9.5px] text-zinc-450 block">Tamaño: 1.2 MB | Formato: PDF</span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[9px] font-bold uppercase">
+                    Verificado
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-zinc-50 border-t border-zinc-200 px-5 py-4 flex justify-between gap-3 font-semibold">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProvReceiptModal(false);
+                  setSelectedObligationForReceipt(null);
+                }}
+                className="px-4 py-2 border border-zinc-250 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase cursor-pointer"
+              >
+                Cerrar
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    alert(`Simulando descarga de soporte: ${selectedObligationForReceipt.attachedFile || "soporte_pago.pdf"}`);
+                  }}
+                  className="px-4 py-2 border border-zinc-250 hover:bg-zinc-100 text-zinc-700 bg-white rounded text-xs font-bold uppercase cursor-pointer flex items-center gap-1.5 shadow-3xs"
+                >
+                  <Download className="w-3.5 h-3.5" /> Descargar PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    alert(`El comprobante de pago ha sido enviado exitosamente al correo del proveedor legal: ${selectedObligationForReceipt.providerName}.`);
+                    setShowProvReceiptModal(false);
+                    setSelectedObligationForReceipt(null);
+                  }}
+                  className="px-5 py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase cursor-pointer shadow-xs flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5 text-emerald-400" /> Enviar a Proveedor
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
