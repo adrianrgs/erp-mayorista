@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Reservation, FinancialInvoice, ServiceItem, B2BClient, ServiceType, PayableObligation, ProviderStatement } from "../types";
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
+import type { FlightTicket } from "../types/aereos";
 import { 
   FileCheck, 
   Clock, 
@@ -43,6 +44,8 @@ interface FacturacionViewProps {
   onUpdateClient?: (updated: B2BClient) => void;
   onAddPayableObligation?: (obligation: PayableObligation) => void;
   onAddProviderStatement?: (statement: ProviderStatement) => void;
+  boletos?: FlightTicket[];
+  onBoletosChange?: React.Dispatch<React.SetStateAction<FlightTicket[]>>;
 }
 
 export default function FacturacionView({ 
@@ -56,7 +59,9 @@ export default function FacturacionView({
   detailedProperties,
   onUpdateClient,
   onAddPayableObligation,
-  onAddProviderStatement
+  onAddProviderStatement,
+  boletos = [],
+  onBoletosChange
 }: FacturacionViewProps) {
   const [search, setSearch] = useState("");
   const [selectedResId, setSelectedResId] = useState<string | null>(null);
@@ -412,8 +417,50 @@ export default function FacturacionView({
     }
   };
 
+  const aereoReservations: Reservation[] = boletos
+    .filter(b => b.expedienteAereo && b.expedienteAereo.status !== "Borrador")
+    .map(b => {
+      const exp = b.expedienteAereo!;
+      const checkIn = b.segmentos?.[0]?.fecha;
+      const origin = b.segmentos?.[0]?.origen || "";
+      const dest = b.segmentos && b.segmentos.length > 0 ? b.segmentos[b.segmentos.length-1].destino : "";
+      
+      return {
+        id: exp.id,
+        holder: exp.titular,
+        checkIn: checkIn,
+        checkOut: checkIn, // Aéreos no tienen un checkout tan claro en el mismo formato, usamos checkIn
+        pax: b.pasajeros?.length || 1,
+        totalPrice: b.precioVenta || 0,
+        netPrice: b.costoNeto || 0,
+        status: "Confirmada",
+        agenciaName: exp.clienteB2BNombre,
+        comprobanteMonto: exp.comprobanteMonto,
+        hotelName: "Boleto Aéreo GDS",
+        facturacionTipo: exp.facturacionTipo,
+        servicios: [
+          {
+            id: b.id,
+            tipo: ServiceType.AEREO,
+            descripcion: `PNR: ${b.pnr} | Ruta: ${origin}-${dest}`,
+            precioNeto: b.costoNeto,
+            precioVenta: b.precioVenta,
+            statusFacturacion: exp.status === "Solicitado" ? "Solicitado" : 
+                               exp.status === "Facturado" || exp.status === "PagadoAerolinea" ? "Facturado" : "Rechazado",
+            detalles: {
+              pnr: b.pnr,
+              pasajeros: b.pasajeros,
+              segmentos: b.segmentos
+            }
+          }
+        ]
+      } as Reservation;
+    });
+
+  const allBookings = [...reservations, ...aereoReservations];
+
   // Only manage actual bookings that have been sent to billing (i.e. has at least one service with Solicitado, Facturado, or Rechazado status)
-  const realBookings = reservations.filter(r => {
+  const realBookings = allBookings.filter(r => {
     const isReal = r.tipo === "Reserva Real" || r.tipo === undefined;
     if (!isReal) return false;
     const services = r.servicios || [];
@@ -421,9 +468,12 @@ export default function FacturacionView({
   });
 
   const filtered = realBookings.filter(r => {
-    return r.id.toLowerCase().includes(search.toLowerCase()) ||
-           r.holder.toLowerCase().includes(search.toLowerCase()) ||
-           (r.agenciaName || "").toLowerCase().includes(search.toLowerCase());
+    const safeId = r.id || "";
+    const safeHolder = r.holder || "";
+    const safeAgencia = r.agenciaName || "";
+    return safeId.toLowerCase().includes(search.toLowerCase()) ||
+           safeHolder.toLowerCase().includes(search.toLowerCase()) ||
+           safeAgencia.toLowerCase().includes(search.toLowerCase());
   });
 
   // Sort: Put cancellation requests first, then pending billing requests ("Solicitado")
@@ -501,7 +551,16 @@ export default function FacturacionView({
       ...activeRes,
       servicios: updatedServices
     };
-    onUpdateReservation(updatedRes);
+    
+    if (activeRes.hotelName === "Boleto Aéreo GDS" && onBoletosChange) {
+      const boletoId = activeRes.servicios?.[0]?.id;
+      const boleto = boletos.find(b => b.id === boletoId);
+      if (boleto && boleto.expedienteAereo) {
+        onBoletosChange(prev => prev.map(b => b.id === boleto.id ? { ...b, expedienteAereo: { ...b.expedienteAereo!, status: "Facturado" } } : b));
+      }
+    } else {
+      onUpdateReservation(updatedRes);
+    }
 
     // SIDE-EFFECT: Auto-generate Payable Obligation & Provider Statement (Libro Mayor)
     const netCost = pendingServices.reduce((sum, s) => sum + s.precioNeto, 0);
@@ -667,7 +726,16 @@ export default function FacturacionView({
       ...activeRes,
       servicios: updatedServices
     };
-    onUpdateReservation(updatedRes);
+    
+    if (activeRes.hotelName === "Boleto Aéreo GDS" && onBoletosChange) {
+      const boletoId = activeRes.servicios?.[0]?.id;
+      const boleto = boletos.find(b => b.id === boletoId);
+      if (boleto && boleto.expedienteAereo) {
+        onBoletosChange(prev => prev.map(b => b.id === boleto.id ? { ...b, expedienteAereo: { ...b.expedienteAereo!, status: "Borrador" as any } } : b));
+      }
+    } else {
+      onUpdateReservation(updatedRes);
+    }
 
     setStatusMessage(`⚠ Solicitud de facturación rechazada para el Expediente ${activeRes.id}. Se ha devuelto al Dpto. de Reservas para su revisión.`);
     setTimeout(() => setStatusMessage(""), 5000);
@@ -695,7 +763,16 @@ export default function FacturacionView({
       ...activeRes,
       servicios: updatedServices
     };
-    onUpdateReservation(updatedRes);
+    
+    if (activeRes.hotelName === "Boleto Aéreo GDS" && onBoletosChange) {
+      const boletoId = activeRes.servicios?.[0]?.id;
+      const boleto = boletos.find(b => b.id === boletoId);
+      if (boleto && boleto.expedienteAereo) {
+        onBoletosChange(prev => prev.map(b => b.id === boleto.id ? { ...b, expedienteAereo: { ...b.expedienteAereo!, status: "Borrador" as any } } : b));
+      }
+    } else {
+      onUpdateReservation(updatedRes);
+    }
 
     // Find invoices associated with this reservation locator (excluding ABO- abonos to avoid double refunding excesses)
     const associatedInvoices = invoices.filter(inv => 

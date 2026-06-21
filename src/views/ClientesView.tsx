@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { B2BClient, ClientType, ClientStatus, FinancialInvoice, Reservation, ServiceType } from "../types";
+import { FlightTicket } from "../types/aereos";
 import { RoomType, RatePlan, TipoCobro, Property } from "../types/producto";
 import { 
   Users, 
@@ -27,6 +28,7 @@ interface ClientesViewProps {
   onAddClient: (newClient: B2BClient) => void;
   invoices: FinancialInvoice[];
   reservations: Reservation[];
+  boletos?: FlightTicket[];
   roomTypes: RoomType[];
   ratePlans: RatePlan[];
   detailedProperties: Property[];
@@ -97,6 +99,7 @@ export default function ClientesView({
   onAddClient,
   invoices,
   reservations,
+  boletos = [],
   roomTypes,
   ratePlans,
   detailedProperties
@@ -138,6 +141,24 @@ export default function ClientesView({
 
   // Selected reservation details (Level 3)
   const selectedRes = reservations.find(r => r.id === selectedResId);
+
+  // Combine Terrestrial and Flight reservations
+  const aereoReservations = boletos
+    .filter(b => b.expedienteAereo && b.expedienteAereo.status !== "Borrador")
+    .map(b => {
+      const exp = b.expedienteAereo!;
+      return {
+        id: exp.id,
+        holder: exp.titular,
+        hotelName: "Boleto Aéreo GDS",
+        checkIn: b.segmentos?.[0]?.fecha || "N/A",
+        totalPrice: b.precioVenta || 0,
+        status: "Confirmada",
+        agenciaName: exp.clienteB2BNombre,
+      } as Reservation;
+    });
+
+  const allBookings = [...reservations, ...aereoReservations];
 
   // KPI Calculations
   const totalActivos = clients.filter(c => c.status === ClientStatus.ACTIVO).length;
@@ -625,20 +646,20 @@ export default function ClientesView({
                   }
                   
                   // 3. Localizador / Expediente match
-                  const match = inv.clientName.match(/Localizador\s+(RES-\d+)/i);
+                  const match = inv.clientName.match(/Localizador\s+((?:RES|AER)-\d+)/i);
                   if (match) {
                     const locator = match[1];
-                    const res = reservations.find(r => r.id === locator);
+                    const res = allBookings.find(r => r.id === locator);
                     if (res && res.agenciaName && cleanName(res.agenciaName) === normalizedClient) {
                       return true;
                     }
                   }
 
                   // 4. Anulación localizador match
-                  const matchAnulacion = inv.clientName.match(/Anulación:.*(RES-\d+)/i);
+                  const matchAnulacion = inv.clientName.match(/Anulación:.*((?:RES|AER)-\d+)/i);
                   if (matchAnulacion) {
                     const locator = matchAnulacion[1];
-                    const res = reservations.find(r => r.id === locator);
+                    const res = allBookings.find(r => r.id === locator);
                     if (res && res.agenciaName && cleanName(res.agenciaName) === normalizedClient) {
                       return true;
                     }
@@ -724,7 +745,7 @@ export default function ClientesView({
 
             {/* Historial de Expedientes Validados */}
             {(() => {
-              const clientReservations = reservations.filter(r => 
+              const clientReservations = allBookings.filter(r => 
                 r.agenciaName && r.agenciaName.toLowerCase() === activeClient.nombre.toLowerCase()
               );
 

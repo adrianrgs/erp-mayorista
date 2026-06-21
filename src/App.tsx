@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, FinancialInvoice, B2BClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement } from "./types";
 import { Property, RoomType, RatePlan, StopSale } from "./types/producto";
+import type { FlightTicket } from "./types/aereos";
 import { 
   initialProperties, 
   initialReservas, 
@@ -58,6 +59,7 @@ export default function App() {
   const [properties, setProperties] = useState<HotelProperty[]>(initialProperties);
   const [reservations, setReservations] = useState<Reservation[]>(initialReservas);
   const [flights, setFlights] = useState<FlightLeg[]>(initialFlights);
+  const [boletos, setBoletos] = useState<FlightTicket[]>([]);
   const [transfers, setTransfers] = useState<TransferService[]>(initialTransfers);
   const [invoices, setInvoices] = useState<FinancialInvoice[]>(initialInvoices);
   const [clients, setClients] = useState<B2BClient[]>(initialClients);
@@ -601,6 +603,8 @@ export default function App() {
                       ratePlans={ratePlans}
                       invoices={invoices}
                       payableObligations={payableObligations}
+                      boletos={boletos}
+                      onBoletosChange={setBoletos}
                     />
                   )}
                   {currentSection === ProjectView.FACTURACION && (
@@ -616,13 +620,19 @@ export default function App() {
                        onUpdateClient={handleUpdateClient}
                        onAddPayableObligation={handleAddPayableObligation}
                        onAddProviderStatement={handleAddStatement}
+                       boletos={boletos}
+                       onBoletosChange={setBoletos}
                      />
                    )}
                 {currentSection === ProjectView.VUELOS && (
-                  <VuelosView 
-                    flights={flights} 
+                  <VuelosView
+                    flights={flights}
+                    boletos={boletos}
+                    onBoletosChange={setBoletos}
+                    clients={clients}
                   />
                 )}
+
                 {currentSection === ProjectView.OPERACIONES && (
                   <OperacionesView
                     transfers={transfers}
@@ -648,6 +658,7 @@ export default function App() {
                     onAddClient={handleAddClient} 
                     invoices={invoices}
                     reservations={reservations}
+                    boletos={boletos}
                     roomTypes={roomTypes}
                     ratePlans={ratePlans}
                     detailedProperties={detailedProperties}

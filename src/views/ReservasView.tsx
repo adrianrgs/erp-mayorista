@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient } from "../types";
 import { Property, RoomType, RatePlan, TipoCobro } from "../types/producto";
+import type { FlightTicket } from "../types/aereos";
+import { buildRoute, formatGDSDate } from "../lib/parsers/pnrParser";
 import { 
   Calendar, 
   User, 
@@ -34,7 +36,8 @@ import {
   Share2,
   FileCheck,
   Send,
-  Clock
+  Clock,
+  ArrowRight
 } from "lucide-react";
 import { FinancialInvoice, PayableObligation } from "../types";
 
@@ -50,6 +53,9 @@ interface ReservasViewProps {
   ratePlans: RatePlan[];
   invoices: FinancialInvoice[];
   payableObligations: PayableObligation[];
+  // ── Conexión con Módulo de Vuelos ──────────────────────────────────────────
+  boletos?: FlightTicket[];
+  onBoletosChange?: React.Dispatch<React.SetStateAction<FlightTicket[]>>;
 }
 
 // Helper to calculate pricing for an individual room
@@ -116,7 +122,9 @@ export default function ReservasView({
   roomTypes,
   ratePlans,
   invoices,
-  payableObligations
+  payableObligations,
+  boletos = [],
+  onBoletosChange
 }: ReservasViewProps) {
   // Navigation inside the module:
   // 1: List (dashboard), 2: Expediente (details), 3: Crear Expediente (Cart), 4: Configurar Servicio
@@ -179,6 +187,14 @@ export default function ReservasView({
   const [cartFlightNo, setCartFlightNo] = useState("");
   const [cartServices, setCartServices] = useState<ServiceItem[]>([]);
   const [cartTipo, setCartTipo] = useState<"Cotización" | "Reserva Real">("Reserva Real");
+
+  // ── Estado de vinculación con Módulo de Vuelos ─────────────────────────────
+  /** ID del boleto seleccionado para vincular al expediente */
+  const [cartBoletoId, setCartBoletoId] = useState<string | null>(null);
+  /** Controla apertura del drawer de búsqueda de boletos */
+  const [showBoletoDrawer, setShowBoletoDrawer] = useState(false);
+  /** Query de búsqueda dentro del drawer */
+  const [boletoSearch, setBoletoSearch] = useState("");
 
   const handleConvertToRealBooking = () => {
     if (!activeRes) return;
@@ -1044,6 +1060,20 @@ export default function ReservasView({
       };
 
       onAddReservation(newRes);
+
+      // ── AUTO-VINCULAR el boleto seleccionado ──────────────────────────────
+      if (cartBoletoId && onBoletosChange) {
+        onBoletosChange(prev =>
+          prev.map(b =>
+            b.id === cartBoletoId
+              ? { ...b, vinculadoAExpediente: true, expedienteId: cartId }
+              : b
+          )
+        );
+      }
+      setCartBoletoId(null);
+      // ─────────────────────────────────────────────────────────────────────
+
       setSelectedResId(cartId);
       setViewLevel(2);
       setSubmitSuccess(`✓ Expediente "${cartId}" creado exitosamente.`);
@@ -2203,6 +2233,65 @@ export default function ReservasView({
                       onChange={(e) => setCartSpecialRequests(e.target.value)}
                     />
                   </div>
+                </div>
+
+                {/* ── BOLETO AÉREO VINCULADO ──────────────────────────────── */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Plane className="w-3.5 h-3.5" />
+                      Boleto Aéreo Vinculado
+                    </label>
+                    {cartBoletoId && (
+                      <button
+                        type="button"
+                        onClick={() => { setCartBoletoId(null); setCartFlightNo(""); }}
+                        className="text-[10px] text-red-500 hover:text-red-700 font-bold uppercase tracking-wide cursor-pointer"
+                      >
+                        × Desvincular
+                      </button>
+                    )}
+                  </div>
+
+                  {cartBoletoId ? (() => {
+                    const b = boletos.find(x => x.id === cartBoletoId);
+                    if (!b) return null;
+                    const ruta = buildRoute(b.segmentos);
+                    const primerSeg = b.segmentos[0];
+                    return (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded bg-emerald-600 flex items-center justify-center flex-shrink-0">
+                            <Plane className="w-4 h-4 text-white" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-emerald-800 font-mono">{b.pnr} — {ruta}</p>
+                            <p className="text-[10px] text-emerald-600 font-medium">
+                              {b.pasajeros.map(p => p.nombre.split("/")[0]).join(" · ")} · {primerSeg ? formatGDSDate(primerSeg.fecha) : ""}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 bg-emerald-100 text-emerald-700 border border-emerald-300 rounded">Vinculado ✓</span>
+                      </div>
+                    );
+                  })() : (
+                    <button
+                      type="button"
+                      id="btn-buscar-boleto-drawer"
+                      onClick={() => { setBoletoSearch(""); setShowBoletoDrawer(true); }}
+                      className="w-full flex items-center justify-between p-3 border border-dashed border-zinc-300 rounded hover:border-zinc-500 hover:bg-zinc-50 transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2 text-zinc-400 group-hover:text-zinc-700 transition-colors">
+                        <Plane className="w-4 h-4" />
+                        <span className="text-xs font-semibold">
+                          {boletos.filter(b => !b.vinculadoAExpediente).length > 0
+                            ? `Buscar en ${boletos.filter(b => !b.vinculadoAExpediente).length} boleto${boletos.filter(b => !b.vinculadoAExpediente).length > 1 ? 's' : ''} libre${boletos.filter(b => !b.vinculadoAExpediente).length > 1 ? 's' : ''}...`
+                            : 'Sin boletos disponibles en el módulo de Vuelos'}
+                        </span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600 transition-colors" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -4299,6 +4388,227 @@ export default function ReservasView({
         </div>
       )}
 
+      {/* ══════════════════════════════════════════════════════════════════════
+          DRAWER: BUSCADOR DE BOLETOS AÉREOS
+          Deslizante desde la derecha, activado desde el formulario de expediente.
+      ══════════════════════════════════════════════════════════════════════ */}
+      {showBoletoDrawer && (() => {
+        // Filtrar boletos libres según la búsqueda del agente
+        const query = boletoSearch.trim().toUpperCase();
+        const boletosLibres = boletos.filter(b => !b.vinculadoAExpediente);
+        const resultados = query.length === 0
+          ? boletosLibres
+          : boletosLibres.filter(b =>
+              b.pnr.includes(query) ||
+              b.pasajeros.some(p =>
+                p.nombre.includes(query) ||
+                p.nombre.split("/").some(part => part.includes(query))
+              ) ||
+              b.segmentos.some(s =>
+                s.origen.includes(query) || s.destino.includes(query) ||
+                s.aerolinea.includes(query) || s.numeroVuelo.includes(query)
+              )
+            );
+
+        return (
+          <>
+            {/* Overlay oscuro */}
+            <div
+              className="fixed inset-0 bg-black/40 z-40 backdrop-blur-[2px]"
+              onClick={() => setShowBoletoDrawer(false)}
+            />
+
+            {/* Panel deslizante */}
+            <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white z-50 shadow-2xl flex flex-col">
+
+              {/* Header del drawer */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200 bg-zinc-950 flex-shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded bg-zinc-800 flex items-center justify-center">
+                    <Plane className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white">Boletos Aéreos</h3>
+                    <p className="text-[10px] text-zinc-400 font-medium">
+                      {boletosLibres.length} disponible{boletosLibres.length !== 1 ? "s" : ""} para vincular
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowBoletoDrawer(false)}
+                  className="w-7 h-7 flex items-center justify-center rounded text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Barra de búsqueda */}
+              <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50 flex-shrink-0">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <input
+                    id="drawer-boleto-search"
+                    autoFocus
+                    type="text"
+                    value={boletoSearch}
+                    onChange={e => setBoletoSearch(e.target.value)}
+                    placeholder="Buscar por nombre, PNR, ruta, aerolínea..."
+                    className="w-full pl-9 pr-4 py-2.5 border border-zinc-200 rounded text-xs bg-white focus:outline-none focus:border-zinc-500 font-medium"
+                  />
+                </div>
+                {query.length > 0 && (
+                  <p className="text-[10px] text-zinc-400 font-medium mt-1.5">
+                    {resultados.length} resultado{resultados.length !== 1 ? "s" : ""} para "{boletoSearch}"
+                  </p>
+                )}
+              </div>
+
+              {/* Lista de boletos */}
+              <div className="flex-1 overflow-y-auto">
+                {boletosLibres.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center px-8 py-12">
+                    <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-3">
+                      <Plane className="w-5 h-5 text-zinc-300" />
+                    </div>
+                    <p className="text-sm font-bold text-zinc-500 mb-1">Sin boletos cargados</p>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                      Ve al módulo de <strong>Vuelos</strong> y carga un PNR primero para poder vincularlo aquí.
+                    </p>
+                  </div>
+                ) : resultados.length === 0 ? (
+                  <div className="p-8 text-center text-zinc-400 text-xs font-medium">
+                    Sin resultados para "{boletoSearch}"
+                  </div>
+                ) : (
+                  <div className="divide-y divide-zinc-100">
+                    {resultados.map(b => {
+                      const ruta = buildRoute(b.segmentos);
+                      const primerSeg = b.segmentos[0];
+                      const ultimoSeg = b.segmentos[b.segmentos.length - 1];
+                      const margen = b.precioVenta > 0 && b.costoNeto > 0
+                        ? ((b.precioVenta - b.costoNeto) / b.precioVenta * 100).toFixed(1)
+                        : null;
+
+                      return (
+                        <div key={b.id} className="p-4 hover:bg-zinc-50 transition-colors">
+
+                          {/* Cabecera del boleto */}
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-black text-sm text-zinc-900 tracking-wider">
+                                {b.pnr}
+                              </span>
+                              <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 bg-zinc-100 text-zinc-500 border border-zinc-200 rounded">
+                                {b.segmentos.length} tramo{b.segmentos.length !== 1 ? "s" : ""}
+                              </span>
+                            </div>
+                            <button
+                              id={`btn-vincular-${b.id}`}
+                              onClick={() => {
+                                setCartBoletoId(b.id);
+                                setCartFlightNo(b.pnr);
+                                setShowBoletoDrawer(false);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 text-white text-[10px] font-bold rounded hover:bg-zinc-700 transition-colors cursor-pointer flex-shrink-0"
+                            >
+                              <Plane className="w-3 h-3" />
+                              Vincular
+                            </button>
+                          </div>
+
+                          {/* Ruta visual */}
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="text-center">
+                              <p className="text-lg font-black text-zinc-900 leading-none">{primerSeg?.origen ?? "—"}</p>
+                              <p className="text-[9px] text-zinc-400 font-medium mt-0.5">{primerSeg ? formatGDSDate(primerSeg.fecha) : ""}</p>
+                            </div>
+                            <div className="flex-1 flex items-center gap-1">
+                              <div className="flex-1 h-[1px] bg-zinc-200" />
+                              <Plane className="w-3.5 h-3.5 text-zinc-400 rotate-0" />
+                              {b.segmentos.length > 1 && (
+                                <span className="text-[8px] font-bold text-zinc-400 bg-zinc-100 px-1 rounded">
+                                  {b.segmentos.length - 1} esc
+                                </span>
+                              )}
+                              <div className="flex-1 h-[1px] bg-zinc-200" />
+                            </div>
+                            <div className="text-center">
+                              <p className="text-lg font-black text-zinc-900 leading-none">{ultimoSeg?.destino ?? "—"}</p>
+                              <p className="text-[9px] text-zinc-400 font-medium mt-0.5">{ultimoSeg ? formatGDSDate(ultimoSeg.fecha) : ""}</p>
+                            </div>
+                          </div>
+
+                          {/* Segmentos detallados */}
+                          <div className="space-y-1 mb-3">
+                            {b.segmentos.map((seg, i) => (
+                              <div key={i} className="flex items-center gap-2 text-[10px] bg-zinc-50 px-2.5 py-1.5 rounded border border-zinc-100">
+                                <span className="font-mono font-bold text-zinc-700 w-12 flex-shrink-0">
+                                  {seg.aerolinea}{seg.numeroVuelo}
+                                </span>
+                                <span className="text-zinc-400 font-bold w-4 flex-shrink-0 text-center">{seg.clase}</span>
+                                <span className="font-bold text-zinc-800">{seg.origen}</span>
+                                <ArrowRight className="w-2.5 h-2.5 text-zinc-300 flex-shrink-0" />
+                                <span className="font-bold text-zinc-800">{seg.destino}</span>
+                                <span className="ml-auto text-zinc-400 font-mono">{seg.horaSalida}</span>
+                                <span className={`text-[8px] font-black px-1 py-0.5 rounded border ${
+                                  seg.status.startsWith("HK")
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-amber-50 text-amber-700 border-amber-200"
+                                }`}>{seg.status}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Pasajeros */}
+                          <div className="flex flex-wrap gap-1 mb-3">
+                            {b.pasajeros.map((p, i) => (
+                              <span key={i} className="text-[9px] font-semibold text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
+                                {p.nombre} <span className="text-zinc-400">{p.tipo}</span>
+                              </span>
+                            ))}
+                          </div>
+
+                          {/* Datos financieros */}
+                          <div className="flex items-center justify-between text-[10px]">
+                            <div className="flex gap-3">
+                              <span className="text-zinc-400 font-medium">
+                                Neto: <strong className="text-zinc-700">${b.costoNeto.toLocaleString()}</strong>
+                              </span>
+                              <span className="text-zinc-400 font-medium">
+                                PVP: <strong className="text-zinc-900">${b.precioVenta.toLocaleString()}</strong>
+                              </span>
+                            </div>
+                            {margen !== null && (
+                              <span className={`font-bold px-1.5 py-0.5 rounded ${
+                                parseFloat(margen) >= 10
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : parseFloat(margen) >= 5
+                                  ? "bg-amber-50 text-amber-700"
+                                  : "bg-red-50 text-red-700"
+                              }`}>
+                                Margen {margen}%
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-4 py-3 border-t border-zinc-100 bg-zinc-50 flex-shrink-0">
+                <p className="text-[10px] text-zinc-400 text-center font-medium">
+                  Solo se muestran boletos con estado <strong>Libre</strong> · Los vinculados no aparecen
+                </p>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
     </div>
   );
 }
+

@@ -125,11 +125,13 @@ export interface B2BClient {
 
 export enum ServiceType {
   ALOJAMIENTO = "Alojamiento",
+  AEREO = "Boleto Aéreo",
   TRASLADO = "Traslado",
   RENT_A_CAR = "Rent a Car",
   SEGURO = "Seguro de Viaje",
   MANUAL = "Entrada Manual"
 }
+
 
 export interface ServiceItem {
   id: string;
