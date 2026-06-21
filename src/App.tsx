@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, FinancialInvoice, B2BClient, FleetVehicle, FleetDriver } from "./types";
+import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, FinancialInvoice, B2BClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement } from "./types";
 import { Property, RoomType, RatePlan, StopSale } from "./types/producto";
 import { 
   initialProperties, 
@@ -13,7 +13,9 @@ import {
   initialRatePlans,
   initialStopSales,
   initialFleetVehicles,
-  initialFleetDrivers
+  initialFleetDrivers,
+  initialPayableObligations,
+  initialProviderStatements
 } from "./mockData";
 import PropiedadesView from "./views/PropiedadesView";
 import ReservasView from "./views/ReservasView";
@@ -23,6 +25,7 @@ import AdministracionView from "./views/AdministracionView";
 import ClientesView from "./views/ClientesView";
 import FacturacionView from "./views/FacturacionView";
 import CobranzasView from "./views/CobranzasView";
+import CuentasPorPagarView from "./views/CuentasPorPagarView";
 
 import { 
   Building2, 
@@ -43,7 +46,8 @@ import {
   Terminal,
   Users,
   FileText,
-  ReceiptText
+  ReceiptText,
+  TrendingDown
 } from "lucide-react";
 
 export default function App() {
@@ -66,6 +70,18 @@ export default function App() {
   // Fleet state
   const [fleetVehicles, setFleetVehicles] = useState<FleetVehicle[]>(initialFleetVehicles);
   const [fleetDrivers, setFleetDrivers] = useState<FleetDriver[]>(initialFleetDrivers);
+
+  // Accounts Payable state
+  const [payableObligations, setPayableObligations] = useState<PayableObligation[]>(initialPayableObligations);
+  const [providerStatements, setProviderStatements] = useState<ProviderStatement[]>(initialProviderStatements);
+
+  const handleUpdateObligation = (updated: PayableObligation) => {
+    setPayableObligations(prev => prev.map(o => o.id === updated.id ? updated : o));
+  };
+
+  const handleAddStatement = (newDoc: ProviderStatement) => {
+    setProviderStatements(prev => [newDoc, ...prev]);
+  };
 
   // Selector for showing Literal Next.js Phase 0 empty placeholders vs Interactive fully-realized previews
   const [isFase0SkeletonView, setIsFase0SkeletonView] = useState<boolean>(false);
@@ -195,6 +211,8 @@ export default function App() {
         return "Módulo de Facturación - Dpto. Facturación";
       case ProjectView.COBRANZAS:
         return "Módulo de Cuentas por Cobrar - Dpto. Tesorería";
+      case ProjectView.CUENTAS_PAGAR:
+        return "Módulo de Cuentas por Pagar - Dpto. Tesorería y Pagos";
     }
   };
 
@@ -216,6 +234,8 @@ export default function App() {
         return "Este es el lienzo de trabajo del departamento de facturación y cobranzas. Aquí se consolidan las facturas de expedientes y servicios adicionales emitidos a agencias B2B.";
       case ProjectView.COBRANZAS:
         return "Este es el espacio de control de cuentas por cobrar, gestión de deudas activas de agencias, conciliación bancaria y validación de comprobantes de pago de Foratour ERP.";
+      case ProjectView.CUENTAS_PAGAR:
+        return "Este es el lienzo de trabajo para el control de deudas netas de servicios, conciliaciones con proveedores locales, hoteles y aerolíneas, y la emisión de transferencias bancarias de egresos.";
     }
   };
 
@@ -384,6 +404,24 @@ export default function App() {
               <span className="text-xs font-semibold">8. Cuentas por Cobrar</span>
             </div>
             {currentSection !== ProjectView.COBRANZAS && (
+              <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
+            )}
+          </button>
+
+          <button
+            id="nav-cuentaspagar"
+            onClick={() => setCurrentSection(ProjectView.CUENTAS_PAGAR)}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all cursor-pointer ${
+              currentSection === ProjectView.CUENTAS_PAGAR
+                ? "bg-zinc-900 text-white font-semibold"
+                : "text-zinc-400 hover:text-white hover:bg-zinc-900/40"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <TrendingDown className="w-4 h-4 flex-shrink-0" />
+              <span className="text-xs font-semibold">9. Cuentas por Pagar</span>
+            </div>
+            {currentSection !== ProjectView.CUENTAS_PAGAR && (
               <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
             )}
           </button>
@@ -615,6 +653,14 @@ export default function App() {
                     onUpdateInvoice={handleUpdateInvoice}
                     reservations={reservations}
                     onAddInvoice={handleAddInvoice}
+                  />
+                )}
+                {currentSection === ProjectView.CUENTAS_PAGAR && (
+                  <CuentasPorPagarView 
+                    obligations={payableObligations} 
+                    onUpdateObligation={handleUpdateObligation} 
+                    statements={providerStatements}
+                    onAddStatement={handleAddStatement}
                   />
                 )}
               </div>

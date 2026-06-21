@@ -6,7 +6,8 @@ export enum ProjectView {
   ADMINISTRACION = "administracion",
   CLIENTES = "clientes",
   FACTURACION = "facturacion",
-  COBRANZAS = "cobranzas"
+  COBRANZAS = "cobranzas",
+  CUENTAS_PAGAR = "cuentaspagar"
 }
 
 export interface HotelProperty {
@@ -185,3 +186,32 @@ export interface FleetDriver {
   status: FleetDriverStatus;
   observaciones?: string;
 }
+
+// ─── MÓDULO CUENTAS POR PAGAR (TESORERÍA) ────────────────────────────────────
+
+export interface PayableObligation {
+  id: string;
+  dueDate: string;
+  providerName: string;
+  serviceDetail: string;
+  locatorId: string;
+  netCost: number;
+  paidAmount: number;
+  status: "Pendiente" | "Vencido" | "Pagado Parcial" | "Pagado Total";
+  paymentMethod?: string;
+  reference?: string;
+  notes?: string;
+  date?: string;
+  currency?: string;
+}
+
+export interface ProviderStatement {
+  id: string;
+  providerName: string;
+  date: string;
+  type: "Factura Recibida" | "Pago Emitido";
+  amount: number;
+  reference: string;
+  status: string;
+}
+

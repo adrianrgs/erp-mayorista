@@ -25,7 +25,8 @@ import {
   Clock,
   TrendingUp,
   ArrowUpRight,
-  ShieldCheck
+  ShieldCheck,
+  Eye
 } from "lucide-react";
 
 interface CobranzasViewProps {
@@ -55,6 +56,8 @@ export default function CobranzasView({
   
   // Notification state
   const [statusMessage, setStatusMessage] = useState("");
+
+  const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState<PaymentVoucher | null>(null);
 
   // Simulated Payment Voucher State initialized with high fidelity mock data
   const [vouchers, setVouchers] = useState<PaymentVoucher[]>([
@@ -157,12 +160,22 @@ export default function CobranzasView({
     setVouchers(prev => prev.map(v => v.id === voucher.id ? { ...v, status: newStatus } : v));
 
     if (approve) {
-      // 2. If it's linked to an invoice, mark it as paid
+      // 2. If it's linked to an invoice, mark it as paid or reduce its remaining balance (partial payment)
       if (voucher.invoiceId) {
         const targetInvoice = invoices.find(inv => inv.id === voucher.invoiceId);
         if (targetInvoice && targetInvoice.status !== "Pagado") {
-          const updatedInvoice = { ...targetInvoice, status: "Pagado" as const };
-          onUpdateInvoice(updatedInvoice);
+          if (voucher.amount < targetInvoice.amount) {
+            const nextAmount = Number((targetInvoice.amount - voucher.amount).toFixed(2));
+            const nextVat = Number((nextAmount * 0.16).toFixed(2));
+            onUpdateInvoice({
+              ...targetInvoice,
+              amount: nextAmount,
+              vatAmount: nextVat
+            });
+          } else {
+            const updatedInvoice = { ...targetInvoice, status: "Pagado" as const };
+            onUpdateInvoice(updatedInvoice);
+          }
         }
       }
 
@@ -221,14 +234,27 @@ export default function CobranzasView({
       return;
     }
 
-    // 1. Mark target invoice as "Pagado"
+    // 1. Mark target invoice as "Pagado" or reduce its remaining balance (partial payment)
+    let isPartialPayment = false;
+    let remainingAmount = 0;
     if (paymentForm.invoiceId) {
       const targetInvoice = invoices.find(inv => inv.id === paymentForm.invoiceId);
       if (targetInvoice) {
-        onUpdateInvoice({
-          ...targetInvoice,
-          status: "Pagado"
-        });
+        if (amountPaid < targetInvoice.amount) {
+          isPartialPayment = true;
+          remainingAmount = Number((targetInvoice.amount - amountPaid).toFixed(2));
+          const nextVat = Number((remainingAmount * 0.16).toFixed(2));
+          onUpdateInvoice({
+            ...targetInvoice,
+            amount: remainingAmount,
+            vatAmount: nextVat
+          });
+        } else {
+          onUpdateInvoice({
+            ...targetInvoice,
+            status: "Pagado"
+          });
+        }
       }
     }
 
@@ -285,7 +311,11 @@ export default function CobranzasView({
     }
 
     setShowPaymentModal(false);
-    setStatusMessage(`✓ Cobro de $${amountPaid.toLocaleString("es-ES")} USD registrado y conciliado exitosamente para ${activeClient.nombre}.`);
+    if (isPartialPayment) {
+      setStatusMessage(`✓ Pago parcial de $${amountPaid.toLocaleString("es-ES")} USD registrado. Saldo restante: $${remainingAmount.toLocaleString("es-ES")} USD.`);
+    } else {
+      setStatusMessage(`✓ Cobro de $${amountPaid.toLocaleString("es-ES")} USD registrado y conciliado exitosamente para ${activeClient.nombre}.`);
+    }
     setTimeout(() => setStatusMessage(""), 5000);
   };
 
@@ -649,29 +679,34 @@ export default function CobranzasView({
                                         </span>
                                       </td>
                                       <td className="p-3 text-right">
-                                        {vou.status === "Pendiente" ? (
-                                          <div className="flex gap-1.5 justify-end">
-                                            <button
-                                              onClick={() => handleVerifyVoucher(vou, false)}
-                                              className="p-1 hover:bg-red-50 hover:text-red-700 border border-zinc-200 text-zinc-450 rounded cursor-pointer transition-colors"
-                                              title="Rechazar Comprobante"
-                                            >
-                                              <X className="w-3.5 h-3.5" />
-                                            </button>
-                                            <button
-                                              onClick={() => handleVerifyVoucher(vou, true)}
-                                              className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1 transition-all"
-                                              title="Verificar y Conciliar en Banco"
-                                            >
-                                              <ShieldCheck className="w-3.5 h-3.5 text-zinc-300" />
-                                              <span>Validar</span>
-                                            </button>
-                                          </div>
-                                        ) : (
-                                          <span className="text-[10px] text-zinc-400 font-bold font-mono tracking-wider flex items-center justify-end gap-1">
-                                            📄 {vou.attachedFile}
-                                          </span>
-                                        )}
+                                        <div className="flex flex-col items-end gap-1.5">
+                                          <button
+                                            onClick={() => setSelectedVoucherForPreview(vou)}
+                                            className="text-[10px] text-zinc-500 hover:text-zinc-900 font-bold font-mono tracking-wider flex items-center justify-end gap-1 cursor-pointer underline decoration-dotted"
+                                            title="Ver comprobante adjunto"
+                                          >
+                                            📄 {vou.attachedFile || "Ver archivo"}
+                                          </button>
+                                          {vou.status === "Pendiente" && (
+                                            <div className="flex gap-1.5 justify-end">
+                                              <button
+                                                onClick={() => handleVerifyVoucher(vou, false)}
+                                                className="p-1 hover:bg-red-50 hover:text-red-700 border border-zinc-200 text-zinc-450 rounded cursor-pointer transition-colors"
+                                                title="Rechazar Comprobante"
+                                              >
+                                                <X className="w-3.5 h-3.5" />
+                                              </button>
+                                              <button
+                                                onClick={() => handleVerifyVoucher(vou, true)}
+                                                className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1 transition-all"
+                                                title="Verificar y Conciliar en Banco"
+                                              >
+                                                <ShieldCheck className="w-3.5 h-3.5 text-zinc-300" />
+                                                <span>Validar</span>
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
                                       </td>
                                     </tr>
                                   ))
@@ -849,6 +884,130 @@ export default function CobranzasView({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* VOUCHER PREVIEW MODAL */}
+      {selectedVoucherForPreview && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans">
+          <div className="bg-white border border-zinc-200 rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
+            {/* Header */}
+            <div className="bg-zinc-950 text-white px-5 py-4 flex items-center justify-between">
+              <div>
+                <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2">
+                  <Eye className="w-4.5 h-4.5" /> Vista del Comprobante
+                </h4>
+                <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">
+                  Visualización de soporte digital adjuntado
+                </p>
+              </div>
+              <button 
+                onClick={() => setSelectedVoucherForPreview(null)}
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Receipt Preview Representation */}
+            <div className="p-6 space-y-6">
+              {/* Simulated Paper Receipt */}
+              <div className="border border-zinc-200 bg-linear-to-b from-zinc-50 to-white rounded-lg p-5 shadow-xs relative overflow-hidden font-mono text-xs text-zinc-800 space-y-4">
+                
+                {/* Stamp */}
+                {selectedVoucherForPreview.status === "Verificado" && (
+                  <div className="absolute right-4 top-4 border-2 border-dashed border-emerald-500 text-emerald-500 font-extrabold uppercase px-2 py-1 rounded text-[10px] tracking-wider rotate-12 bg-white/80 z-10">
+                    ✓ Conciliado
+                  </div>
+                )}
+                {selectedVoucherForPreview.status === "Rechazado" && (
+                  <div className="absolute right-4 top-4 border-2 border-dashed border-red-500 text-red-500 font-extrabold uppercase px-2 py-1 rounded text-[10px] tracking-wider rotate-12 bg-white/80 z-10">
+                    ✕ Rechazado
+                  </div>
+                )}
+
+                {/* Receipt Title */}
+                <div className="text-center border-b border-dashed border-zinc-300 pb-3 space-y-1 font-sans">
+                  <h5 className="font-black text-xs uppercase tracking-wider text-zinc-900">
+                    {selectedVoucherForPreview.method === "Zelle" ? "Receipt of Transaction" : "Comprobante de Pago"}
+                  </h5>
+                  <p className="text-[10px] text-zinc-500 font-semibold">
+                    {selectedVoucherForPreview.bankName || "Plataforma Digital"}
+                  </p>
+                </div>
+
+                {/* Receipt Fields */}
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">ID Voucher:</span>
+                    <span className="font-bold">{selectedVoucherForPreview.id}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">Cliente B2B:</span>
+                    <span className="font-bold uppercase text-right max-w-[70%] truncate" title={selectedVoucherForPreview.clientName}>
+                      {selectedVoucherForPreview.clientName}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">Referencia:</span>
+                    <span className="font-bold font-mono">{selectedVoucherForPreview.reference}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">Canal/Método:</span>
+                    <span className="font-bold">{selectedVoucherForPreview.method}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">Fecha Valor:</span>
+                    <span className="font-bold font-mono">{selectedVoucherForPreview.date}</span>
+                  </div>
+                  {selectedVoucherForPreview.invoiceId && (
+                    <div className="flex justify-between">
+                      <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">Factura Ref:</span>
+                      <span className="font-bold font-mono">{selectedVoucherForPreview.invoiceId}</span>
+                    </div>
+                  )}
+                  {selectedVoucherForPreview.locatorId && (
+                    <div className="flex justify-between">
+                      <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">Expediente:</span>
+                      <span className="font-bold font-mono text-zinc-900">{selectedVoucherForPreview.locatorId}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Amount Section */}
+                <div className="border-t border-b border-dashed border-zinc-300 py-3 flex justify-between items-center font-sans">
+                  <span className="font-bold text-zinc-900 uppercase tracking-wider text-[10px]">Monto Transferido</span>
+                  <span className="text-base font-black text-zinc-950 font-mono">
+                    ${selectedVoucherForPreview.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                  </span>
+                </div>
+
+                {/* Notes Section */}
+                {selectedVoucherForPreview.notes && (
+                  <div className="text-[10px] text-zinc-500 font-sans italic bg-zinc-100/50 p-2 rounded border border-zinc-200">
+                    <span className="font-bold not-italic block uppercase text-[8px] text-zinc-400 tracking-wide mb-0.5">Observaciones:</span>
+                    {selectedVoucherForPreview.notes}
+                  </div>
+                )}
+
+                {/* File Attachment Details */}
+                <div className="text-center font-sans text-[10px] text-zinc-400 font-semibold pt-1">
+                  Archivo: <span className="font-mono underline text-zinc-500">{selectedVoucherForPreview.attachedFile}</span>
+                </div>
+              </div>
+
+              {/* Actions Footer */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-zinc-100 font-sans">
+                <button
+                  type="button"
+                  onClick={() => setSelectedVoucherForPreview(null)}
+                  className="w-full py-2.5 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer text-center"
+                >
+                  Cerrar Vista
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

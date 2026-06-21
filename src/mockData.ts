@@ -1036,3 +1036,181 @@ export const initialFleetDrivers: FleetDriver[] = [
     observaciones: "Conductora trilingüe (FR/EN/DE). Ruta Ginebra-Chamonix."
   }
 ];
+
+export const initialPayableObligations: PayableObligation[] = [
+  {
+    id: "PAY-001",
+    dueDate: "2026-06-25",
+    providerName: "Lidotel Hoteles de Venezuela C.A.",
+    serviceDetail: "Habitación Standard Doble - 7 Noches - Lidotel Margarita",
+    locatorId: "RES-8892",
+    netCost: 840.00,
+    paidAmount: 840.00,
+    status: "Pagado Total",
+    date: "2026-06-01",
+    paymentMethod: "Transferencia Bancaria",
+    reference: "TR-PROV-882910",
+    notes: "Factura completamente saldada al cierre de release.",
+    currency: "USD"
+  },
+  {
+    id: "PAY-002",
+    dueDate: "2026-06-20",
+    providerName: "Hesperia World Wholesalers S.A.",
+    serviceDetail: "Superior Deluxe Vista al Campo - 7 Noches - Hesperia Margarita",
+    locatorId: "RES-8891",
+    netCost: 1100.00,
+    paidAmount: 0.00,
+    status: "Vencido",
+    date: "2026-06-02",
+    notes: "Pendiente liquidar neto. Proveedor solicita conciliación bancaria.",
+    currency: "USD"
+  },
+  {
+    id: "PAY-003",
+    dueDate: "2026-06-15",
+    providerName: "Madrid Premium Transfers SL",
+    serviceDetail: "Traslados Privados Ejecutivos - Madrid Barajas ➔ Metropolis Hotel",
+    locatorId: "RES-8890",
+    netCost: 180.00,
+    paidAmount: 180.00,
+    status: "Pagado Total",
+    date: "2026-06-05",
+    paymentMethod: "Transferencia Bancaria",
+    reference: "TR-PROV-882711",
+    notes: "Saldado. Voucher de traslado emitido y despachado.",
+    currency: "EUR"
+  },
+  {
+    id: "PAY-004",
+    dueDate: "2026-06-26",
+    providerName: "Savoie Alpine Hospitality S.A.",
+    serviceDetail: "Alpine Lodge Suite - 5 Noches - Aconca Alps Alpine Lodge & Spa",
+    locatorId: "RES-8889",
+    netCost: 1320.00,
+    paidAmount: 500.00,
+    status: "Pagado Parcial",
+    date: "2026-06-05",
+    paymentMethod: "Transferencia Bancaria",
+    reference: "TR-PROV-998273",
+    notes: "Abono inicial del 38% del costo neto.",
+    currency: "USD"
+  },
+  {
+    id: "PAY-005",
+    dueDate: "2026-06-24",
+    providerName: "Foratour Receptivo S.A.",
+    serviceDetail: "Servicio Traslado Privado Grupal - 18 Pax Orlando MCO ➔ Family Paradise Club",
+    locatorId: "RES-8888",
+    netCost: 350.00,
+    paidAmount: 0.00,
+    status: "Pendiente",
+    date: "2026-06-05",
+    notes: "Liquidación a contra-factura de chofer local.",
+    currency: "USD"
+  },
+  {
+    id: "PAY-006",
+    dueDate: "2026-06-28",
+    providerName: "Disney Area Receptives Inc",
+    serviceDetail: "Entradas Parques Disney + Traslados Internos - 7 Días - 18 Pax",
+    locatorId: "RES-8888",
+    netCost: 8100.00,
+    paidAmount: 0.00,
+    status: "Pendiente",
+    date: "2026-06-05",
+    notes: "Costo neto de bloqueos Disney Mayoristas.",
+    currency: "USD"
+  },
+  {
+    id: "PAY-007",
+    dueDate: "2026-06-12",
+    providerName: "American Airlines Inc.",
+    serviceDetail: "Boletos Aéreos Emisión GDS - Tramo MIA-CUN - 4 Pax",
+    locatorId: "RES-8892",
+    netCost: 1450.00,
+    paidAmount: 1450.00,
+    status: "Pagado Total",
+    date: "2026-06-01",
+    paymentMethod: "Tarjeta de Crédito",
+    reference: "CC-PROV-9901",
+    notes: "Liquidación automática vía BSP IATA.",
+    currency: "USD"
+  }
+];
+
+export const initialProviderStatements: ProviderStatement[] = [
+  {
+    id: "DOC-901",
+    providerName: "Hesperia World Wholesalers S.A.",
+    date: "2026-06-02",
+    type: "Factura Recibida",
+    amount: 1100.00,
+    reference: "FAC-HESP-9982",
+    status: "Pendiente"
+  },
+  {
+    id: "DOC-902",
+    providerName: "Hesperia World Wholesalers S.A.",
+    date: "2026-05-15",
+    type: "Factura Recibida",
+    amount: 2450.00,
+    reference: "FAC-HESP-9011",
+    status: "Saldado"
+  },
+  {
+    id: "DOC-903",
+    providerName: "Hesperia World Wholesalers S.A.",
+    date: "2026-05-18",
+    type: "Pago Emitido",
+    amount: 2450.00,
+    reference: "TR-PROV-872910",
+    status: "Aplicado"
+  },
+  {
+    id: "DOC-904",
+    providerName: "Savoie Alpine Hospitality S.A.",
+    date: "2026-06-05",
+    type: "Factura Recibida",
+    amount: 1320.00,
+    reference: "FAC-SAV-1029",
+    status: "Parcial"
+  },
+  {
+    id: "DOC-905",
+    providerName: "Savoie Alpine Hospitality S.A.",
+    date: "2026-06-10",
+    type: "Pago Emitido",
+    amount: 500.00,
+    reference: "TR-PROV-998273",
+    status: "Aplicado"
+  },
+  {
+    id: "DOC-906",
+    providerName: "Foratour Receptivo S.A.",
+    date: "2026-06-05",
+    type: "Factura Recibida",
+    amount: 350.00,
+    reference: "FAC-FORA-2291",
+    status: "Pendiente"
+  },
+  {
+    id: "DOC-907",
+    providerName: "Foratour Receptivo S.A.",
+    date: "2026-05-20",
+    type: "Factura Recibida",
+    amount: 480.00,
+    reference: "FAC-FORA-2104",
+    status: "Saldado"
+  },
+  {
+    id: "DOC-908",
+    providerName: "Foratour Receptivo S.A.",
+    date: "2026-05-22",
+    type: "Pago Emitido",
+    amount: 480.00,
+    reference: "TR-PROV-882739",
+    status: "Aplicado"
+  }
+];
+
