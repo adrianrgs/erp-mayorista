@@ -77,9 +77,15 @@ export interface FlightTicket {
   costoNeto: number;
   /**
    * Precio de venta al cliente final (PVP).
-   * Incluye el markup/comisión de la agencia.
+   * Si es B2B, este es el precio base sobre el cual se calcula la comisión.
    */
   precioVenta: number;
+  /** Precio PVP explícito (opcional) */
+  precioPvp?: number;
+  /** Porcentaje de comisión para la agencia B2B (opcional) */
+  comisionB2B?: number;
+  /** Porcentaje de comisión para la agencia Mayorista (opcional) */
+  comisionMayorista?: number;
   /**
    * Indica si este boleto ya fue vinculado a un expediente/reserva.
    * Por defecto false. Una vez vinculado se bloquea para evitar duplicados.

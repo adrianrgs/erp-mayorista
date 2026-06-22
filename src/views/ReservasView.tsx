@@ -1724,6 +1724,10 @@ export default function ReservasView({
                     return jointFlights.map(vuelo => {
                       const vProfit = vuelo.precioVenta - vuelo.costoNeto;
                       const statusFact = vuelo.expedienteAereo?.status === "Facturado" || vuelo.expedienteAereo?.status === "PagadoAerolinea" ? "Facturado (Aprobado)" : "Enviado a Facturación (Conjunta)";
+                      const pvp = vuelo.precioPvp || vuelo.precioVenta;
+                      const comisionPct = vuelo.comisionB2B || 0;
+                      const comisionAmt = pvp - vuelo.precioVenta;
+
                       return (
                         <div key={vuelo.id} className="py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-t border-zinc-150">
                           <div className="space-y-1 max-w-md">
@@ -1745,12 +1749,12 @@ export default function ReservasView({
                           <div className="w-full md:w-auto grid grid-cols-2 sm:grid-cols-5 md:flex md:items-center gap-x-4 gap-y-2 md:gap-6 text-xs font-semibold text-zinc-800 border-t md:border-t-0 border-zinc-100 pt-2 md:pt-0">
                             <div className="text-left md:text-right">
                               <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">PVP (Público)</span>
-                              <span className="text-zinc-900 font-bold">${vuelo.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-zinc-900 font-bold">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
                             </div>
                             
                             <div className="text-left md:text-right">
-                              <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">Comisión (0%)</span>
-                              <span className="text-amber-600 font-bold">-$0,00</span>
+                              <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">Comisión ({comisionPct}%)</span>
+                              <span className="text-amber-600 font-bold">-${comisionAmt.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
                             </div>
 
                             <div className="text-left md:text-right">
@@ -1759,7 +1763,7 @@ export default function ReservasView({
                             </div>
 
                             <div className="text-left md:text-right">
-                              <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">Neto Prov (Costo)</span>
+                              <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">Neto Proveedor (Costo)</span>
                               <span className="text-zinc-500 font-bold">${vuelo.costoNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
                             </div>
 
@@ -1806,12 +1810,13 @@ export default function ReservasView({
                     }, 0)
                   : (activeRes.totalPrice / 0.9);
                 
+                let totalVenta = activeRes.totalPrice;
+                let totalNeto = activeRes.netPrice;
+
                 jointFlights.forEach(f => {
-                   totalPvp += f.precioVenta;
+                   totalPvp += (f.precioPvp || f.precioVenta);
                 });
 
-                const totalVenta = activeRes.totalPrice;
-                const totalNeto = activeRes.netPrice;
                 const totalComisionesB2B = totalPvp - totalVenta;
                 const nuestraGanancia = totalVenta - totalNeto;
                 
@@ -2169,9 +2174,17 @@ export default function ReservasView({
                     <input
                       type="date"
                       required
+                      min={new Date().toISOString().split("T")[0]}
                       className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
                       value={cartCheckIn}
-                      onChange={(e) => setCartCheckIn(e.target.value)}
+                      onChange={(e) => {
+                        const newIn = e.target.value;
+                        setCartCheckIn(newIn);
+                        if (newIn) {
+                          const nextDay = new Date(new Date(newIn).getTime() + 86400000).toISOString().split('T')[0];
+                          if (!cartCheckOut || cartCheckOut <= newIn) setCartCheckOut(nextDay);
+                        }
+                      }}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -2179,6 +2192,7 @@ export default function ReservasView({
                     <input
                       type="date"
                       required
+                      min={cartCheckIn || new Date().toISOString().split("T")[0]}
                       className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
                       value={cartCheckOut}
                       onChange={(e) => setCartCheckOut(e.target.value)}
@@ -2544,11 +2558,10 @@ export default function ReservasView({
                             </div>
                             <p className="text-xs font-bold text-zinc-900 leading-tight truncate">Itinerario Vuelo - PNR: {vuelo.pnr}</p>
                           </div>
-                          <div className="text-right flex-shrink-0 flex items-center gap-2">
-                            <div>
-                              <p className="text-xs font-black text-zinc-955">${vuelo.precioVenta.toLocaleString("es-ES")} USD</p>
-                              <p className="text-[9px] text-zinc-400 font-medium">Neto: ${vuelo.costoNeto.toLocaleString("es-ES")} | Margen: +${vProfit.toLocaleString("es-ES")}</p>
-                            </div>
+                          <div className="text-right flex-shrink-0 flex flex-col items-end gap-1">
+                            <p className="text-[9px] text-zinc-400 font-bold uppercase block">Neto B2B a Cobrar</p>
+                            <p className="text-sm font-black text-zinc-955">${vuelo.precioVenta.toLocaleString("es-ES")} USD</p>
+                            <p className="text-[9px] text-zinc-500 font-medium">PVP: ${(vuelo.precioPvp || vuelo.precioVenta).toLocaleString("es-ES")} | Margen: <span className="text-emerald-600 font-bold">+${vProfit.toLocaleString("es-ES")}</span></p>
                           </div>
                         </div>
                       );
@@ -2734,9 +2747,17 @@ export default function ReservasView({
                     <input
                       type="date"
                       required
+                      min={new Date().toISOString().split("T")[0]}
                       className="w-full p-2.5 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800 focus:outline-none"
                       value={checkInDate}
-                      onChange={(e) => setCheckInDate(e.target.value)}
+                      onChange={(e) => {
+                        const newIn = e.target.value;
+                        setCheckInDate(newIn);
+                        if (newIn) {
+                          const nextDay = new Date(new Date(newIn).getTime() + 86400000).toISOString().split('T')[0];
+                          if (!checkOutDate || checkOutDate <= newIn) setCheckOutDate(nextDay);
+                        }
+                      }}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -2744,6 +2765,7 @@ export default function ReservasView({
                     <input
                       type="date"
                       required
+                      min={checkInDate || new Date().toISOString().split("T")[0]}
                       className="w-full p-2.5 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800 focus:outline-none"
                       value={checkOutDate}
                       onChange={(e) => setCheckOutDate(e.target.value)}
@@ -3782,164 +3804,182 @@ export default function ReservasView({
                 </div>
               </div>
 
-              {/* Service Line Items Table */}
-              <div className="space-y-3 font-sans">
-                <h4 className="font-bold text-[10px] uppercase text-zinc-450 tracking-wider">Detalle de Servicios Incluidos</h4>
-                <div className="border border-zinc-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase text-[9px] font-extrabold tracking-wider">
-                        <th className="p-3 w-16">Cod</th>
-                        <th className="p-3 w-24">Tipo</th>
-                        <th className="p-3">Descripción / Itinerario del Servicio</th>
-                        <th className="p-3 text-right w-24">PVP Tarifa</th>
-                        <th className="p-3 text-center w-36">Comisión B2B</th>
-                        <th className="p-3 text-right w-28">Neto a Pagar B2B</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-200 text-zinc-800">
-                      {activeRes.servicios && activeRes.servicios.length > 0 ? (
-                        activeRes.servicios.map((s) => {
-                          const comisionPct = s.comisionB2B !== undefined ? s.comisionB2B : 10;
-                          const pvp = s.precioPvp !== undefined ? s.precioPvp : (s.precioVenta / (1 - comisionPct / 100));
-                          const comisionAmt = pvp - s.precioVenta;
-                          
-                          if (s.tipo === ServiceType.ALOJAMIENTO && s.detalles?.lodgingRooms) {
-                            const hotelName = detailedProperties.find(p => p.id === s.detalles.hotelId)?.nombre || s.descripcion.split(" (")[0]?.replace("Hotel: ", "") || "Hotel";
-                            return (
-                              <React.Fragment key={s.id}>
-                                {/* Header Hotel Row */}
-                                <tr className="bg-zinc-50/40 font-semibold border-t border-zinc-200">
-                                  <td className="p-3 font-mono text-[10.5px] text-zinc-400">{s.id}</td>
-                                  <td className="p-3 font-bold text-zinc-900">{s.tipo}</td>
-                                  <td className="p-3 text-left leading-normal">
-                                    <span className="text-zinc-900 font-extrabold">{hotelName}</span>
-                                    <span className="block text-[9.5px] text-zinc-455 font-medium mt-0.5">
-                                      IN: {formatDate(s.detalles.checkInDate)} / OUT: {formatDate(s.detalles.checkOutDate)} ({s.detalles.selectedPromoName || "Tarifa Directa"})
-                                    </span>
-                                  </td>
-                                  <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                  <td className="p-3 text-center font-bold text-zinc-650">
-                                    {comisionPct}%
-                                    <span className="text-[10.5px] text-zinc-400 block font-normal">
-                                      (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
-                                    </span>
-                                  </td>
-                                  <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                </tr>
-                                {/* Room Rows */}
-                                {s.detalles.lodgingRooms.map((room: any, rIdx: number) => {
-                                  const rates = calculateRoomRates(room, s.detalles, activeRes.mercado || "NACIONAL", ratePlans, roomTypes);
-                                  const roomTypeName = roomTypes.find(rt => rt.id === room.roomTypeId)?.nombre || "Habitación";
-                                  const guestsNames = room.guests?.map((g: any) => `${g.name} (${g.type === "Adulto" ? "ADT" : "CHD"})`).filter((str: string) => str.replace(/\s*\([^)]+\)/g, "").trim() !== "").join(", ");
-                                  return (
-                                    <tr key={`${s.id}-rm-${rIdx}`} className="border-b border-zinc-100 last:border-b-zinc-200 bg-white">
-                                      <td className="p-2.5"></td>
-                                      <td className="p-2.5 text-[9.5px] text-zinc-400 font-bold uppercase tracking-wider pl-5">Hab {rIdx + 1}</td>
-                                      <td className="p-2.5 text-zinc-650 pl-5 text-left">
-                                        <span className="font-semibold text-zinc-850 text-xs">{roomTypeName}</span>
-                                        {guestsNames && <span className="block text-[10px] text-zinc-400 italic">Pasajeros: {guestsNames}</span>}
-                                      </td>
-                                      <td className="p-2.5 text-right text-zinc-700 text-xs font-semibold">${rates.pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                      <td className="p-2.5 text-center text-zinc-500 text-[10.5px]">
-                                        {comisionPct}%
-                                        <span className="text-[9.5px] text-zinc-400 block font-normal">
-                                          (${rates.comisionB2BVal.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
-                                        </span>
-                                      </td>
-                                      <td className="p-2.5 text-right text-zinc-850 font-bold text-xs">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                    </tr>
-                                  );
-                                })}
-                              </React.Fragment>
-                            );
-                          }
-                          
-                          return (
-                            <tr key={s.id} className="hover:bg-zinc-50/50">
-                              <td className="p-3 font-mono text-[10.5px] text-zinc-400">{s.id}</td>
-                              <td className="p-3 font-bold text-zinc-900">{s.tipo}</td>
-                              <td className="p-3 font-medium text-zinc-700 leading-normal">{s.descripcion}</td>
-                              <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                              <td className="p-3 text-center font-bold text-zinc-650">
-                                {comisionPct}%
-                                <span className="text-[10.5px] text-zinc-400 block font-normal">
-                                  (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
-                                </span>
-                              </td>
-                              <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                          );
-                        })
-                      ) : (
-                        /* Fallback */
-                        (() => {
-                          const pvp = activeRes.totalPrice / 0.9;
-                          const comisionAmt = pvp - activeRes.totalPrice;
-                          return (
-                            <tr>
-                              <td className="p-3 font-mono text-[10.5px] text-zinc-400">SRV-01</td>
-                              <td className="p-3 font-bold text-zinc-900">Alojamiento</td>
-                              <td className="p-3 font-medium text-zinc-700 leading-normal">
-                                {activeRes.hotelName} - 7 noches - {activeRes.pax} Pax - Check-in: {formatDate(activeRes.checkIn)} ➔ Out: {formatDate(activeRes.checkOut)}
-                              </td>
-                              <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                              <td className="p-3 text-center font-bold text-zinc-600">
-                                10%
-                                <span className="text-[10.5px] text-zinc-400 block font-normal">
-                                  (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
-                                </span>
-                              </td>
-                              <td className="p-3 text-right font-bold text-zinc-950">${activeRes.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                          );
-                        })()
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Notes */}
-              {activeRes.specialRequests && (
-                <div className="mt-6 space-y-2 font-sans">
-                  <h5 className="font-bold text-[10px] uppercase text-zinc-455 tracking-wider">Observaciones / Requerimientos Especiales</h5>
-                  <p className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-700 rounded text-xs leading-relaxed font-semibold">
-                    {activeRes.specialRequests}
-                  </p>
-                </div>
-              )}
-
-              {/* Totals Summary Card */}
+              {/* Service Line Items Table & Totals */}
               {(() => {
-                const totalPvp = activeRes.servicios && activeRes.servicios.length > 0
-                  ? activeRes.servicios.reduce((sum, s) => {
+                const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
+                const flightServices = jointFlights.map(b => ({
+                  id: b.pnr,
+                  tipo: "Aéreo GDS",
+                  descripcion: `${b.aerolineaValidadora || b.segmentos?.[0]?.aerolinea || "Aerolínea"} - Ruta: ${b.segmentos?.map(s => `${s.origen}-${s.destino}`).join(', ')} - PNR: ${b.pnr}`,
+                  precioVenta: b.precioVenta,
+                  precioPvp: b.precioPvp || b.precioVenta,
+                  comisionB2B: b.comisionB2B || 0,
+                  detalles: null
+                }));
+                const allServices = [...(activeRes.servicios || []), ...flightServices];
+
+                const totalPvp = allServices.length > 0
+                  ? allServices.reduce((sum, s) => {
                       const comisionPct = s.comisionB2B !== undefined ? s.comisionB2B : 10;
                       const itemPvp = s.precioPvp !== undefined ? s.precioPvp : (s.precioVenta / (1 - comisionPct / 100));
                       return sum + itemPvp;
                     }, 0)
                   : (activeRes.totalPrice / 0.9);
-                const totalVenta = activeRes.totalPrice;
+                
+                const totalVenta = allServices.length > 0 
+                  ? allServices.reduce((sum, s) => sum + s.precioVenta, 0)
+                  : activeRes.totalPrice;
+                  
                 const totalComisionesB2B = totalPvp - totalVenta;
 
                 return (
-                  <div className="mt-8 flex justify-end font-sans">
-                    <div className="w-full sm:w-80 bg-zinc-50 border border-zinc-200 p-4.5 rounded-lg space-y-2.5">
-                      <div className="flex justify-between items-center text-xs text-zinc-550 uppercase font-bold tracking-wider">
-                        <span>Total Venta Final (PVP):</span>
-                        <span className="text-zinc-900 font-bold">${totalPvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
-                      </div>
-                      <div className="flex justify-between items-center text-xs text-zinc-550 uppercase font-bold tracking-wider">
-                        <span>Comisión de Agencia B2B:</span>
-                        <span className="text-zinc-900 font-bold">-${totalComisionesB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
-                      </div>
-                      <div className="h-[1px] bg-zinc-200"></div>
-                      <div className="flex justify-between items-end">
-                        <span className="text-xs text-zinc-655 uppercase font-black tracking-wide">Neto a Pagar a Foratour:</span>
-                        <span className="text-lg font-black text-zinc-955 font-mono">${totalVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                  <React.Fragment>
+                    <div className="space-y-3 font-sans">
+                      <h4 className="font-bold text-[10px] uppercase text-zinc-450 tracking-wider">Detalle de Servicios Incluidos</h4>
+                      <div className="border border-zinc-200 rounded-lg overflow-hidden">
+                        <table className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase text-[9px] font-extrabold tracking-wider">
+                              <th className="p-3 w-16">Cod</th>
+                              <th className="p-3 w-24">Tipo</th>
+                              <th className="p-3">Descripción / Itinerario del Servicio</th>
+                              <th className="p-3 text-right w-24">PVP Tarifa</th>
+                              <th className="p-3 text-center w-36">Comisión B2B</th>
+                              <th className="p-3 text-right w-28">Neto a Pagar B2B</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-200 text-zinc-800">
+                            {allServices.length > 0 ? (
+                              allServices.map((s, idx) => {
+                                const comisionPct = s.comisionB2B !== undefined ? s.comisionB2B : 10;
+                                const pvp = s.precioPvp !== undefined ? s.precioPvp : (s.precioVenta / (1 - comisionPct / 100));
+                                const comisionAmt = pvp - s.precioVenta;
+                                
+                                if (s.tipo === ServiceType.ALOJAMIENTO && s.detalles?.lodgingRooms) {
+                                  const hotelName = detailedProperties.find(p => p.id === s.detalles.hotelId)?.nombre || s.descripcion.split(" (")[0]?.replace("Hotel: ", "") || "Hotel";
+                                  return (
+                                    <React.Fragment key={s.id || idx}>
+                                      {/* Header Hotel Row */}
+                                      <tr className="bg-zinc-50/40 font-semibold border-t border-zinc-200">
+                                        <td className="p-3 font-mono text-[10.5px] text-zinc-400">{s.id}</td>
+                                        <td className="p-3 font-bold text-zinc-900">{s.tipo}</td>
+                                        <td className="p-3 text-left leading-normal">
+                                          <span className="text-zinc-900 font-extrabold">{hotelName}</span>
+                                          <span className="block text-[9.5px] text-zinc-455 font-medium mt-0.5">
+                                            IN: {formatDate(s.detalles.checkInDate)} / OUT: {formatDate(s.detalles.checkOutDate)} ({s.detalles.selectedPromoName || "Tarifa Directa"})
+                                          </span>
+                                        </td>
+                                        <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-3 text-center font-bold text-zinc-650">
+                                          {comisionPct}%
+                                          <span className="text-[10.5px] text-zinc-400 block font-normal">
+                                            (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
+                                          </span>
+                                        </td>
+                                        <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                      </tr>
+                                      {/* Room Rows */}
+                                      {s.detalles.lodgingRooms.map((room: any, rIdx: number) => {
+                                        const rates = calculateRoomRates(room, s.detalles, activeRes.mercado || "NACIONAL", ratePlans, roomTypes);
+                                        const roomTypeName = roomTypes.find(rt => rt.id === room.roomTypeId)?.nombre || "Habitación";
+                                        const guestsNames = room.guests?.map((g: any) => `${g.name} (${g.type === "Adulto" ? "ADT" : "CHD"})`).filter((str: string) => str.replace(/\s*\([^)]+\)/g, "").trim() !== "").join(", ");
+                                        return (
+                                          <tr key={`${s.id}-rm-${rIdx}`} className="border-b border-zinc-100 last:border-b-zinc-200 bg-white">
+                                            <td className="p-2.5"></td>
+                                            <td className="p-2.5 text-[9.5px] text-zinc-400 font-bold uppercase tracking-wider pl-5">Hab {rIdx + 1}</td>
+                                            <td className="p-2.5 text-zinc-650 pl-5 text-left">
+                                              <span className="font-semibold text-zinc-850 text-xs">{roomTypeName}</span>
+                                              {guestsNames && <span className="block text-[10px] text-zinc-400 italic">Pasajeros: {guestsNames}</span>}
+                                            </td>
+                                            <td className="p-2.5 text-right text-zinc-700 text-xs font-semibold">${rates.pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                            <td className="p-2.5 text-center text-zinc-500 text-[10.5px]">
+                                              {comisionPct}%
+                                              <span className="text-[9.5px] text-zinc-400 block font-normal">
+                                                (${rates.comisionB2BVal.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
+                                              </span>
+                                            </td>
+                                            <td className="p-2.5 text-right text-zinc-850 font-bold text-xs">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </React.Fragment>
+                                  );
+                                }
+                                
+                                return (
+                                  <tr key={s.id || idx} className="hover:bg-zinc-50/50">
+                                    <td className="p-3 font-mono text-[10.5px] text-zinc-400">{s.id}</td>
+                                    <td className="p-3 font-bold text-zinc-900">{s.tipo}</td>
+                                    <td className="p-3 font-medium text-zinc-700 leading-normal">{s.descripcion}</td>
+                                    <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                    <td className="p-3 text-center font-bold text-zinc-650">
+                                      {comisionPct}%
+                                      <span className="text-[10.5px] text-zinc-400 block font-normal">
+                                        (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
+                                      </span>
+                                    </td>
+                                    <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                  </tr>
+                                );
+                              })
+                            ) : (
+                              /* Fallback */
+                              (() => {
+                                const pvp = activeRes.totalPrice / 0.9;
+                                const comisionAmt = pvp - activeRes.totalPrice;
+                                return (
+                                  <tr>
+                                    <td className="p-3 font-mono text-[10.5px] text-zinc-400">SRV-01</td>
+                                    <td className="p-3 font-bold text-zinc-900">Alojamiento</td>
+                                    <td className="p-3 font-medium text-zinc-700 leading-normal">
+                                      {activeRes.hotelName} - 7 noches - {activeRes.pax} Pax - Check-in: {formatDate(activeRes.checkIn)} ➔ Out: {formatDate(activeRes.checkOut)}
+                                    </td>
+                                    <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                    <td className="p-3 text-center font-bold text-zinc-600">
+                                      10%
+                                      <span className="text-[10.5px] text-zinc-400 block font-normal">
+                                        (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
+                                      </span>
+                                    </td>
+                                    <td className="p-3 text-right font-bold text-zinc-950">${activeRes.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                  </tr>
+                                );
+                              })()
+                            )}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                  </div>
+
+                    {/* Notes */}
+                    {activeRes.specialRequests && (
+                      <div className="mt-6 space-y-2 font-sans">
+                        <h5 className="font-bold text-[10px] uppercase text-zinc-455 tracking-wider">Observaciones / Requerimientos Especiales</h5>
+                        <p className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-700 rounded text-xs leading-relaxed font-semibold">
+                          {activeRes.specialRequests}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Totals Summary Card */}
+                    <div className="mt-8 flex justify-end font-sans">
+                      <div className="w-full sm:w-80 bg-zinc-50 border border-zinc-200 p-4.5 rounded-lg space-y-2.5">
+                        <div className="flex justify-between items-center text-xs text-zinc-550 uppercase font-bold tracking-wider">
+                          <span>Total Venta Final (PVP):</span>
+                          <span className="text-zinc-900 font-bold">${totalPvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-zinc-550 uppercase font-bold tracking-wider">
+                          <span>Comisión de Agencia B2B:</span>
+                          <span className="text-zinc-900 font-bold">-${totalComisionesB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                        </div>
+                        <div className="h-[1px] bg-zinc-200"></div>
+                        <div className="flex justify-between items-end">
+                          <span className="text-xs text-zinc-655 uppercase font-black tracking-wide">Neto a Pagar a Foratour:</span>
+                          <span className="text-lg font-black text-zinc-955 font-mono">${totalVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                        </div>
+                      </div>
+                    </div>
+                  </React.Fragment>
                 );
               })()}
 

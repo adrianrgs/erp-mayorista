@@ -483,7 +483,7 @@ export default function AdministracionView({
 
               <button
                 onClick={handleUpdateExchangeRates}
-                className="w-full py-2 bg-zinc-955 hover:bg-zinc-800 text-white rounded-lg text-[10.5px] font-black uppercase tracking-wider cursor-pointer shadow-xs transition-all flex items-center justify-center gap-1.5"
+                className="w-full py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded-lg text-[10.5px] font-black uppercase tracking-wider cursor-pointer shadow-xs transition-all flex items-center justify-center gap-1.5"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Actualizar Tasas ERP

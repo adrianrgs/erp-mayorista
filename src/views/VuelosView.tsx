@@ -355,8 +355,11 @@ function NuevoBoletoView({
   const [pnr, setPnr] = useState("");
   const [pasajeros, setPasajeros] = useState<Passenger[]>([]);
   const [segmentos, setSegmentos] = useState<FlightSegment[]>([]);
-  const [costoNeto, setCostoNeto] = useState("");
-  const [precioVenta, setPrecioVenta] = useState("");
+  const [precioPvp, setPrecioPvp] = useState("");
+  const [costoNetoInput, setCostoNetoInput] = useState("");
+  const [baseCalculo, setBaseCalculo] = useState<'PVP' | 'NETO'>('PVP');
+  const [comisionB2B, setComisionB2B] = useState<number>(10);
+  const [comisionMayorista, setComisionMayorista] = useState<number>(12);
   const [notas, setNotas] = useState("");
   const [guardando, setGuardando] = useState(false);
 
@@ -387,12 +390,62 @@ function NuevoBoletoView({
     setParseWarnings([]);
   };
 
+  // Manejadores bidireccionales
+  const handleCostoNetoChange = (val: string) => {
+    setCostoNetoInput(val);
+    setBaseCalculo('NETO');
+    const num = parseFloat(val) || 0;
+    const suma = comisionB2B + comisionMayorista;
+    setPrecioPvp(num > 0 ? (num * (1 + suma / 100)).toFixed(2) : "");
+  };
+
+  const handlePvpChange = (val: string) => {
+    setPrecioPvp(val);
+    setBaseCalculo('PVP');
+    const num = parseFloat(val) || 0;
+    const suma = comisionB2B + comisionMayorista;
+    setCostoNetoInput(num > 0 ? (num / (1 + suma / 100)).toFixed(2) : "");
+  };
+
+  const handleComisionB2BChange = (val: number) => {
+    setComisionB2B(val);
+    const suma = val + comisionMayorista;
+    if (baseCalculo === 'PVP') {
+      const pvpNum = parseFloat(precioPvp) || 0;
+      setCostoNetoInput(pvpNum > 0 ? (pvpNum / (1 + suma / 100)).toFixed(2) : "");
+    } else {
+      const netoNum = parseFloat(costoNetoInput) || 0;
+      setPrecioPvp(netoNum > 0 ? (netoNum * (1 + suma / 100)).toFixed(2) : "");
+    }
+  };
+
+  const handleComisionMayoristaChange = (val: number) => {
+    setComisionMayorista(val);
+    const suma = comisionB2B + val;
+    if (baseCalculo === 'PVP') {
+      const pvpNum = parseFloat(precioPvp) || 0;
+      setCostoNetoInput(pvpNum > 0 ? (pvpNum / (1 + suma / 100)).toFixed(2) : "");
+    } else {
+      const netoNum = parseFloat(costoNetoInput) || 0;
+      setPrecioPvp(netoNum > 0 ? (netoNum * (1 + suma / 100)).toFixed(2) : "");
+    }
+  };
+
+  const pvpFinal = parseFloat(precioPvp) || 0;
+  const costoNetoFinal = parseFloat(costoNetoInput) || 0;
+  const sumaComisiones = comisionB2B + comisionMayorista;
+  
+  const comisionBruta = pvpFinal - costoNetoFinal;
+  
+  // Repartición proporcional de la comisión bruta
+  const gananciaAgencia = sumaComisiones > 0 ? comisionBruta * (comisionB2B / sumaComisiones) : 0;
+  const gananciaForatour = sumaComisiones > 0 ? comisionBruta * (comisionMayorista / sumaComisiones) : 0;
+  
+  const netoB2B = pvpFinal - gananciaAgencia;
+
   // ─ Acción: Guardar boleto ─────────────────────────────────────────────────
   const handleGuardar = () => {
-    if (!pnr || pasajeros.length === 0 || segmentos.length === 0) return;
-    const costo = parseFloat(costoNeto) || 0;
-    const venta = parseFloat(precioVenta) || 0;
-    if (venta === 0) return;
+    if (!pnr || pasajeros.length === 0 || segmentos.length === 0 || pvpFinal === 0 || costoNetoFinal === 0) return;
 
     setGuardando(true);
     setTimeout(() => {
@@ -401,8 +454,11 @@ function NuevoBoletoView({
         pnr,
         pasajeros,
         segmentos,
-        costoNeto: costo,
-        precioVenta: venta,
+        costoNeto: costoNetoFinal,
+        precioPvp: pvpFinal,
+        comisionB2B: comisionB2B,
+        comisionMayorista: comisionMayorista,
+        precioVenta: netoB2B, // Lo que paga la agencia B2B
         vinculadoAExpediente: false,
         notas,
         createdAt: new Date().toISOString(),
@@ -416,12 +472,8 @@ function NuevoBoletoView({
     pnr.trim().length === 6 &&
     pasajeros.length > 0 &&
     segmentos.length > 0 &&
-    parseFloat(precioVenta) > 0;
-
-  const margenVal =
-    parseFloat(precioVenta) > 0 && parseFloat(costoNeto) > 0
-      ? ((parseFloat(precioVenta) - parseFloat(costoNeto)) / parseFloat(precioVenta)) * 100
-      : null;
+    pvpFinal > 0 &&
+    costoNetoFinal > 0;
 
   return (
     <div className="space-y-6">
@@ -645,7 +697,7 @@ function NuevoBoletoView({
               </span>
             </div>
             <div className="p-4 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
                     Costo Neto *
@@ -659,48 +711,92 @@ function NuevoBoletoView({
                       type="number"
                       min="0"
                       step="0.01"
-                      value={costoNeto}
-                      onChange={(e) => setCostoNeto(e.target.value)}
+                      value={costoNetoInput}
+                      onChange={(e) => handleCostoNetoChange(e.target.value)}
                       placeholder="0.00"
-                      className="w-full pl-6 pr-3 py-2 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500"
+                      className="w-full pl-6 pr-3 py-2 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white"
                     />
                   </div>
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
-                    Precio de Venta (PVP) *
+                    Precio Venta (PVP) *
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 font-bold">
                       $
                     </span>
                     <input
-                      id="field-precio-venta"
+                      id="field-precio-pvp"
                       type="number"
                       min="0"
                       step="0.01"
-                      value={precioVenta}
-                      onChange={(e) => setPrecioVenta(e.target.value)}
+                      value={precioPvp}
+                      onChange={(e) => handlePvpChange(e.target.value)}
                       placeholder="0.00"
-                      className="w-full pl-6 pr-3 py-2 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500"
+                      className="w-full pl-6 pr-3 py-2 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white"
                     />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                    Comisión Agencia (%)
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="field-comision-b2b"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      value={comisionB2B}
+                      onChange={(e) => handleComisionB2BChange(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="w-full p-2 pr-8 border border-zinc-200 bg-white rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                    Comisión Foratour (%)
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="field-comision-mayorista"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      value={comisionMayorista}
+                      onChange={(e) => handleComisionMayoristaChange(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="w-full p-2 pr-8 border border-zinc-200 bg-white rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
                   </div>
                 </div>
               </div>
 
               {/* Indicador de margen */}
-              {margenVal !== null && (
-                <div
-                  className={`flex items-center justify-between p-2.5 rounded border text-xs font-bold ${
-                    margenVal >= 10
-                      ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                      : margenVal >= 5
-                      ? "bg-amber-50 border-amber-200 text-amber-700"
-                      : "bg-red-50 border-red-200 text-red-700"
-                  }`}
-                >
-                  <span>Margen estimado</span>
-                  <span>{margenVal.toFixed(1)}%</span>
+              {pvpFinal > 0 && costoNetoFinal > 0 && (
+                <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-md text-xs space-y-2 text-zinc-700 font-semibold">
+                  <div className="flex justify-between items-center text-zinc-500">
+                    <span>Costo Neto (Calculado a pagar):</span>
+                    <span className="font-bold">
+                      ${costoNetoFinal.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Neto B2B (a Cobrar por Agencia):</span>
+                    <span className="text-zinc-955 font-black">
+                      ${netoB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-emerald-700 font-bold border-t border-zinc-200 pt-1.5 mt-1">
+                    <span>Nuestra Ganancia Mayorista ({comisionMayorista}%):</span>
+                    <span>
+                      +${gananciaForatour.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -898,21 +994,35 @@ function ExpedienteAereoView({
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-zinc-200">
-                <div className="flex justify-between items-center mb-1">
+              <div className="pt-4 border-t border-zinc-200 space-y-1.5">
+                <div className="flex justify-between items-center">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Costo Neto</span>
                   <span className="text-xs font-bold text-zinc-700">${boleto.costoNeto.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between items-center mb-1">
+                <div className="flex justify-between items-center">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Precio Venta (PVP)</span>
-                  <span className="text-sm font-black text-zinc-900">${boleto.precioVenta.toLocaleString()}</span>
+                  <span className="text-xs font-bold text-zinc-700">${(boleto.precioPvp || boleto.precioVenta).toLocaleString()}</span>
+                </div>
+                {boleto.comisionB2B !== undefined && boleto.comisionB2B > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Comisión B2B</span>
+                    <span className="text-xs font-bold text-amber-600">-{boleto.comisionB2B}% (${((boleto.precioPvp || 0) - boleto.precioVenta).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+                  </div>
+                )}
+                {boleto.comisionMayorista !== undefined && boleto.comisionMayorista > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Comisión Foratour</span>
+                    <span className="text-xs font-bold text-amber-600">-{boleto.comisionMayorista}% (${(boleto.precioVenta - boleto.costoNeto).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-1 border-t border-zinc-100">
+                  <span className="text-[10px] text-zinc-800 font-bold uppercase tracking-wider">Neto B2B a Cobrar</span>
+                  <span className="text-sm font-black text-zinc-900">${boleto.precioVenta.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Margen</span>
+                  <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Ganancia Foratour</span>
                   <span className="text-xs font-bold text-emerald-600">
-                    {boleto.precioVenta > 0 
-                      ? ((boleto.precioVenta - boleto.costoNeto) / boleto.precioVenta * 100).toFixed(1) 
-                      : 0}%
+                    +${(boleto.precioVenta - boleto.costoNeto).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               </div>

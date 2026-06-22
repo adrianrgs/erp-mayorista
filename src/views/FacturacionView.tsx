@@ -1611,7 +1611,7 @@ export default function FacturacionView({
                         className={`py-2.5 text-white text-[11px] font-black uppercase tracking-wider rounded flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all ${
                           isApproveDisabled 
                             ? "bg-zinc-200 border-zinc-200 text-zinc-400 cursor-not-allowed opacity-60" 
-                            : "bg-zinc-955 hover:bg-zinc-800"
+                            : "bg-zinc-950 hover:bg-zinc-800"
                         }`}
                       >
                         {selectedFacturacionTipo === "Pago Contado" ? (
