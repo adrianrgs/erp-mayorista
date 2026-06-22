@@ -112,21 +112,24 @@ export default function App() {
         });
       }
 
-      // SIDE-EFFECT: Auto-generate ground transfer task!
-      const matchedFlight = flights.find(f => f.flightNo === newRes.flightNo);
-      const newTrans: TransferService = {
-        id: `TR-${Math.floor(200 + Math.random() * 800)}`,
-        leadPassenger: newRes.holder,
-        paxCount: newRes.pax,
-        pickupLocation: matchedFlight ? `Llegadas Aeropuerto (Vuelo ${matchedFlight.flightNo})` : "Aeropuerto Internacional Local",
-        dropoffLocation: newRes.hotelName,
-        date: newRes.checkIn,
-        time: "14:00",
-        provider: "Foratour Receptivo S.A.",
-        status: "No Asignado",
-        vehicleType: newRes.pax > 4 ? "Minivan de Línea" : "Berlina Ejecutiva"
-      };
-      setTransfers(prev => [newTrans, ...prev]);
+      // SIDE-EFFECT: Auto-generate ground transfer task ONLY if transfer service was sold!
+      const hasTransfer = newRes.servicios?.some(s => s.tipo === "Traslado" || s.tipo === "Rent a Car");
+      if (hasTransfer) {
+        const matchedFlight = flights.find(f => f.flightNo === newRes.flightNo);
+        const newTrans: TransferService = {
+          id: `TR-${Math.floor(200 + Math.random() * 800)}`,
+          leadPassenger: newRes.holder,
+          paxCount: newRes.pax,
+          pickupLocation: matchedFlight ? `Llegadas Aeropuerto (Vuelo ${matchedFlight.flightNo})` : "Aeropuerto Internacional Local",
+          dropoffLocation: newRes.hotelName,
+          date: newRes.checkIn,
+          time: "14:00",
+          provider: "Foratour Receptivo S.A.",
+          status: "No Asignado",
+          vehicleType: newRes.pax > 4 ? "Minivan de Línea" : "Berlina Ejecutiva"
+        };
+        setTransfers(prev => [newTrans, ...prev]);
+      }
     }
   };
 

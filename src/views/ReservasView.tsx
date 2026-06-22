@@ -1972,22 +1972,31 @@ export default function ReservasView({
               </div>
 
               {/* Status de Pago */}
-              <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-3 shadow-xs">
-                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block text-zinc-650">Condición de Cobro B2B</h4>
-                {activeRes.status === "Cancelada" ? (
-                  <div className="p-3 bg-red-50 border border-red-200 text-red-750 text-xs rounded font-semibold leading-relaxed">
-                    Expediente anulado. No se procesarán transacciones de cobro.
+              {(() => {
+                const b2bPayment = getClientPaymentStatus(activeRes.id);
+                return (
+                  <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-3 shadow-xs">
+                    <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block text-zinc-650">Condición de Cobro B2B</h4>
+                    {activeRes.status === "Cancelada" ? (
+                      <div className="p-3 bg-red-50 border border-red-200 text-red-750 text-xs rounded font-semibold leading-relaxed">
+                        Expediente anulado. No se procesarán transacciones de cobro.
+                      </div>
+                    ) : b2bPayment.status === "Cobrado Total" ? (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded font-semibold leading-relaxed">
+                        Acreditado. Los importes han sido cobrados y conciliados en contabilidad mayorista.
+                      </div>
+                    ) : b2bPayment.status === "Sin Facturar" ? (
+                      <div className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-600 text-xs rounded font-semibold leading-relaxed">
+                        Pendiente de emisión de factura. Los servicios aún no han sido cobrados a la agencia.
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-250 text-amber-800 text-xs rounded font-semibold leading-relaxed">
+                        Factura emitida pendiente de cobro. Límite de crédito sujeto a revisión de la cartera.
+                      </div>
+                    )}
                   </div>
-                ) : activeRes.status === "Pendiente de Pago" ? (
-                  <div className="p-3 bg-amber-50 border border-amber-250 text-amber-800 text-xs rounded font-semibold leading-relaxed">
-                    Factura pendiente de cobro. Límite de crédito sujeto a revisión de la cartera de cobros.
-                  </div>
-                ) : (
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded font-semibold leading-relaxed">
-                    Acreditado. Los importes han sido cobrados y conciliados en contabilidad mayorista.
-                  </div>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Liquidación a Proveedores */}
               {(() => {

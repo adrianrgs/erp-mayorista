@@ -47,6 +47,7 @@ export default function CobranzasView({
   onAddInvoice 
 }: CobranzasViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [invoiceSearchQuery, setInvoiceSearchQuery] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(clients[0]?.id || null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<FinancialInvoice | null>(null);
@@ -60,53 +61,7 @@ export default function CobranzasView({
   const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState<PaymentVoucher | null>(null);
 
   // Simulated Payment Voucher State initialized with high fidelity mock data
-  const [vouchers, setVouchers] = useState<PaymentVoucher[]>([
-    {
-      id: "VOU-301",
-      clientId: clients[0]?.id || "CLI-01",
-      clientName: clients[0]?.nombre || "Viajes B2B América C.A.",
-      invoiceId: "FAC-5231",
-      locatorId: "LOC-8821",
-      method: "Transferencia Bancaria",
-      reference: "TR-99827392",
-      amount: 1250.00,
-      date: "2026-06-05",
-      status: "Verificado",
-      bankName: "Banesco Banco Universal",
-      notes: "Pago correspondiente a la reserva de la familia Gonzalez.",
-      attachedFile: "comprobante_banesco_99827392.pdf"
-    },
-    {
-      id: "VOU-302",
-      clientId: clients[1]?.id || "CLI-02",
-      clientName: clients[1]?.nombre || "Destinos Satélite Internacional",
-      invoiceId: "FAC-5232",
-      locatorId: "LOC-1205",
-      method: "Zelle",
-      reference: "Z-102938475",
-      amount: 850.00,
-      date: "2026-06-08",
-      status: "Pendiente",
-      bankName: "Chase Bank",
-      notes: "Abono para cotización pendiente de confirmación.",
-      attachedFile: "zelle_receipt_102938475.jpg"
-    },
-    {
-      id: "VOU-303",
-      clientId: clients[2]?.id || "CLI-03",
-      clientName: clients[2]?.nombre || "Freelance VIP Tours",
-      invoiceId: "FAC-5233",
-      locatorId: "LOC-4412",
-      method: "Pago Móvil",
-      reference: "PM-3829102",
-      amount: 430.00,
-      date: "2026-06-07",
-      status: "Pendiente",
-      bankName: "Banco Mercantil",
-      notes: "Pago rápido de traslado privado.",
-      attachedFile: "pago_movil_mercantil_3829102.png"
-    }
-  ]);
+  const [vouchers, setVouchers] = useState<PaymentVoucher[]>([]);
 
   // Payment Form States
   const [paymentForm, setPaymentForm] = useState({
@@ -569,8 +524,23 @@ export default function CobranzasView({
                         return matchesClient && isUnpaid && isCollection;
                       });
 
+                      const filteredInvoices = unpaidInvoices.filter(inv => 
+                        inv.id.toLowerCase().includes(invoiceSearchQuery.toLowerCase()) ||
+                        inv.clientName.toLowerCase().includes(invoiceSearchQuery.toLowerCase())
+                      );
+
                       return (
                         <div className="space-y-4">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-450" />
+                            <input
+                              type="text"
+                              placeholder="Buscar factura por código o expediente (ej. FAC-1234 o RES-5678)..."
+                              className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-500 font-semibold"
+                              value={invoiceSearchQuery}
+                              onChange={(e) => setInvoiceSearchQuery(e.target.value)}
+                            />
+                          </div>
                           <div className="overflow-x-auto">
                             <table className="w-full text-left text-xs divide-y divide-zinc-200">
                               <thead>
@@ -584,18 +554,28 @@ export default function CobranzasView({
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
-                                {unpaidInvoices.length === 0 ? (
+                                {filteredInvoices.length === 0 ? (
                                   <tr>
                                     <td colSpan={6} className="p-6 text-center text-zinc-450 italic bg-zinc-50/20">
-                                      Este cliente no posee facturas pendientes de cobro en cartera.
+                                      {invoiceSearchQuery ? "No se encontraron facturas ni expedientes que coincidan con la búsqueda." : "Este cliente no posee facturas pendientes de cobro en cartera."}
                                     </td>
                                   </tr>
                                 ) : (
-                                  unpaidInvoices.map((inv) => (
+                                  filteredInvoices.map((inv) => {
+                                    const locatorMatch = inv.clientName.match(/(RES-\d+)/);
+                                    const locator = locatorMatch ? locatorMatch[1] : null;
+                                    return (
                                     <tr key={inv.id} className="hover:bg-zinc-50/50 transition-colors">
                                       <td className="p-3 font-mono font-bold text-zinc-950">{inv.id}</td>
                                       <td className="p-3 text-zinc-800 leading-tight">
-                                        <p className="font-bold truncate max-w-[200px]">{inv.clientName}</p>
+                                        {locator && (
+                                          <span className="inline-block mb-1 px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-700 text-[9px] font-black tracking-widest rounded-sm">
+                                            {locator}
+                                          </span>
+                                        )}
+                                        <p className="font-semibold text-[10.5px] line-clamp-2 max-w-[220px]" title={inv.clientName}>
+                                          {inv.clientName}
+                                        </p>
                                       </td>
                                       <td className="p-3 font-mono text-[10.5px]">
                                         <p>{formatDate(inv.date)}</p>
@@ -620,7 +600,8 @@ export default function CobranzasView({
                                         </button>
                                       </td>
                                     </tr>
-                                  ))
+                                  );
+                                })
                                 )}
                               </tbody>
                             </table>

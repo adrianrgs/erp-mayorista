@@ -503,12 +503,18 @@ export default function FacturacionView({
   // Billing statistics
   const totalBilledVal = realBookings.reduce((sum, r) => {
     const billedServices = r.servicios?.filter(s => s.statusFacturacion === "Facturado") || [];
-    return sum + billedServices.reduce((sSum, s) => sSum + s.precioVenta, 0);
+    let rSum = billedServices.reduce((sSum, s) => sSum + s.precioVenta, 0);
+    const billedFlights = boletos.filter(b => b.expedienteId === r.id && b.facturarConjunto && (b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea"));
+    rSum += billedFlights.reduce((fSum, f) => fSum + f.precioVenta, 0);
+    return sum + rSum;
   }, 0);
 
   const totalPendingVal = realBookings.reduce((sum, r) => {
     const pendingServices = r.servicios?.filter(s => s.statusFacturacion === "Solicitado") || [];
-    return sum + pendingServices.reduce((sSum, s) => sSum + s.precioVenta, 0);
+    let rSum = pendingServices.reduce((sSum, s) => sSum + s.precioVenta, 0);
+    const pendingFlights = boletos.filter(b => b.expedienteId === r.id && b.facturarConjunto && (b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador"));
+    rSum += pendingFlights.reduce((fSum, f) => fSum + f.precioVenta, 0);
+    return sum + rSum;
   }, 0);
 
   const pendingBillingCount = realBookings.filter(r => {
