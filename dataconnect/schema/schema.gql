@@ -1,0 +1,92 @@
+type HotelProperty @table {
+  id: String!
+  name: String!
+  destination: String!
+  category: String!
+  image: String!
+  baseRate: Float!
+  occupancy: Int!
+  roomsCount: Int!
+  stars: Int!
+  allotment: Int!
+  supplierName: String!
+}
+
+type Reservation @table {
+  id: String! @col(dataType: "varchar(50)")
+  holder: String!
+  hotelName: String!
+  checkIn: String!
+  checkOut: String!
+  pax: Int!
+  status: String!
+  totalPrice: Float!
+  netPrice: Float!
+  specialRequests: String
+  flightNo: String
+  telefono: String
+  email: String
+  agenciaName: String
+  createdAt: String
+  mercado: String
+  tipo: String
+  comprobanteRef: String
+  comprobanteMonto: Float
+  comprobanteMetodo: String
+  facturacionTipo: String
+}
+
+type FlightLeg @table {
+  id: String! @col(dataType: "varchar(50)")
+  flightNo: String!
+  airline: String!
+  departure: String!
+  arrival: String!
+  depTime: String!
+  arrTime: String!
+  terminal: String!
+  status: String!
+  seatsRemaining: Int!
+  seatsTotal: Int!
+}
+
+type TransferService @table {
+  id: String! @col(dataType: "varchar(50)")
+  leadPassenger: String!
+  paxCount: Int!
+  pickupLocation: String!
+  dropoffLocation: String!
+  date: String!
+  time: String!
+  provider: String!
+  driverName: String
+  driverId: String
+  vehicleId: String
+  reservationId: String
+  flightRef: String
+  notes: String
+  status: String!
+  vehicleType: String!
+}
+
+type FinancialInvoice @table {
+  id: String! @col(dataType: "varchar(50)")
+  clientName: String!
+  date: String!
+  dueDate: String!
+  amount: Float!
+  vatAmount: Float!
+  type: String!
+  status: String!
+}
+
+type B2BClient @table {
+  id: String! @col(dataType: "varchar(50)")
+  nombre: String!
+  email: String!
+  telefono: String!
+  type: String!
+  tier: String!
+  balance: Float!
+  status: String!
+}

@@ -1,0 +1,12 @@
+specVersion: "v1alpha"
+serviceId: "foratour-erp"
+location: "us-central1"
+schema:
+  source: "./schema"
+  datasource:
+    postgresql:
+      database: "foratour_erp_db"
+      cloudSql:
+        instanceId: "foratour-erp-instance"
+connectorDirs:
+  - "./connector"

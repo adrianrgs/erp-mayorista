@@ -1,0 +1,55 @@
+query ListReservations @auth(level: USER) {
+  reservations {
+    id
+    holder
+    hotelName
+    checkIn
+    checkOut
+    pax
+    status
+    totalPrice
+    netPrice
+  }
+}
+
+query ListClients @auth(level: USER) {
+  b2BClients {
+    id
+    nombre
+    email
+    telefono
+    type
+    tier
+    balance
+    status
+  }
+}
+
+query ListInvoices @auth(level: USER) {
+  financialInvoices {
+    id
+    clientName
+    date
+    dueDate
+    amount
+    vatAmount
+    type
+    status
+  }
+}
+
+query ListProperties @auth(level: USER) {
+  hotelProperties {
+    id
+    name
+    destination
+    category
+    image
+    baseRate
+    occupancy
+    roomsCount
+    stars
+    allotment
+    supplierName
+  }
+}

@@ -1,0 +1,5 @@
+connectorId: "foratour-erp-connector"
+generate:
+  javascriptSdk:
+    outputDir: "../../src/lib/dataconnect"
+    package: "@foratour-erp/dataconnect"
