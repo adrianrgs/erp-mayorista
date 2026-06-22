@@ -63,6 +63,7 @@ export default function App() {
   const [transfers, setTransfers] = useState<TransferService[]>(initialTransfers);
   const [invoices, setInvoices] = useState<FinancialInvoice[]>(initialInvoices);
   const [clients, setClients] = useState<B2BClient[]>(initialClients);
+  const [exchangeRates, setExchangeRates] = useState({ usdToEur: 0.92, usdToVes: 45.50 });
 
   const [detailedProperties, setDetailedProperties] = useState<Property[]>(initialDetailedProperties);
   const [roomTypes, setRoomTypes] = useState<RoomType[]>(initialRoomTypes);
@@ -649,6 +650,13 @@ export default function App() {
                   <AdministracionView 
                     invoices={invoices} 
                     onUpdateInvoice={handleUpdateInvoice} 
+                    reservations={reservations}
+                    boletos={boletos}
+                    clients={clients}
+                    detailedProperties={detailedProperties}
+                    exchangeRates={exchangeRates}
+                    onExchangeRatesChange={setExchangeRates}
+                    payableObligations={payableObligations}
                   />
                 )}
                 {currentSection === ProjectView.CLIENTES && (

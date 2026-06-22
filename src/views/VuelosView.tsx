@@ -840,7 +840,7 @@ function ExpedienteAereoView({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {expediente.status === "Borrador" && (
+          {expediente.status === "Borrador" && !boleto.facturarConjunto && (
             <>
               <button
                 onClick={handleSave}
@@ -855,6 +855,12 @@ function ExpedienteAereoView({
                 <Send className="w-3.5 h-3.5" /> Enviar a Facturar
               </button>
             </>
+          )}
+          {expediente.status === "Borrador" && boleto.facturarConjunto && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded">
+              <Info className="w-3.5 h-3.5" />
+              Se facturará junto a la reserva {boleto.expedienteId}
+            </div>
           )}
         </div>
       </div>

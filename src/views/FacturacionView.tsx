@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Reservation, FinancialInvoice, ServiceItem, B2BClient, ServiceType, PayableObligation, ProviderStatement } from "../types";
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
+import { formatGDSDate } from "../lib/parsers/pnrParser";
 import { 
   FileCheck, 
   Clock, 
@@ -418,7 +419,7 @@ export default function FacturacionView({
   };
 
   const aereoReservations: Reservation[] = boletos
-    .filter(b => b.expedienteAereo && b.expedienteAereo.status !== "Borrador")
+    .filter(b => b.expedienteAereo && b.expedienteAereo.status !== "Borrador" && !b.facturarConjunto)
     .map(b => {
       const exp = b.expedienteAereo!;
       const checkIn = b.segmentos?.[0]?.fecha;
@@ -521,9 +522,13 @@ export default function FacturacionView({
 
     // Approve only those requested (statusFacturacion === "Solicitado")
     const pendingServices = (activeRes.servicios || []).filter(s => s.statusFacturacion === "Solicitado");
-    if (pendingServices.length === 0) return;
+    
+    // Find joint flights
+    const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto && (!b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === "Solicitado"));
 
-    const pendingTotal = pendingServices.reduce((sum, s) => sum + s.precioVenta, 0);
+    if (pendingServices.length === 0 && jointFlights.length === 0) return;
+
+    const pendingTotal = pendingServices.reduce((sum, s) => sum + s.precioVenta, 0) + jointFlights.reduce((sum, b) => sum + b.precioVenta, 0);
 
     const agencyRecord = clients.find(c => c.nombre === activeRes.agenciaName);
     const appliedSaldoFavor = (useSaldoFavor && agencyRecord) ? Math.min(pendingTotal, agencyRecord.saldoFavor) : 0;
@@ -552,6 +557,14 @@ export default function FacturacionView({
       servicios: updatedServices
     };
     
+    if (onBoletosChange && jointFlights.length > 0) {
+      onBoletosChange(prev => prev.map(b => 
+        jointFlights.some(jf => jf.id === b.id) && b.expedienteAereo
+          ? { ...b, expedienteAereo: { ...b.expedienteAereo, status: "Facturado" } } 
+          : b
+      ));
+    }
+
     if (activeRes.hotelName === "Boleto Aéreo GDS" && onBoletosChange) {
       const boletoId = activeRes.servicios?.[0]?.id;
       const boleto = boletos.find(b => b.id === boletoId);
@@ -563,19 +576,23 @@ export default function FacturacionView({
     }
 
     // SIDE-EFFECT: Auto-generate Payable Obligation & Provider Statement (Libro Mayor)
-    const netCost = pendingServices.reduce((sum, s) => sum + s.precioNeto, 0);
-    const matchedProp = detailedProperties.find(p => p.nombre === activeRes.hotelName);
-    const providerName = matchedProp?.supplierName || activeRes.hotelName || "Proveedor General";
-
-    if (netCost > 0) {
+    const terrestrialServices = pendingServices.filter(s => s.tipo !== ServiceType.AEREO);
+    const flightServices = pendingServices.filter(s => s.tipo === ServiceType.AEREO);
+    
+    // 1. Process terrestrial services (hotels, transfers, etc.)
+    const terrestrialNetCost = terrestrialServices.reduce((sum, s) => sum + s.precioNeto, 0);
+    if (terrestrialNetCost > 0) {
+      const matchedProp = detailedProperties.find(p => p.nombre === activeRes.hotelName);
+      const providerName = matchedProp?.supplierName || activeRes.hotelName || "Proveedor General";
+      
       if (onAddPayableObligation) {
         const newObligation: PayableObligation = {
           id: `PAY-${Math.floor(5000 + Math.random() * 4999)}`,
           dueDate: activeRes.checkIn,
           providerName: providerName,
-          serviceDetail: pendingServices.map(s => s.descripcion).join(", "),
+          serviceDetail: terrestrialServices.map(s => s.descripcion).join(", "),
           locatorId: activeRes.id,
-          netCost: netCost,
+          netCost: terrestrialNetCost,
           paidAmount: 0.00,
           status: "Pendiente",
           date: new Date().toISOString().split("T")[0],
@@ -590,13 +607,89 @@ export default function FacturacionView({
           providerName: providerName,
           date: new Date().toISOString().split("T")[0],
           type: "Factura Recibida",
-          amount: netCost,
+          amount: terrestrialNetCost,
           reference: `FAC-${activeRes.id}`,
           status: "Pendiente"
         };
         onAddProviderStatement(newStatement);
       }
     }
+
+    // 2. Process standalone flight services from activeRes.servicios (if any)
+    flightServices.forEach(s => {
+      if (s.precioNeto > 0) {
+        const boleto = boletos.find(b => b.id === s.id);
+        const flightProvider = boleto?.aerolineaValidadora || "Boleto Aéreo GDS";
+        
+        if (onAddPayableObligation) {
+          const newObligation: PayableObligation = {
+            id: `PAY-${Math.floor(5000 + Math.random() * 4999)}`,
+            dueDate: activeRes.checkIn,
+            providerName: flightProvider,
+            serviceDetail: s.descripcion,
+            locatorId: activeRes.id,
+            netCost: s.precioNeto,
+            paidAmount: 0.00,
+            status: "Pendiente",
+            date: new Date().toISOString().split("T")[0],
+            currency: "USD"
+          };
+          onAddPayableObligation(newObligation);
+        }
+
+        if (onAddProviderStatement) {
+          const newStatement: ProviderStatement = {
+            id: `DOC-FAC-${Math.floor(3000 + Math.random() * 6999)}`,
+            providerName: flightProvider,
+            date: new Date().toISOString().split("T")[0],
+            type: "Factura Recibida",
+            amount: s.precioNeto,
+            reference: `FAC-${activeRes.id}-${s.id}`,
+            status: "Pendiente"
+          };
+          onAddProviderStatement(newStatement);
+        }
+      }
+    });
+
+    // 3. Process joint flights (linked to this reservation)
+    jointFlights.forEach(vuelo => {
+      const flightNetCost = vuelo.costoNeto || 0;
+      if (flightNetCost > 0) {
+        const flightProvider = vuelo.aerolineaValidadora || "Boleto Aéreo GDS";
+        const origin = vuelo.segmentos?.[0]?.origen || "";
+        const dest = vuelo.segmentos && vuelo.segmentos.length > 0 ? vuelo.segmentos[vuelo.segmentos.length-1].destino : "";
+        
+        if (onAddPayableObligation) {
+          const newObligation: PayableObligation = {
+            id: `PAY-${Math.floor(5000 + Math.random() * 4999)}`,
+            dueDate: activeRes.checkIn,
+            providerName: flightProvider,
+            serviceDetail: `Boleto Aéreo PNR: ${vuelo.pnr} (Ruta: ${origin}-${dest})`,
+            locatorId: activeRes.id,
+            netCost: flightNetCost,
+            paidAmount: 0.00,
+            status: "Pendiente",
+            date: new Date().toISOString().split("T")[0],
+            currency: "USD"
+          };
+          onAddPayableObligation(newObligation);
+        }
+
+        if (onAddProviderStatement) {
+          const newStatement: ProviderStatement = {
+            id: `DOC-FAC-${Math.floor(3000 + Math.random() * 6999)}`,
+            providerName: flightProvider,
+            date: new Date().toISOString().split("T")[0],
+            type: "Factura Recibida",
+            amount: flightNetCost,
+            reference: `FAC-${activeRes.id}-${vuelo.id}`,
+            status: "Pendiente"
+          };
+          onAddProviderStatement(newStatement);
+        }
+      }
+    });
 
     const invoiceStatus = isCredit ? "Facturado" : "Pagado";
     const receiptAmount = activeRes.comprobanteMonto || 0;
@@ -632,7 +725,7 @@ export default function FacturacionView({
         // Single invoice as before
         const newInvoice: FinancialInvoice = {
           id: `FAC-${Math.floor(5200 + Math.random() * 800)}`,
-          clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Facturación Serv. Aprobados)`,
+          clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Facturación Serv. Terrestres${jointFlights.length > 0 ? ' y Aéreos' : ''} Aprobados)`,
           date: new Date().toISOString().split("T")[0],
           dueDate: activeRes.checkIn,
           amount: pendingTotal,
@@ -713,7 +806,8 @@ export default function FacturacionView({
     if (!activeRes) return;
 
     const pendingServices = (activeRes.servicios || []).filter(s => s.statusFacturacion === "Solicitado");
-    if (pendingServices.length === 0) return;
+    const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto && (b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador"));
+    if (pendingServices.length === 0 && jointFlights.length === 0) return;
 
     const updatedServices = (activeRes.servicios || []).map(s => {
       if (s.statusFacturacion === "Solicitado") {
@@ -727,6 +821,14 @@ export default function FacturacionView({
       servicios: updatedServices
     };
     
+    if (onBoletosChange && jointFlights.length > 0) {
+      onBoletosChange(prev => prev.map(b => 
+        jointFlights.some(jf => jf.id === b.id) && b.expedienteAereo
+          ? { ...b, expedienteAereo: { ...b.expedienteAereo, status: "Borrador" as any } } 
+          : b
+      ));
+    }
+
     if (activeRes.hotelName === "Boleto Aéreo GDS" && onBoletosChange) {
       const boletoId = activeRes.servicios?.[0]?.id;
       const boleto = boletos.find(b => b.id === boletoId);
@@ -748,8 +850,9 @@ export default function FacturacionView({
     if (!activeRes) return;
 
     const services = activeRes.servicios || [];
+    const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto && (b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador"));
     const billedServices = services.filter(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado");
-    const billedTotal = billedServices.reduce((sum, s) => sum + s.precioVenta, 0);
+    const billedTotal = billedServices.reduce((sum, s) => sum + s.precioVenta, 0) + jointFlights.reduce((sum, b) => sum + b.precioVenta, 0);
 
     // Mark all services as "Rechazado" (canceled in billing)
     const updatedServices = services.map(s => {
@@ -764,6 +867,14 @@ export default function FacturacionView({
       servicios: updatedServices
     };
     
+    if (onBoletosChange && jointFlights.length > 0) {
+      onBoletosChange(prev => prev.map(b => 
+        jointFlights.some(jf => jf.id === b.id) && b.expedienteAereo
+          ? { ...b, expedienteAereo: { ...b.expedienteAereo, status: "Borrador" as any } } 
+          : b
+      ));
+    }
+
     if (activeRes.hotelName === "Boleto Aéreo GDS" && onBoletosChange) {
       const boletoId = activeRes.servicios?.[0]?.id;
       const boleto = boletos.find(b => b.id === boletoId);
@@ -943,12 +1054,18 @@ export default function FacturacionView({
                   ) : (
                     sortedAndFiltered.map((r) => {
                       const services = r.servicios || [];
-                      const billedCount = services.filter(s => s.statusFacturacion === "Facturado").length;
-                      const requestedCount = services.filter(s => s.statusFacturacion === "Solicitado").length;
-                      const totalCount = services.length;
+                      const jointFlights = boletos.filter(b => b.expedienteId === r.id && b.facturarConjunto);
+                      const billedCount = services.filter(s => s.statusFacturacion === "Facturado").length +
+                                         jointFlights.filter(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea").length;
+                      const requestedCount = services.filter(s => s.statusFacturacion === "Solicitado").length +
+                                            jointFlights.filter(b => b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador").length;
+                      const totalCount = services.length + jointFlights.length;
                       const percent = totalCount > 0 ? Math.round((billedCount / totalCount) * 100) : 100;
-                      const hasRequest = requestedCount > 0;
-                      const isCancellationRequest = r.status === "Cancelada" && services.some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado");
+                      const hasRequest = requestedCount > 0 || jointFlights.some(b => b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador");
+                      const isCancellationRequest = r.status === "Cancelada" && (
+                        services.some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado") ||
+                        jointFlights.some(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador")
+                      );
 
                       return (
                         <tr 
@@ -1211,6 +1328,45 @@ export default function FacturacionView({
                     </div>
                   );
                 })}
+                {boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto).map((vuelo) => {
+                  const status = (vuelo.expedienteAereo?.status || "Borrador") as any;
+                  const origin = vuelo.segmentos?.[0]?.origen || "";
+                  const dest = vuelo.segmentos && vuelo.segmentos.length > 0 ? vuelo.segmentos[vuelo.segmentos.length-1].destino : "";
+                  return (
+                    <div key={vuelo.id} className="p-3 bg-white flex items-start justify-between gap-4 border-t border-zinc-150 bg-blue-50/10">
+                      <div className="space-y-0.5 flex-1 text-left">
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-blue-900 text-white">
+                            AÉREO
+                          </span>
+                          <span className="text-[9px] font-mono text-zinc-400">PNR: {vuelo.pnr}</span>
+                        </div>
+                        <p className="text-xs font-bold text-zinc-900 leading-snug mt-1">Boleto Aéreo GDS - Ruta: {origin}-{dest}</p>
+                        <span className="text-zinc-950 text-xs font-black block mt-0.5">${vuelo.precioVenta.toLocaleString("es-ES")} USD</span>
+                      </div>
+                      
+                      <div className="flex-shrink-0">
+                        {status === "Facturado" || status === "PagadoAerolinea" ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-emerald-50 border border-emerald-250 text-emerald-700 inline-flex items-center gap-1">
+                            ● Aprobado
+                          </span>
+                        ) : status === "Solicitado" ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-blue-50 border border-blue-250 text-blue-750 inline-flex items-center gap-1 animate-pulse">
+                            ● Solicitado
+                          </span>
+                        ) : status === "Rechazado" ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-red-50 border border-red-200 text-red-655 inline-flex items-center gap-1">
+                            ● Rechazado
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-bold uppercase bg-amber-50 border border-amber-200 text-amber-750 inline-flex items-center gap-1">
+                            ● Borrador
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -1226,7 +1382,9 @@ export default function FacturacionView({
                 const paidInvoicedAmount = associatedInvoices.filter(inv => inv.status === "Pagado").reduce((sum, inv) => sum + inv.amount, 0);
                 const unpaidInvoicedAmount = associatedInvoices.filter(inv => inv.status !== "Pagado").reduce((sum, inv) => sum + inv.amount, 0);
                 const invoicedTotal = paidInvoicedAmount + unpaidInvoicedAmount;
-                const hasBilledOrRequested = (activeRes.servicios || []).some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado");
+                const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
+                const hasBilledOrRequested = (activeRes.servicios || []).some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado") ||
+                                             jointFlights.some(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea" || b.expedienteAereo?.status === "Solicitado");
 
                 if (!hasBilledOrRequested) {
                   return (
@@ -1304,11 +1462,15 @@ export default function FacturacionView({
               }
 
               const requestedServices = (activeRes.servicios || []).filter(s => s.statusFacturacion === "Solicitado");
-              const requestedTotal = requestedServices.reduce((sum, s) => sum + s.precioVenta, 0);
-              const hasRequests = requestedServices.length > 0;
+              const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto && (b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador"));
+              const requestedTotal = requestedServices.reduce((sum, s) => sum + s.precioVenta, 0) + jointFlights.reduce((sum, b) => sum + b.precioVenta, 0);
+              const hasRequests = requestedServices.length > 0 || jointFlights.length > 0;
 
               const billedServices = (activeRes.servicios || []).filter(s => s.statusFacturacion === "Facturado");
-              const hasBorrador = (activeRes.servicios || []).some(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === undefined);
+              const billedFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto && (b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea"));
+              
+              const hasBorrador = (activeRes.servicios || []).some(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === undefined) ||
+                                  boletos.some(b => b.expedienteId === activeRes.id && b.facturarConjunto && (!b.expedienteAereo || b.expedienteAereo.status === "Borrador"));
               const hasRechazados = (activeRes.servicios || []).some(s => s.statusFacturacion === "Rechazado");
 
               const agencyRecord = clients.find(c => c.nombre === activeRes.agenciaName);
@@ -1678,6 +1840,48 @@ export default function FacturacionView({
                           </tr>
                         );
                       })}
+                      {(() => {
+                        const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
+                        return jointFlights.map((vuelo) => {
+                          const margin = vuelo.precioVenta - vuelo.costoNeto;
+                          return (
+                            <tr key={vuelo.id} className="hover:bg-zinc-50/50 bg-blue-50/10">
+                              <td className="p-3 font-mono font-bold text-zinc-900">{vuelo.id}</td>
+                              <td className="p-3">
+                                <div className="space-y-0.5 text-left">
+                                  <div className="flex items-center">
+                                    <span className="px-1.5 py-0.25 bg-blue-100 text-blue-700 text-[8px] font-black border border-blue-200 rounded mr-2 uppercase">
+                                      Aéreo GDS
+                                    </span>
+                                    <span className="font-bold text-zinc-900">Itinerario Vuelo - PNR: {vuelo.pnr}</span>
+                                  </div>
+                                  <div className="mt-2 text-[10px] text-zinc-605 bg-white p-2 rounded border border-zinc-200 space-y-1 text-left font-sans shadow-2xs">
+                                    {vuelo.segmentos.map((seg, i) => (
+                                      <div key={i} className="flex gap-2 font-mono">
+                                        <span className="font-bold text-zinc-800">{seg.origen} → {seg.destino}</span>
+                                        <span>({seg.aerolinea}{seg.numeroVuelo})</span>
+                                        <span className="text-zinc-400 ml-auto">{formatGDSDate(seg.fecha)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-3 text-right font-mono text-zinc-500">${vuelo.costoNeto.toLocaleString("es-ES")} USD</td>
+                              <td className="p-3 text-right font-mono text-zinc-900 font-bold">${vuelo.precioVenta.toLocaleString("es-ES")} USD</td>
+                              <td className="p-3 text-right font-mono text-emerald-700 font-extrabold">+${margin.toLocaleString("es-ES")} USD</td>
+                              <td className="p-3 text-center">
+                                <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase ${
+                                  vuelo.expedienteAereo?.status === "Facturado" || vuelo.expedienteAereo?.status === "PagadoAerolinea"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : "bg-blue-50 text-blue-750 border border-blue-200 animate-pulse"
+                                }`}>
+                                  {vuelo.expedienteAereo?.status === "Facturado" || vuelo.expedienteAereo?.status === "PagadoAerolinea" ? "Facturado" : "Por Facturar"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -1819,6 +2023,52 @@ export default function FacturacionView({
                   )}
                 </div>
               </div>
+
+              {/* Vuelos Conjuntos Facturados */}
+              {(() => {
+                const vuelosFacturados = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto && (b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea"));
+                if (vuelosFacturados.length === 0) return null;
+                
+                return (
+                  <div className="space-y-4 mb-6">
+                    <h5 className="text-[9.5px] font-black text-zinc-455 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Itinerario de Vuelo Aéreo</h5>
+                    <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30">
+                      {vuelosFacturados.map((vuelo) => (
+                        <div key={vuelo.id} className="p-4 bg-white space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="px-2 py-0.5 bg-blue-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
+                              BOLETO AÉREO GDS
+                            </span>
+                            <span className="text-[9px] font-mono text-zinc-455 font-semibold">PNR: {vuelo.pnr}</span>
+                          </div>
+                          
+                          <div className="space-y-2 mt-2">
+                            {vuelo.segmentos.map((seg, i) => (
+                              <div key={i} className="flex items-center gap-3 text-xs">
+                                <span className="font-mono font-bold text-zinc-400 text-[10px]">{String(i + 1).padStart(2, "0")}</span>
+                                <span className="font-bold text-zinc-800 font-mono">{seg.aerolinea}{seg.numeroVuelo}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-zinc-950">{seg.origen}</span>
+                                  <span className="text-zinc-300">→</span>
+                                  <span className="font-bold text-zinc-950">{seg.destino}</span>
+                                </div>
+                                <span className="ml-auto text-zinc-600 font-medium">
+                                  {formatGDSDate(seg.fecha)} · Salida: {seg.horaSalida}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                          
+                          <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-[10.5px] text-zinc-650 font-semibold space-y-1 font-sans mt-3">
+                            <span className="text-[8.5px] font-black text-zinc-400 uppercase tracking-wider block">Instrucciones de Embarque</span>
+                            <p>Preséntese en el mostrador de la aerolínea 3 horas antes de la salida programada del vuelo para el check-in internacional, o 2 horas antes para vuelos domésticos. El equipaje permitido dependerá de la política de la clase {vuelo.segmentos[0]?.clase || "Y"}.</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Services List (Only Billed) */}
               <div className="space-y-4 mb-6">

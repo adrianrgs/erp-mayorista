@@ -86,6 +86,10 @@ export interface FlightTicket {
    */
   vinculadoAExpediente: boolean;
   /**
+   * Indica si el boleto se debe facturar conjuntamente con la reserva terrestre a la que está vinculado.
+   */
+  facturarConjunto?: boolean;
+  /**
    * ID del expediente al que fue vinculado (si aplica).
    * Referencia a la colección `reservas` en Firestore.
    */

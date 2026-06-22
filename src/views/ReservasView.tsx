@@ -191,6 +191,7 @@ export default function ReservasView({
   // ── Estado de vinculación con Módulo de Vuelos ─────────────────────────────
   /** ID del boleto seleccionado para vincular al expediente */
   const [cartBoletoId, setCartBoletoId] = useState<string | null>(null);
+  const [cartFacturarConjunto, setCartFacturarConjunto] = useState<boolean>(false);
   /** Controla apertura del drawer de búsqueda de boletos */
   const [showBoletoDrawer, setShowBoletoDrawer] = useState(false);
   /** Query de búsqueda dentro del drawer */
@@ -311,8 +312,10 @@ export default function ReservasView({
     setBillingMetodo("Transferencia Bancaria");
     
     const services = activeRes.servicios || [];
+    const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
     const unsentServices = services.filter(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === "Rechazado" || s.statusFacturacion === undefined);
-    const pendingTotal = unsentServices.reduce((sum, s) => sum + s.precioVenta, 0);
+    const unsentFlights = jointFlights.filter(b => !b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined);
+    const pendingTotal = unsentServices.reduce((sum, s) => sum + s.precioVenta, 0) + unsentFlights.reduce((sum, b) => sum + b.precioVenta, 0);
     setBillingMonto(pendingTotal.toString());
     setBillingModalError("");
     setShowSendBillingModal(true);
@@ -342,6 +345,30 @@ export default function ReservasView({
       comprobanteMetodo: billingFacturacionTipo === "Pago Contado" ? billingMetodo : undefined,
       comprobanteMonto: billingFacturacionTipo === "Pago Contado" ? parseFloat(billingMonto) || 0 : undefined
     };
+
+    if (onBoletosChange) {
+      onBoletosChange(prev => prev.map(b => {
+        if (b.expedienteId === activeRes.id && b.facturarConjunto && (!b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined)) {
+          return {
+            ...b,
+            expedienteAereo: b.expedienteAereo
+              ? { ...b.expedienteAereo, status: "Solicitado" as const }
+              : {
+                  id: `EXP-AER-${b.id}`,
+                  pnr: b.pnr,
+                  pasajerosCount: b.pasajeros.length,
+                  status: "Solicitado" as const,
+                  totalNeto: b.costoNeto || 0,
+                  totalVenta: b.precioVenta || 0,
+                  fees: 0,
+                  currency: "USD",
+                  fechaCreacion: new Date().toISOString()
+                }
+          };
+        }
+        return b;
+      }));
+    }
 
     if (onUpdateReservation) {
       onUpdateReservation(updatedRes);
@@ -1002,8 +1029,21 @@ export default function ReservasView({
       return;
     }
 
-    const totalNeto = cartServices.reduce((sum, s) => sum + s.precioNeto, 0);
-    const totalVenta = cartServices.reduce((sum, s) => sum + s.precioVenta, 0);
+    let totalNeto = cartServices.reduce((sum, s) => sum + s.precioNeto, 0);
+    let totalVenta = cartServices.reduce((sum, s) => sum + s.precioVenta, 0);
+
+    const targetResId = isEditingReservationId || cartId;
+    const existingJointFlights = boletos.filter(b => b.expedienteId === targetResId && b.facturarConjunto);
+    const newJointFlight = (cartBoletoId && cartFacturarConjunto) ? boletos.find(b => b.id === cartBoletoId) : null;
+
+    existingJointFlights.forEach(f => {
+      totalNeto += f.costoNeto;
+      totalVenta += f.precioVenta;
+    });
+    if (newJointFlight) {
+      totalNeto += newJointFlight.costoNeto;
+      totalVenta += newJointFlight.precioVenta;
+    }
 
     const hotelSrv = cartServices.find(s => s.tipo === ServiceType.ALOJAMIENTO);
     const hotelName = hotelSrv ? hotelSrv.descripcion.split(" - ")[0].replace("Hotel: ", "") : "Multi-servicio Terrestre";
@@ -1029,6 +1069,18 @@ export default function ReservasView({
         servicios: cartServices,
         tipo: cartTipo
       };
+
+      if (cartBoletoId && onBoletosChange) {
+        onBoletosChange(prev =>
+          prev.map(b =>
+            b.id === cartBoletoId
+              ? { ...b, vinculadoAExpediente: true, expedienteId: isEditingReservationId, facturarConjunto: cartFacturarConjunto }
+              : b
+          )
+        );
+      }
+      setCartBoletoId(null);
+      setCartFacturarConjunto(false);
 
       if (onUpdateReservation) {
         onUpdateReservation(updatedRes);
@@ -1066,12 +1118,13 @@ export default function ReservasView({
         onBoletosChange(prev =>
           prev.map(b =>
             b.id === cartBoletoId
-              ? { ...b, vinculadoAExpediente: true, expedienteId: cartId }
+              ? { ...b, vinculadoAExpediente: true, expedienteId: cartId, facturarConjunto: cartFacturarConjunto }
               : b
           )
         );
       }
       setCartBoletoId(null);
+      setCartFacturarConjunto(false);
       // ─────────────────────────────────────────────────────────────────────
 
       setSelectedResId(cartId);
@@ -1267,20 +1320,19 @@ export default function ReservasView({
           {/* Listado Completo en Tabla */}
           <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden shadow-xs">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
+              <table className="w-full text-left border-collapse text-xs table-fixed">
                 <thead>
-                  <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase text-[9px] font-extrabold tracking-wider">
-                    <th className="p-4 w-28">Localizador</th>
-                    <th className="p-4">Pasajero Titular</th>
-                    <th className="p-4">Mercado</th>
-                    <th className="p-4">Establecimiento / Detalle</th>
-                    <th className="p-4">Servicios</th>
-                    <th className="p-4 text-right">Total PVP</th>
-                    <th className="p-4">Agencia B2B</th>
-                    <th className="p-4">Estatus Reserva</th>
-                    <th className="p-4 text-center">Cobro B2B</th>
-                    <th className="p-4 text-center">Pago Proveedor</th>
-                    <th className="p-4 text-center">Acciones</th>
+                  <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase text-[9px] font-extrabold tracking-tight">
+                    <th className="px-2 py-3 w-[12%] whitespace-nowrap">Localizador</th>
+                    <th className="px-2 py-3 w-[14%]">Pasajero Titular</th>
+                    <th className="px-2 py-3 w-[16%]">Establecimiento / Detalle</th>
+                    <th className="px-2 py-3 w-[8%] text-center">Servicios</th>
+                    <th className="px-2 py-3 w-[9%] text-right whitespace-nowrap">Total PVP</th>
+                    <th className="px-2 py-3 w-[11%]">Agencia B2B</th>
+                    <th className="px-2 py-3 w-[10%] whitespace-nowrap text-center">Estatus</th>
+                    <th className="px-2 py-3 w-[8%] text-center whitespace-nowrap">Cobro</th>
+                    <th className="px-2 py-3 w-[8%] text-center whitespace-nowrap">Pago Prov.</th>
+                    <th className="px-2 py-3 w-[4%] text-center whitespace-nowrap"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
@@ -1297,49 +1349,49 @@ export default function ReservasView({
                         onClick={() => { setSelectedResId(r.id); setViewLevel(2); }}
                         className="hover:bg-zinc-50/60 transition-colors cursor-pointer group"
                       >
-                        <td className="p-4 font-mono font-bold text-zinc-900">{r.id}</td>
-                        <td className="p-4 font-bold text-zinc-900 group-hover:underline">
-                          <div className="flex items-center gap-1.5">
-                            <User className="w-3.5 h-3.5 text-zinc-400" />
-                            {r.holder}
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border ${
+                        <td className="px-2 py-2.5 font-mono font-bold text-zinc-900 whitespace-nowrap truncate text-[11px]">
+                          {r.id}
+                          <span className={`ml-1.5 px-1 py-0.5 rounded text-[7px] font-extrabold uppercase border ${
                             r.mercado === "INTERNACIONAL" ? "bg-purple-50 border-purple-200 text-purple-700" : "bg-blue-50 border-blue-200 text-blue-700"
                           }`}>
-                            {r.mercado || "INTERNACIONAL"}
+                            {r.mercado === "INTERNACIONAL" ? "INTL" : "NAC"}
                           </span>
                         </td>
-                        <td className="p-4 text-zinc-750 font-semibold truncate max-w-xs">
+                        <td className="px-2 py-2.5 font-bold text-zinc-900 group-hover:underline truncate text-[11px]">
+                          <div className="flex items-center gap-1.5">
+                            <User className="w-3 h-3 text-zinc-400 flex-shrink-0" />
+                            <span className="truncate">{r.holder}</span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-2.5 text-zinc-750 font-semibold truncate text-[11px]">
                           {r.hotelName}
                         </td>
-                        <td className="p-4 text-zinc-500 font-bold">
-                          {r.servicios?.length || 1} servicio(s)
+                        <td className="px-2 py-2.5 text-zinc-500 font-bold whitespace-nowrap text-center text-[11px]">
+                          {r.servicios?.length || 1}
                         </td>
-                        <td className="p-4 text-right font-bold text-zinc-950">${r.totalPrice.toLocaleString("es-ES")} USD</td>
-                        <td className="p-4 text-zinc-650 font-semibold">{r.agenciaName || "Directo"}</td>
-                        <td className="p-4">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase border inline-flex items-center gap-1 ${getStatusBadge(r.status)}`}>
-                            ● {r.status}
+                        <td className="px-2 py-2.5 text-right font-bold text-zinc-950 whitespace-nowrap text-[11px]">${r.totalPrice.toLocaleString("es-ES")} USD</td>
+                        <td className="px-2 py-2.5 text-zinc-650 font-semibold truncate text-[11px]">{r.agenciaName || "Directo"}</td>
+                        <td className="px-2 py-2.5 whitespace-nowrap text-center text-[11px]">
+                          <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-bold uppercase border inline-flex items-center gap-1 truncate max-w-full ${getStatusBadge(r.status)}`}>
+                            {r.status}
                           </span>
                         </td>
-                        <td className="p-4 text-center">
+                        <td className="px-2 py-2.5 text-center whitespace-nowrap text-[11px]">
                           {(() => {
                             const cPay = getClientPaymentStatus(r.id);
                             return (
-                              <span className={`px-2 py-0.5 rounded text-[8.5px] uppercase tracking-wider border font-bold ${cPay.color}`}>
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider border font-bold truncate max-w-full inline-block ${cPay.color}`}>
                                 {cPay.status}
                               </span>
                             );
                           })()}
                         </td>
-                        <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-2 py-2.5 text-center whitespace-nowrap text-[11px]" onClick={(e) => e.stopPropagation()}>
                           {(() => {
                             const pPay = getProviderPaymentStatus(r.id);
                             return (
-                              <div className="flex items-center justify-center gap-1.5">
-                                <span className={`px-2 py-0.5 rounded text-[8.5px] uppercase tracking-wider border font-bold ${pPay.color}`}>
+                              <div className="flex items-center justify-center gap-1">
+                                <span className={`px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider border font-bold truncate max-w-full ${pPay.color}`}>
                                   {pPay.status}
                                 </span>
                                 {pPay.obligation?.attachedFile && (
@@ -1351,19 +1403,20 @@ export default function ReservasView({
                                     }}
                                     className="p-1 hover:bg-zinc-150 rounded text-zinc-600 transition-colors cursor-pointer"
                                   >
-                                    <Download className="w-3.5 h-3.5 text-emerald-600" />
+                                    <Download className="w-3 h-3 text-emerald-600" />
                                   </button>
                                 )}
                               </div>
                             );
                           })()}
                         </td>
-                        <td className="p-4 text-center" onClick={e => e.stopPropagation()}>
+                        <td className="px-2 py-2.5 text-center whitespace-nowrap text-[11px]" onClick={e => e.stopPropagation()}>
                           <button
                             onClick={() => { setSelectedResId(r.id); setViewLevel(2); }}
-                            className="px-2.5 py-1 bg-zinc-50 border border-zinc-200 hover:bg-zinc-900 hover:text-white rounded text-[9px] font-extrabold uppercase tracking-wide cursor-pointer transition-all inline-flex items-center gap-0.5"
+                            className="p-1.5 bg-zinc-50 border border-zinc-200 hover:bg-zinc-900 hover:text-white rounded text-[10px] cursor-pointer transition-all inline-flex items-center justify-center"
+                            title="Ver Expediente"
                           >
-                            Expediente <ChevronRight className="w-3 h-3" />
+                            <ChevronRight className="w-3.5 h-3.5" />
                           </button>
                         </td>
                       </tr>
@@ -1665,6 +1718,60 @@ export default function ReservasView({
                       );
                     })()
                   )}
+
+                  {(() => {
+                    const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
+                    return jointFlights.map(vuelo => {
+                      const vProfit = vuelo.precioVenta - vuelo.costoNeto;
+                      const statusFact = vuelo.expedienteAereo?.status === "Facturado" || vuelo.expedienteAereo?.status === "PagadoAerolinea" ? "Facturado (Aprobado)" : "Enviado a Facturación (Conjunta)";
+                      return (
+                        <div key={vuelo.id} className="py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-t border-zinc-150">
+                          <div className="space-y-1 max-w-md">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-blue-300 bg-blue-100 text-blue-800">
+                                Aéreo GDS
+                              </span>
+                              <span className="text-[9px] font-mono text-zinc-400">Vuelo Vinculado</span>
+                              <span className={`px-1.5 py-0.25 rounded-full text-[7.5px] font-bold uppercase tracking-wider ${vuelo.expedienteAereo?.status === 'Facturado' ? 'bg-emerald-50 border-emerald-250 text-emerald-700' : 'bg-blue-50 border-blue-250 text-blue-700'}`}>
+                                {statusFact}
+                              </span>
+                            </div>
+                            <p className="text-xs font-bold text-zinc-900 mt-1 truncate">Itinerario Vuelo - PNR: {vuelo.pnr}</p>
+                            <div className="text-[9px] text-zinc-500 font-mono mt-0.5">
+                              {vuelo.segmentos.map((s, i) => <span key={i} className="mr-2">{s.origen} ➔ {s.destino}</span>)}
+                            </div>
+                          </div>
+                          
+                          <div className="w-full md:w-auto grid grid-cols-2 sm:grid-cols-5 md:flex md:items-center gap-x-4 gap-y-2 md:gap-6 text-xs font-semibold text-zinc-800 border-t md:border-t-0 border-zinc-100 pt-2 md:pt-0">
+                            <div className="text-left md:text-right">
+                              <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">PVP (Público)</span>
+                              <span className="text-zinc-900 font-bold">${vuelo.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            
+                            <div className="text-left md:text-right">
+                              <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">Comisión (0%)</span>
+                              <span className="text-amber-600 font-bold">-$0,00</span>
+                            </div>
+
+                            <div className="text-left md:text-right">
+                              <span className="text-[9px] text-zinc-500 uppercase tracking-wider block font-black text-zinc-950">Neto B2B (Cobrar)</span>
+                              <span className="text-zinc-950 font-black">${vuelo.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                            </div>
+
+                            <div className="text-left md:text-right">
+                              <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">Neto Prov (Costo)</span>
+                              <span className="text-zinc-500 font-bold">${vuelo.costoNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                            </div>
+
+                            <div className="text-left md:text-right">
+                              <span className="text-[9px] text-emerald-600 uppercase tracking-wider block font-bold">Ganancia Foratour</span>
+                              <span className="text-emerald-700 font-bold">+${vProfit.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 
@@ -1690,13 +1797,19 @@ export default function ReservasView({
               </h4>
 
               {(() => {
-                const totalPvp = activeRes.servicios && activeRes.servicios.length > 0
+                const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
+                let totalPvp = activeRes.servicios && activeRes.servicios.length > 0
                   ? activeRes.servicios.reduce((sum, s) => {
                       const comisionPct = s.comisionB2B !== undefined ? s.comisionB2B : 10;
                       const itemPvp = s.precioPvp !== undefined ? s.precioPvp : (s.precioVenta / (1 - comisionPct / 100));
                       return sum + itemPvp;
                     }, 0)
                   : (activeRes.totalPrice / 0.9);
+                
+                jointFlights.forEach(f => {
+                   totalPvp += f.precioVenta;
+                });
+
                 const totalVenta = activeRes.totalPrice;
                 const totalNeto = activeRes.netPrice;
                 const totalComisionesB2B = totalPvp - totalVenta;
@@ -1765,46 +1878,58 @@ export default function ReservasView({
                     {/* Billed breakdown */}
                     {(() => {
                       const services = activeRes.servicios || [];
-                      const billedCount = services.filter(s => s.statusFacturacion === "Facturado").length;
-                      const totalCount = services.length;
-                      const hasPending = services.some(s => s.statusFacturacion !== "Facturado");
-                      const pendingTotal = services.filter(s => s.statusFacturacion !== "Facturado").reduce((sum, s) => sum + s.precioVenta, 0);
-
+                      const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
+                      
+                      const billedCount = services.filter(s => s.statusFacturacion === "Facturado").length +
+                                         jointFlights.filter(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea").length;
+                                         
+                      const totalCount = services.length + jointFlights.length;
+                      
+                      const hasPending = services.some(s => s.statusFacturacion !== "Facturado") ||
+                                         jointFlights.some(b => b.expedienteAereo?.status !== "Facturado" && b.expedienteAereo?.status !== "PagadoAerolinea");
+                                         
                       return (
                         <div className="space-y-3 text-xs font-semibold">
                           <div className="flex justify-between text-[11px] text-zinc-655">
                             <span>Estado Facturación:</span>
                             <span className={hasPending ? "text-amber-700 font-bold" : "text-emerald-700 font-extrabold"}>
-                              {hasPending ? `Pendiente por Facturar ($${pendingTotal} USD)` : "Totalmente Facturado"}
+                              {hasPending ? "Pendiente por Facturar" : "Totalmente Facturado"}
                             </span>
                           </div>
 
                           {(() => {
-                            const hasBorradorOrRechazado = services.some(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === "Rechazado" || s.statusFacturacion === undefined);
-                            const hasSolicitado = services.some(s => s.statusFacturacion === "Solicitado");
+                            const hasBorradorOrRechazado = services.some(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === "Rechazado" || s.statusFacturacion === undefined) ||
+                                                           jointFlights.some(b => !b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined);
+                            const hasSolicitado = services.some(s => s.statusFacturacion === "Solicitado") ||
+                                                  jointFlights.some(b => b.expedienteAereo?.status === "Solicitado");
                             
                             const billedServices = services.filter(s => s.statusFacturacion === "Facturado");
+                            const billedFlights = jointFlights.filter(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea");
+                            
                             const pendingServices = services.filter(s => s.statusFacturacion === "Solicitado");
+                            const pendingFlights = jointFlights.filter(b => b.expedienteAereo?.status === "Solicitado");
+                            
                             const unsentServices = services.filter(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === "Rechazado" || s.statusFacturacion === undefined);
-                            const pendingTotal = unsentServices.reduce((sum, s) => sum + s.precioVenta, 0);
+                            const unsentFlights = jointFlights.filter(b => !b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined);
+                            const pendingTotal = unsentServices.reduce((sum, s) => sum + s.precioVenta, 0) + unsentFlights.reduce((sum, b) => sum + b.precioVenta, 0);
 
                             return (
                               <div className="space-y-3 text-xs font-semibold">
                                 <div className="space-y-1">
                                   <div className="flex justify-between text-[11px] text-zinc-655">
-                                    <span>Servicios Facturados:</span>
-                                    <span className="text-emerald-700 font-extrabold">{billedServices.length} / {services.length}</span>
+                                    <span>Servicios/Vuelos Facturados:</span>
+                                    <span className="text-emerald-700 font-extrabold">{billedServices.length + billedFlights.length} / {services.length + jointFlights.length}</span>
                                   </div>
                                   {hasSolicitado && (
                                     <div className="flex justify-between text-[11px] text-zinc-655">
                                       <span>En Revisión Facturación:</span>
-                                      <span className="text-blue-700 font-extrabold">{pendingServices.length}</span>
+                                      <span className="text-blue-700 font-extrabold">{pendingServices.length + pendingFlights.length}</span>
                                     </div>
                                   )}
                                   {hasBorradorOrRechazado && (
                                     <div className="flex justify-between text-[11px] text-zinc-655">
                                       <span>Pendientes de Enviar:</span>
-                                      <span className="text-amber-700 font-extrabold">{unsentServices.length} (${pendingTotal} USD)</span>
+                                      <span className="text-amber-700 font-extrabold">{unsentServices.length + unsentFlights.length} (${pendingTotal} USD)</span>
                                     </div>
                                   )}
                                 </div>
@@ -2259,19 +2384,32 @@ export default function ReservasView({
                     const ruta = buildRoute(b.segmentos);
                     const primerSeg = b.segmentos[0];
                     return (
-                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded bg-emerald-600 flex items-center justify-center flex-shrink-0">
-                            <Plane className="w-4 h-4 text-white" />
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded bg-emerald-600 flex items-center justify-center flex-shrink-0">
+                              <Plane className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-emerald-800 font-mono">{b.pnr} — {ruta}</p>
+                              <p className="text-[10px] text-emerald-600 font-medium">
+                                {b.pasajeros.map(p => p.nombre.split("/")[0]).join(" · ")} · {primerSeg ? formatGDSDate(primerSeg.fecha) : ""}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-xs font-bold text-emerald-800 font-mono">{b.pnr} — {ruta}</p>
-                            <p className="text-[10px] text-emerald-600 font-medium">
-                              {b.pasajeros.map(p => p.nombre.split("/")[0]).join(" · ")} · {primerSeg ? formatGDSDate(primerSeg.fecha) : ""}
-                            </p>
-                          </div>
+                          <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 bg-emerald-100 text-emerald-700 border border-emerald-300 rounded">Vinculado ✓</span>
                         </div>
-                        <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 bg-emerald-100 text-emerald-700 border border-emerald-300 rounded">Vinculado ✓</span>
+                        <label className="flex items-center gap-2 mt-1 cursor-pointer w-max">
+                          <input
+                            type="checkbox"
+                            className="w-3.5 h-3.5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-600"
+                            checked={cartFacturarConjunto}
+                            onChange={(e) => setCartFacturarConjunto(e.target.checked)}
+                          />
+                          <span className="text-[10px] font-bold text-emerald-800">
+                            Facturar conjuntamente con esta reserva terrestre (Unifica precios y voucher)
+                          </span>
+                        </label>
                       </div>
                     );
                   })() : (
@@ -2383,6 +2521,39 @@ export default function ReservasView({
                       );
                     })
                   )}
+                  
+                  {(() => {
+                    const targetResId = isEditingReservationId || cartId;
+                    const jointFlightsToRender = boletos.filter(b => 
+                      (b.expedienteId === targetResId && b.facturarConjunto && b.id !== cartBoletoId) || 
+                      (b.id === cartBoletoId && cartFacturarConjunto)
+                    );
+                    
+                    return jointFlightsToRender.map(vuelo => {
+                      const vProfit = vuelo.precioVenta - vuelo.costoNeto;
+                      return (
+                        <div key={vuelo.id} className="p-4 bg-blue-50/20 hover:bg-zinc-50 flex items-start gap-4 transition-colors group">
+                          <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 border border-blue-200">
+                            <Plane className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 bg-blue-100 text-blue-750 text-[9px] font-black uppercase tracking-wider rounded border border-blue-200">
+                                Boleto Aéreo GDS
+                              </span>
+                            </div>
+                            <p className="text-xs font-bold text-zinc-900 leading-tight truncate">Itinerario Vuelo - PNR: {vuelo.pnr}</p>
+                          </div>
+                          <div className="text-right flex-shrink-0 flex items-center gap-2">
+                            <div>
+                              <p className="text-xs font-black text-zinc-955">${vuelo.precioVenta.toLocaleString("es-ES")} USD</p>
+                              <p className="text-[9px] text-zinc-400 font-medium">Neto: ${vuelo.costoNeto.toLocaleString("es-ES")} | Margen: +${vProfit.toLocaleString("es-ES")}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 
@@ -2455,8 +2626,20 @@ export default function ReservasView({
                 </h4>
 
                 {(() => {
-                  const totalNeto = cartServices.reduce((sum, s) => sum + s.precioNeto, 0);
-                  const totalVenta = cartServices.reduce((sum, s) => sum + s.precioVenta, 0);
+                  let totalNeto = cartServices.reduce((sum, s) => sum + s.precioNeto, 0);
+                  let totalVenta = cartServices.reduce((sum, s) => sum + s.precioVenta, 0);
+
+                  const targetResId = isEditingReservationId || cartId;
+                  const jointFlightsToRender = boletos.filter(b => 
+                    (b.expedienteId === targetResId && b.facturarConjunto && b.id !== cartBoletoId) || 
+                    (b.id === cartBoletoId && cartFacturarConjunto)
+                  );
+
+                  jointFlightsToRender.forEach(f => {
+                    totalNeto += f.costoNeto;
+                    totalVenta += f.precioVenta;
+                  });
+
                   const totalMargen = totalVenta - totalNeto;
                   const ratioMargen = totalNeto > 0 ? Math.round((totalMargen / totalNeto) * 100) : 0;
                   
@@ -2491,7 +2674,7 @@ export default function ReservasView({
                 <button
                   type="submit"
                   className="w-full py-3 bg-zinc-950 hover:bg-zinc-850 text-white font-black text-xs uppercase tracking-wider rounded transition-all cursor-pointer text-center block shadow-sm disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed"
-                  disabled={cartServices.length === 0 || !cartHolder.trim()}
+                  disabled={(cartServices.length === 0 && !(cartBoletoId && cartFacturarConjunto)) || !cartHolder.trim()}
                 >
                   {isEditingReservationId ? "Guardar Cambios del Expediente" : "Confirmar y Generar Expediente"}
                 </button>
@@ -3953,6 +4136,52 @@ export default function ReservasView({
                   )}
                 </div>
               </div>
+
+              {/* Vuelos Conjuntos Facturados */}
+              {(() => {
+                const vuelosFacturados = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto && (b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea"));
+                if (vuelosFacturados.length === 0) return null;
+                
+                return (
+                  <div className="space-y-4 mb-6">
+                    <h5 className="text-[9.5px] font-black text-zinc-455 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Itinerario de Vuelo Aéreo</h5>
+                    <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30">
+                      {vuelosFacturados.map((vuelo) => (
+                        <div key={vuelo.id} className="p-4 bg-white space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="px-2 py-0.5 bg-blue-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
+                              BOLETO AÉREO GDS
+                            </span>
+                            <span className="text-[9px] font-mono text-zinc-455 font-semibold">PNR: {vuelo.pnr}</span>
+                          </div>
+                          
+                          <div className="space-y-2 mt-2">
+                            {vuelo.segmentos.map((seg, i) => (
+                              <div key={i} className="flex items-center gap-3 text-xs">
+                                <span className="font-mono font-bold text-zinc-400 text-[10px]">{String(i + 1).padStart(2, "0")}</span>
+                                <span className="font-bold text-zinc-800 font-mono">{seg.aerolinea}{seg.numeroVuelo}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-zinc-950">{seg.origen}</span>
+                                  <span className="text-zinc-300">→</span>
+                                  <span className="font-bold text-zinc-950">{seg.destino}</span>
+                                </div>
+                                <span className="ml-auto text-zinc-600 font-medium">
+                                  {formatGDSDate(seg.fecha)} · Salida: {seg.horaSalida}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                          
+                          <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-[10.5px] text-zinc-650 font-semibold space-y-1 font-sans mt-3">
+                            <span className="text-[8.5px] font-black text-zinc-400 uppercase tracking-wider block">Instrucciones de Embarque</span>
+                            <p>Preséntese en el mostrador de la aerolínea 3 horas antes de la salida programada del vuelo para el check-in internacional, o 2 horas antes para vuelos domésticos. El equipaje permitido dependerá de la política de la clase {vuelo.segmentos[0]?.clase || "Y"}.</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Services List (Only Billed) */}
               <div className="space-y-4 mb-6">
