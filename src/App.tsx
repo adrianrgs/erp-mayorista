@@ -3,9 +3,9 @@ import React, { useState } from "react";
 import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, OperationalTransfer, mapToOperationalTransfer, mapToTransferService, FinancialInvoice, B2BClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement, PaymentVoucher, CompanyConfig } from "./types";
 import { Property, RoomType, RatePlan, StopSale, ExtraService, ServiceRate } from "./types/producto";
 
-import { 
+import {
   listReservations, insertReservation, updateReservation, deleteReservation,
-  listClients, insertClient, 
+  listClients, insertClient,
   listInvoices, insertInvoice,
   listDetailedProperties, insertDetailedProperty, updateDetailedProperty, deleteDetailedProperty,
   listRoomTypes, insertRoomType, updateRoomType, deleteRoomType,
@@ -21,8 +21,10 @@ import {
   updateInvoice, updateClient,
   listPayableObligations, insertPayableObligation, updatePayableObligation, deletePayableObligation,
   listProviderStatements, insertProviderStatement, deleteProviderStatement
-} from "@foratour-erp/dataconnect";
-import { dataConnect } from "./lib/firebase";
+} from "./lib/dataconnect-shim";
+import { isAuthenticated, logout } from "./lib/api";
+import LoginScreen from "./components/LoginScreen";
+const dataConnect = null;
 
 import { 
   initialProperties, 
@@ -81,6 +83,12 @@ import {
 } from "lucide-react";
 
 export default function App() {
+  const [authenticated, setAuthenticated] = useState(isAuthenticated());
+
+  if (!authenticated) {
+    return <LoginScreen onLogin={() => setAuthenticated(true)} />;
+  }
+
   // Navigation Section
   const [currentSection, setCurrentSection] = useState<ProjectView>(ProjectView.PROPIEDADES);
   
