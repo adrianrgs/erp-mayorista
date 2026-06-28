@@ -62,3 +62,46 @@ export interface StopSale {
   fechaFin: string; // YYYY-MM-DD
   motivo?: string;
 }
+
+// ─── SERVICIOS VARIOS (TRASLADOS, EXCURSIONES, ETC.) ─────────────────────────
+
+export enum ServiceCategory {
+  TRASLADO = "Traslado",
+  EXCURSION = "Excursión",
+  TICKET = "Ticket/Entrada",
+  ASISTENCIA = "Asistencia al Viajero"
+}
+
+export enum PricingModel {
+  POR_PERSONA = "Por Persona",
+  POR_VEHICULO_GRUPO = "Por Vehículo/Grupo"
+}
+
+export interface ExtraService {
+  id: string;
+  nombre: string;
+  providerName: string;
+  category: ServiceCategory;
+  ubicacion: string;
+  descripcion: string;
+  politicasCancelacion: string;
+  status: "Activo" | "Inactivo";
+}
+
+export interface ServiceRate {
+  id: string;
+  extraServiceId: string;
+  temporadaInicio: string; // YYYY-MM-DD
+  temporadaFin: string; // YYYY-MM-DD
+
+  pricingModel: PricingModel;
+  // Campos requeridos si pricingModel === 'Por Persona'
+  netoAdulto?: number;
+  ventaAdulto?: number;
+  netoNino?: number;
+  ventaNino?: number;
+  // Campos requeridos si pricingModel === 'Por Vehículo/Grupo'
+  capacidadMaxima?: number;
+  netoTotal?: number;
+  ventaTotal?: number;
+}

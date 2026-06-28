@@ -1,0 +1,63 @@
+query ListPaymentVouchers @auth(level: PUBLIC) {
+  paymentVouchers {
+    id
+    clientId
+    clientName
+    invoiceId
+    locatorId
+    method
+    reference
+    amount
+    date
+    status
+    bankName
+    notes
+    attachedFile
+  }
+}
+
+mutation InsertPaymentVoucher(
+  $id: String!
+  $clientId: String!
+  $clientName: String!
+  $invoiceId: String
+  $locatorId: String
+  $method: String!
+  $reference: String!
+  $amount: Float!
+  $date: String!
+  $status: String!
+  $bankName: String
+  $notes: String
+  $attachedFile: String
+) @auth(level: PUBLIC) {
+  paymentVoucher_insert(
+    data: {
+      id: $id
+      clientId: $clientId
+      clientName: $clientName
+      invoiceId: $invoiceId
+      locatorId: $locatorId
+      method: $method
+      reference: $reference
+      amount: $amount
+      date: $date
+      status: $status
+      bankName: $bankName
+      notes: $notes
+      attachedFile: $attachedFile
+    }
+  )
+}
+
+mutation UpdatePaymentVoucher(
+  $id: String!
+  $status: String!
+) @auth(level: PUBLIC) {
+  paymentVoucher_update(
+    id: $id
+    data: {
+      status: $status
+    }
+  )
+}

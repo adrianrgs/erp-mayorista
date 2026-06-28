@@ -96,7 +96,7 @@ const PASSENGER_UNIFIED_REGEX =
  * Grupo 10 opcional: indicador "+1" o "+2" (siguiente día).
  */
 const SEGMENT_JOINED_IATA_REGEX =
-  /^\s*(\d{1,2})\s+([A-Z]{2})\s+(\d{1,4}[A-Z]?)\s+([A-Z])\s+(\d{1,2}[A-Z]{3})\s+\d?\s*([A-Z]{3})([A-Z]{3})\s+((?:HK|RQ|HL|UN|SA|KL)\d{1,2})\s+(\d{4})\s+(\d{4})(\+\d)?/gim;
+  /^\s*(\d{1,2})\s+([A-Z0-9]{2})\s+(\d{1,4}[A-Z]?)\s+([A-Z])\s+(\d{1,2}[A-Z]{3})\s+\d?\s*([A-Z]{3})([A-Z]{3})\s+((?:HK|RQ|HL|UN|SA|KL)\d{1,2})\s+(\d{4})\s+(\d{4})(\+\d)?/gim;
 
 /**
  * Variante B: IATA origen y destino SEPARADOS por espacio.
@@ -104,14 +104,14 @@ const SEGMENT_JOINED_IATA_REGEX =
  * Idéntica a la variante A pero con \s+ entre los dos códigos IATA.
  */
 const SEGMENT_SPLIT_IATA_REGEX =
-  /^\s*(\d{1,2})\s+([A-Z]{2})\s+(\d{1,4}[A-Z]?)\s+([A-Z])\s+(\d{1,2}[A-Z]{3})\s+\d?\s*([A-Z]{3})\s+([A-Z]{3})\s+((?:HK|RQ|HL|UN|SA|KL)\d{1,2})\s+(\d{4})\s+(\d{4})(\+\d)?/gim;
+  /^\s*(\d{1,2})\s+([A-Z0-9]{2})\s+(\d{1,4}[A-Z]?)\s+([A-Z])\s+(\d{1,2}[A-Z]{3})\s+\d?\s*([A-Z]{3})\s+([A-Z]{3})\s+((?:HK|RQ|HL|UN|SA|KL)\d{1,2})\s+(\d{4})\s+(\d{4})(\+\d)?/gim;
 
 /**
  * Variante C: Horas en formato HH:MM (menos común, pero existe).
  * Ej: "08:35 10:20" en lugar de "0835 1020"
  */
 const SEGMENT_COLON_TIME_REGEX =
-  /^\s*(\d{1,2})\s+([A-Z]{2})\s+(\d{1,4}[A-Z]?)\s+([A-Z])\s+(\d{1,2}[A-Z]{3})\s+\d?\s*([A-Z]{3})\s*([A-Z]{3})\s+((?:HK|RQ|HL|UN|SA|KL)\d{1,2})\s+(\d{2}:\d{2})\s+(\d{2}:\d{2})(\+\d)?/gim;
+  /^\s*(\d{1,2})\s+([A-Z0-9]{2})\s+(\d{1,4}[A-Z]?)\s+([A-Z])\s+(\d{1,2}[A-Z]{3})\s+\d?\s*([A-Z]{3})\s*([A-Z]{3})\s+((?:HK|RQ|HL|UN|SA|KL)\d{1,2})\s+(\d{2}:\d{2})\s+(\d{2}:\d{2})(\+\d)?/gim;
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 

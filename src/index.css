@@ -1,1 +1,35 @@
 @import "tailwindcss";
+
+@theme {
+  --color-muted-foreground: var(--color-zinc-400);
+}
+
+@media print {
+  /* Mostrar únicamente el componente de impresión y sus hijos */
+  .print-manifest, .print-manifest *, .print-receipt, .print-receipt * {
+    visibility: visible;
+  }
+
+  /* Posicionar el manifiesto de forma absoluta para llenar la página de impresión */
+  .print-manifest, .print-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    display: block !important;
+  }
+
+  /* Forzar colores e imágenes de fondo para impresión */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+@media print {
+  .page-break {
+    page-break-before: always;
+    break-before: page;
+  }
+}

@@ -14,20 +14,38 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { listReservations, listClients, listInvoices, listProperties } from '@foratour-erp/dataconnect';
+import { listPaymentVouchers, insertPaymentVoucher, updatePaymentVoucher, insertReservation, updateReservationStatus, updateReservation, insertClient, insertInvoice, insertDetailedProperty, updateDetailedProperty } from '@foratour-erp/dataconnect';
 
 
-// Operation ListReservations: 
-const { data } = await ListReservations(dataConnect);
+// Operation ListPaymentVouchers: 
+const { data } = await ListPaymentVouchers(dataConnect);
 
-// Operation ListClients: 
-const { data } = await ListClients(dataConnect);
+// Operation InsertPaymentVoucher:  For variables, look at type InsertPaymentVoucherVars in ../index.d.ts
+const { data } = await InsertPaymentVoucher(dataConnect, insertPaymentVoucherVars);
 
-// Operation ListInvoices: 
-const { data } = await ListInvoices(dataConnect);
+// Operation UpdatePaymentVoucher:  For variables, look at type UpdatePaymentVoucherVars in ../index.d.ts
+const { data } = await UpdatePaymentVoucher(dataConnect, updatePaymentVoucherVars);
 
-// Operation ListProperties: 
-const { data } = await ListProperties(dataConnect);
+// Operation InsertReservation:  For variables, look at type InsertReservationVars in ../index.d.ts
+const { data } = await InsertReservation(dataConnect, insertReservationVars);
+
+// Operation UpdateReservationStatus:  For variables, look at type UpdateReservationStatusVars in ../index.d.ts
+const { data } = await UpdateReservationStatus(dataConnect, updateReservationStatusVars);
+
+// Operation UpdateReservation:  For variables, look at type UpdateReservationVars in ../index.d.ts
+const { data } = await UpdateReservation(dataConnect, updateReservationVars);
+
+// Operation InsertClient:  For variables, look at type InsertClientVars in ../index.d.ts
+const { data } = await InsertClient(dataConnect, insertClientVars);
+
+// Operation InsertInvoice:  For variables, look at type InsertInvoiceVars in ../index.d.ts
+const { data } = await InsertInvoice(dataConnect, insertInvoiceVars);
+
+// Operation InsertDetailedProperty:  For variables, look at type InsertDetailedPropertyVars in ../index.d.ts
+const { data } = await InsertDetailedProperty(dataConnect, insertDetailedPropertyVars);
+
+// Operation UpdateDetailedProperty:  For variables, look at type UpdateDetailedPropertyVars in ../index.d.ts
+const { data } = await UpdateDetailedProperty(dataConnect, updateDetailedPropertyVars);
 
 
 ```

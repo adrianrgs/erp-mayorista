@@ -1,7 +1,8 @@
-query ListReservations @auth(level: USER) {
+query ListReservations @auth(level: PUBLIC) {
   reservations {
     id
-    holder
+    updatedAt
+holder
     hotelName
     checkIn
     checkOut
@@ -9,26 +10,50 @@ query ListReservations @auth(level: USER) {
     status
     totalPrice
     netPrice
+    agenciaName
+    tipo
+    servicios
+    telefono
+    email
+    flightNo
+    specialRequests
+    mercado
+    createdAt
+    comprobanteRef
+    comprobanteMonto
+    comprobanteMetodo
+    facturacionTipo
+    facturacionRechazoMotivo
+    facturacionRechazoArchivos
+    variaciones
   }
 }
 
-query ListClients @auth(level: USER) {
+query ListClients @auth(level: PUBLIC) {
   b2BClients {
     id
-    nombre
+    updatedAt
+nombre
+    rif
+    tipo
+    status
+    contactoNombre
     email
     telefono
-    type
-    tier
-    balance
-    status
+    saldoFavor
+    saldoDeber
+    moroso
+    limiteCredito
+    diasCredito
+    observaciones
   }
 }
 
-query ListInvoices @auth(level: USER) {
+query ListInvoices @auth(level: PUBLIC) {
   financialInvoices {
     id
-    clientName
+    updatedAt
+clientName
     date
     dueDate
     amount
@@ -38,10 +63,11 @@ query ListInvoices @auth(level: USER) {
   }
 }
 
-query ListProperties @auth(level: USER) {
+query ListProperties @auth(level: PUBLIC) {
   hotelProperties {
     id
-    name
+    updatedAt
+name
     destination
     category
     image
@@ -51,5 +77,208 @@ query ListProperties @auth(level: USER) {
     stars
     allotment
     supplierName
+  }
+}
+
+query ListDetailedProperties @auth(level: PUBLIC) {
+  detailedProperties {
+    id
+    updatedAt
+nombre
+    pais
+    estado
+    ciudad
+    categoria
+    status
+    politicasGenerales
+    imagen
+    supplierName
+  }
+}
+
+query ListRoomTypes @auth(level: PUBLIC) {
+  roomTypes {
+    id
+    updatedAt
+propertyId
+    nombre
+    regimenAlimentacion
+    capacidadMax
+    ocupacionBase
+  }
+}
+
+query ListRatePlans @auth(level: PUBLIC) {
+  ratePlans {
+    id
+    updatedAt
+propertyId
+    roomTypeId
+    nombrePromocion
+    fechaInicio
+    fechaFin
+    tipoCobro
+    tarifaBase
+    tarifaExtraAdulto
+    tarifaExtraNino
+    politicasCancelacion
+    mercado
+  }
+}
+
+query ListStopSales @auth(level: PUBLIC) {
+  stopSales {
+    id
+    updatedAt
+propertyId
+    fechaInicio
+    fechaFin
+    motivo
+  }
+}
+
+query ListFlightTickets @auth(level: PUBLIC) {
+  flightTickets {
+    id
+    updatedAt
+pnr
+    pasajeros
+    segmentos
+    costoNeto
+    precioVenta
+    precioPvp
+    comisionB2B
+    comisionMayorista
+    tipoComision
+    fee
+    vinculadoAExpediente
+    facturarConjunto
+    expedienteId
+    agenteNombre
+    createdAt
+    ticketNumero
+    aerolineaValidadora
+    notas
+    expedienteAereo
+  }
+}
+
+query ListTransferServices @auth(level: PUBLIC) {
+  transferServices {
+    id
+    updatedAt
+leadPassenger
+    paxCount
+    pickupLocation
+    dropoffLocation
+    date
+    time
+    provider
+    driverName
+    driverId
+    vehicleId
+    reservationId
+    flightRef
+    notes
+    status
+    vehicleType
+    direction
+    legIndex
+    tipoTraslado
+    telefono
+  }
+}
+
+query ListFleetVehicles @auth(level: PUBLIC) {
+  fleetVehicles {
+    id
+    updatedAt
+placa
+    tipo
+    marca
+    modelo
+    capacidad
+    proveedor
+    status
+    conductorAsignadoId
+    observaciones
+  }
+}
+
+query ListFleetDrivers @auth(level: PUBLIC) {
+  fleetDrivers {
+    id
+    updatedAt
+nombre
+    telefono
+    licencia
+    vehiculoAsignadoId
+    status
+    observaciones
+  }
+}
+
+query ListPayableObligations @auth(level: PUBLIC) {
+  payableObligations(orderBy: [{dueDate: ASC}]) {
+    id
+    updatedAt
+dueDate
+    providerName
+    serviceDetail
+    locatorId
+    netCost
+    paidAmount
+    status
+    paymentMethod
+    reference
+    notes
+    date
+    currency
+    attachedFile
+  }
+}
+
+query ListProviderStatements @auth(level: PUBLIC) {
+  providerStatements(orderBy: [{date: DESC}]) {
+    id
+    updatedAt
+providerName
+    date
+    type
+    amount
+    reference
+    status
+  }
+}
+
+query ListExtraServices @auth(level: PUBLIC) {
+  extraServices {
+    id
+    updatedAt
+nombre
+    providerName
+    category
+    ubicacion
+    descripcion
+    politicasCancelacion
+    status
+  }
+}
+
+query ListServiceRates @auth(level: PUBLIC) {
+  serviceRates {
+    id
+    updatedAt
+extraServiceId
+    temporadaInicio
+    temporadaFin
+    pricingModel
+    netoAdulto
+    ventaAdulto
+    netoNino
+    ventaNino
+    capacidadMaxima
+    netoTotal
+    ventaTotal
   }
 }

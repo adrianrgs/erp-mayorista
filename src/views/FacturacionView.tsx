@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Reservation, FinancialInvoice, ServiceItem, B2BClient, ServiceType, PayableObligation, ProviderStatement } from "../types";
+import { Reservation, FinancialInvoice, ServiceItem, B2BClient, ServiceType, PayableObligation, ProviderStatement, CompanyConfig } from "../types";
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
 import { formatGDSDate } from "../lib/parsers/pnrParser";
@@ -32,6 +32,9 @@ import {
   ShieldAlert,
   Calculator
 } from "lucide-react";
+import { useDialog } from "../components/ui/DialogProvider";
+import { storage } from "../lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 interface FacturacionViewProps {
   reservations: Reservation[];
@@ -47,6 +50,8 @@ interface FacturacionViewProps {
   onAddProviderStatement?: (statement: ProviderStatement) => void;
   boletos?: FlightTicket[];
   onBoletosChange?: React.Dispatch<React.SetStateAction<FlightTicket[]>>;
+  onUpdateBoleto?: (b: FlightTicket) => void;
+  companyConfig: CompanyConfig;
 }
 
 export default function FacturacionView({ 
@@ -62,8 +67,12 @@ export default function FacturacionView({
   onAddPayableObligation,
   onAddProviderStatement,
   boletos = [],
-  onBoletosChange
+  onBoletosChange,
+  onUpdateBoleto,
+  companyConfig
 }: FacturacionViewProps) {
+  const { showAlert } = useDialog();
+  const [activeTab, setActiveTab] = useState<"solicitudes" | "historial">("solicitudes");
   const [search, setSearch] = useState("");
   const [selectedResId, setSelectedResId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
@@ -73,6 +82,38 @@ export default function FacturacionView({
   
   const [selectedFacturacionTipo, setSelectedFacturacionTipo] = useState<"Crédito" | "Pago Contado">("Pago Contado");
   const [useSaldoFavor, setUseSaldoFavor] = useState(false);
+
+  // Rejection Modal State
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectFiles, setRejectFiles] = useState<File[]>([]);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState<FinancialInvoice | null>(null);
+
+  const handlePrintInvoice = () => {
+    const printContent = document.getElementById("printable-invoice-doc");
+    const root = document.getElementById("root");
+    if (!printContent || !root) return;
+    
+    const clone = printContent.cloneNode(true) as HTMLElement;
+    clone.id = "print-clone";
+    clone.style.position = "absolute";
+    clone.style.top = "0";
+    clone.style.left = "0";
+    clone.style.width = "100%";
+    clone.style.backgroundColor = "white";
+    clone.style.zIndex = "999999";
+    clone.style.padding = "20px";
+    
+    root.style.display = "none";
+    document.body.appendChild(clone);
+    
+    setTimeout(() => {
+      window.print();
+      document.body.removeChild(clone);
+      root.style.display = "";
+    }, 150);
+  };
 
   const formatDate = (dateStr?: string): string => {
     if (!dateStr) return '';
@@ -460,12 +501,17 @@ export default function FacturacionView({
 
   const allBookings = [...reservations, ...aereoReservations];
 
-  // Only manage actual bookings that have been sent to billing (i.e. has at least one service with Solicitado, Facturado, or Rechazado status)
+  // Only manage actual bookings that have been sent to billing (i.e. has at least one service or joint flight with Solicitado, Facturado, or Rechazado status)
   const realBookings = allBookings.filter(r => {
     const isReal = r.tipo === "Reserva Real" || r.tipo === undefined;
     if (!isReal) return false;
     const services = r.servicios || [];
-    return services.some(s => s.statusFacturacion === "Solicitado" || s.statusFacturacion === "Facturado" || s.statusFacturacion === "Rechazado");
+    const hasBilledOrRequestedServices = services.some(s => s.statusFacturacion === "Solicitado" || s.statusFacturacion === "Facturado" || s.statusFacturacion === "Rechazado");
+    
+    const jointFlights = boletos.filter(b => b.expedienteId === r.id && b.facturarConjunto);
+    const hasBilledOrRequestedFlights = jointFlights.some(b => b.expedienteAereo && (b.expedienteAereo.status === "Solicitado" || b.expedienteAereo.status === "Facturado" || b.expedienteAereo.status === "PagadoAerolinea" || b.expedienteAereo.status === "Rechazado"));
+
+    return hasBilledOrRequestedServices || hasBilledOrRequestedFlights;
   });
 
   const filtered = realBookings.filter(r => {
@@ -479,14 +525,24 @@ export default function FacturacionView({
 
   // Sort: Put cancellation requests first, then pending billing requests ("Solicitado")
   const sortedAndFiltered = [...filtered].sort((a, b) => {
-    const aNeedsCancel = (a.status === "Cancelada" && a.servicios?.some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado")) ? 1 : 0;
-    const bNeedsCancel = (b.status === "Cancelada" && b.servicios?.some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado")) ? 1 : 0;
+    const aJointFlights = boletos.filter(bl => bl.expedienteId === a.id && bl.facturarConjunto);
+    const bJointFlights = boletos.filter(bl => bl.expedienteId === b.id && bl.facturarConjunto);
+
+    const aNeedsCancel = (a.status === "Cancelada" && (
+      (a.servicios || []).some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado") ||
+      aJointFlights.some(f => f.expedienteAereo?.status === "Facturado" || f.expedienteAereo?.status === "PagadoAerolinea" || f.expedienteAereo?.status === "Solicitado")
+    )) ? 1 : 0;
+    const bNeedsCancel = (b.status === "Cancelada" && (
+      (b.servicios || []).some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado") ||
+      bJointFlights.some(f => f.expedienteAereo?.status === "Facturado" || f.expedienteAereo?.status === "PagadoAerolinea" || f.expedienteAereo?.status === "Solicitado")
+    )) ? 1 : 0;
+    
     if (aNeedsCancel !== bNeedsCancel) {
       return bNeedsCancel - aNeedsCancel;
     }
 
-    const aHasReq = a.servicios?.some(s => s.statusFacturacion === "Solicitado") ? 1 : 0;
-    const bHasReq = b.servicios?.some(s => s.statusFacturacion === "Solicitado") ? 1 : 0;
+    const aHasReq = ((a.servicios || []).some(s => s.statusFacturacion === "Solicitado") || aJointFlights.some(f => f.expedienteAereo?.status === "Solicitado")) ? 1 : 0;
+    const bHasReq = ((b.servicios || []).some(s => s.statusFacturacion === "Solicitado") || bJointFlights.some(f => f.expedienteAereo?.status === "Solicitado")) ? 1 : 0;
     return bHasReq - aHasReq;
   });
 
@@ -518,10 +574,109 @@ export default function FacturacionView({
   }, 0);
 
   const pendingBillingCount = realBookings.filter(r => {
-    const hasPendingServices = r.servicios?.some(s => s.statusFacturacion === "Solicitado");
-    const isPendingCancellation = r.status === "Cancelada" && r.servicios?.some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado");
+    const jointFlights = boletos.filter(b => b.expedienteId === r.id && b.facturarConjunto);
+    const hasPendingServices = r.servicios?.some(s => s.statusFacturacion === "Solicitado") || jointFlights.some(f => f.expedienteAereo?.status === "Solicitado");
+    const isPendingCancellation = r.status === "Cancelada" && (
+      r.servicios?.some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado") ||
+      jointFlights.some(f => f.expedienteAereo?.status === "Facturado" || f.expedienteAereo?.status === "PagadoAerolinea" || f.expedienteAereo?.status === "Solicitado")
+    );
     return hasPendingServices || isPendingCancellation;
   }).length;
+
+  const handleInvoiceVariation = async (variation: any) => {
+    if (!activeRes) return;
+    const newInvoice: FinancialInvoice = {
+      id: `SUP-${Math.floor(1000 + Math.random() * 9000)}`,
+      clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Suplemento: ${variation.reason})`,
+      date: new Date().toISOString().split("T")[0],
+      dueDate: activeRes.checkIn,
+      amount: variation.amountSale,
+      vatAmount: Math.round(variation.amountSale * 0.16),
+      type: "Cobro",
+      status: "Facturado"  // Must be "Facturado" to appear in Cuentas por Cobrar
+    };
+
+    if (onAddInvoice) {
+      onAddInvoice(newInvoice);
+    }
+
+    // Update client's saldoDeber for the supplement amount
+    const agencyRecord = clients.find(c => c.nombre === activeRes.agenciaName);
+    if (agencyRecord && onUpdateClient) {
+      onUpdateClient({
+        ...agencyRecord,
+        saldoDeber: agencyRecord.saldoDeber + variation.amountSale
+      });
+    }
+
+    const updatedVariations = (activeRes.variaciones || []).map((v: any) => {
+      if (v.id === variation.id) {
+        return { ...v, invoiceId: newInvoice.id };
+      }
+      return v;
+    });
+
+    onUpdateReservation({
+      ...activeRes,
+      variaciones: updatedVariations,
+      __billingOnly: true
+    } as any);
+
+    setStatusMessage(`✓ Suplemento facturado con éxito. Documento emitido: ${newInvoice.id} — Se actualizó el saldo deudor del cliente.`);
+    setTimeout(() => setStatusMessage(""), 5000);
+  };
+
+  const handleCreditNoteVariation = async (variation: any) => {
+    if (!activeRes) return;
+    const creditNote: FinancialInvoice = {
+      id: `NC-${Math.floor(8000 + Math.random() * 999)}`,
+      clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Nota de Crédito: ${variation.reason})`,
+      date: new Date().toISOString().split("T")[0],
+      dueDate: activeRes.checkIn,
+      amount: variation.amountSale,  // already negative from reconciler
+      vatAmount: Math.round(variation.amountSale * 0.16),
+      type: "Cobro",
+      status: "Pagado"  // credit note auto-settles
+    };
+
+    if (onAddInvoice) {
+      onAddInvoice(creditNote);
+    }
+
+    // Revert client's saldoDeber for the credit amount (amountSale is negative)
+    const agencyRecord = clients.find(c => c.nombre === activeRes.agenciaName);
+    if (agencyRecord && onUpdateClient) {
+      const creditAmount = Math.abs(variation.amountSale);
+      const isCreditClient = agencyRecord.tipo === "A Crédito" || activeRes.facturacionTipo === "Crédito";
+      if (isCreditClient) {
+        onUpdateClient({
+          ...agencyRecord,
+          saldoDeber: Math.max(0, agencyRecord.saldoDeber - creditAmount)
+        });
+      } else {
+        onUpdateClient({
+          ...agencyRecord,
+          saldoFavor: agencyRecord.saldoFavor + creditAmount
+        });
+      }
+    }
+
+    const updatedVariations = (activeRes.variaciones || []).map((v: any) => {
+      if (v.id === variation.id) {
+        return { ...v, invoiceId: creditNote.id };
+      }
+      return v;
+    });
+
+    onUpdateReservation({
+      ...activeRes,
+      variaciones: updatedVariations,
+      __billingOnly: true
+    } as any);
+
+    setStatusMessage(`✓ Nota de Crédito emitida con éxito. Documento: ${creditNote.id} — Se revirtió el saldo del cliente.`);
+    setTimeout(() => setStatusMessage(""), 5000);
+  };
 
   const handleApproveBilling = () => {
     if (!activeRes) return;
@@ -546,7 +701,7 @@ export default function FacturacionView({
     if (remainingToPay > 0 && !isCredit) {
       const receiptAmount = activeRes.comprobanteMonto || 0;
       if (receiptAmount < remainingToPay) {
-        alert(`Pago insuficiente. El comprobante adjunto ($${receiptAmount} USD) más el saldo a favor usado ($${appliedSaldoFavor} USD) no cubren el total ($${pendingTotal} USD).`);
+        showAlert({ title: "Pago insuficiente", message: `Pago insuficiente. El comprobante adjunto ($${receiptAmount} USD) más el saldo a favor usado ($${appliedSaldoFavor} USD) no cubren el total ($${pendingTotal} USD).`, type: "danger" });
         return;
       }
     }
@@ -560,22 +715,31 @@ export default function FacturacionView({
 
     const updatedRes: Reservation = {
       ...activeRes,
-      servicios: updatedServices
-    };
+      servicios: updatedServices,
+      facturacionRechazoMotivo: "",
+      facturacionRechazoArchivos: "",
+      __billingOnly: true
+    } as any;
     
-    if (onBoletosChange && jointFlights.length > 0) {
-      onBoletosChange(prev => prev.map(b => 
-        jointFlights.some(jf => jf.id === b.id) && b.expedienteAereo
-          ? { ...b, expedienteAereo: { ...b.expedienteAereo, status: "Facturado" } } 
-          : b
-      ));
+    if (onUpdateBoleto && jointFlights.length > 0) {
+      jointFlights.forEach(jf => {
+        if (jf.expedienteAereo) {
+          onUpdateBoleto({
+            ...jf,
+            expedienteAereo: { ...jf.expedienteAereo, status: "Facturado" }
+          });
+        }
+      });
     }
 
-    if (activeRes.hotelName === "Boleto Aéreo GDS" && onBoletosChange) {
+    if (activeRes.hotelName === "Boleto Aéreo GDS" && onUpdateBoleto) {
       const boletoId = activeRes.servicios?.[0]?.id;
       const boleto = boletos.find(b => b.id === boletoId);
       if (boleto && boleto.expedienteAereo) {
-        onBoletosChange(prev => prev.map(b => b.id === boleto.id ? { ...b, expedienteAereo: { ...b.expedienteAereo!, status: "Facturado" } } : b));
+        onUpdateBoleto({
+          ...boleto,
+          expedienteAereo: { ...boleto.expedienteAereo, status: "Facturado" }
+        });
       }
     } else {
       onUpdateReservation(updatedRes);
@@ -585,39 +749,48 @@ export default function FacturacionView({
     const terrestrialServices = pendingServices.filter(s => s.tipo !== ServiceType.AEREO);
     const flightServices = pendingServices.filter(s => s.tipo === ServiceType.AEREO);
     
-    // 1. Process terrestrial services (hotels, transfers, etc.)
-    const terrestrialNetCost = terrestrialServices.reduce((sum, s) => sum + s.precioNeto, 0);
-    if (terrestrialNetCost > 0) {
-      const matchedProp = detailedProperties.find(p => p.nombre === activeRes.hotelName);
-      const providerName = matchedProp?.supplierName || activeRes.hotelName || "Proveedor General";
-      
-      if (onAddPayableObligation) {
-        const newObligation: PayableObligation = {
-          id: `PAY-${Math.floor(5000 + Math.random() * 4999)}`,
-          dueDate: activeRes.checkIn,
-          providerName: providerName,
-          serviceDetail: terrestrialServices.map(s => s.descripcion).join(", "),
-          locatorId: activeRes.id,
-          netCost: terrestrialNetCost,
-          paidAmount: 0.00,
-          status: "Pendiente",
-          date: new Date().toISOString().split("T")[0],
-          currency: "USD"
-        };
-        onAddPayableObligation(newObligation);
-      }
+    // 1. Process terrestrial services (hotels, transfers, etc.) grouped by provider
+    const matchedProp = detailedProperties.find(p => p.nombre === activeRes.hotelName);
+    const defaultHotelProvider = matchedProp?.supplierName || activeRes.hotelName || "Proveedor General";
 
-      if (onAddProviderStatement) {
-        const newStatement: ProviderStatement = {
-          id: `DOC-FAC-${Math.floor(3000 + Math.random() * 6999)}`,
-          providerName: providerName,
-          date: new Date().toISOString().split("T")[0],
-          type: "Factura Recibida",
-          amount: terrestrialNetCost,
-          reference: `FAC-${activeRes.id}`,
-          status: "Pendiente"
-        };
-        onAddProviderStatement(newStatement);
+    const terrestrialByProvider = terrestrialServices.reduce((acc, s) => {
+      const providerName = s.proveedor || defaultHotelProvider;
+      if (!acc[providerName]) acc[providerName] = [];
+      acc[providerName].push(s);
+      return acc;
+    }, {} as Record<string, typeof terrestrialServices>);
+
+    for (const [providerName, services] of Object.entries(terrestrialByProvider)) {
+      const netCost = services.reduce((sum, s) => sum + s.precioNeto, 0);
+      if (netCost > 0) {
+        if (onAddPayableObligation) {
+          const newObligation: PayableObligation = {
+            id: `PAY-${Math.floor(5000 + Math.random() * 4999)}`,
+            dueDate: activeRes.checkIn,
+            providerName: providerName,
+            serviceDetail: services.map(s => s.descripcion).join(", "),
+            locatorId: activeRes.id,
+            netCost: netCost,
+            paidAmount: 0.00,
+            status: "Pendiente",
+            date: new Date().toISOString().split("T")[0],
+            currency: "USD"
+          };
+          onAddPayableObligation(newObligation);
+        }
+
+        if (onAddProviderStatement) {
+          const newStatement: ProviderStatement = {
+            id: `DOC-FAC-${Math.floor(3000 + Math.random() * 6999)}`,
+            providerName: providerName,
+            date: new Date().toISOString().split("T")[0],
+            type: "Factura Recibida",
+            amount: netCost,
+            reference: `FAC-${activeRes.id}`,
+            status: "Pendiente"
+          };
+          onAddProviderStatement(newStatement);
+        }
       }
     }
 
@@ -810,47 +983,78 @@ export default function FacturacionView({
 
   const handleRejectBilling = () => {
     if (!activeRes) return;
-
-    const pendingServices = (activeRes.servicios || []).filter(s => s.statusFacturacion === "Solicitado");
-    const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto && (b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador"));
-    if (pendingServices.length === 0 && jointFlights.length === 0) return;
-
-    const updatedServices = (activeRes.servicios || []).map(s => {
-      if (s.statusFacturacion === "Solicitado") {
-        return { ...s, statusFacturacion: "Rechazado" as const };
-      }
-      return s;
-    });
-
-    const updatedRes: Reservation = {
-      ...activeRes,
-      servicios: updatedServices
-    };
-    
-    if (onBoletosChange && jointFlights.length > 0) {
-      onBoletosChange(prev => prev.map(b => 
-        jointFlights.some(jf => jf.id === b.id) && b.expedienteAereo
-          ? { ...b, expedienteAereo: { ...b.expedienteAereo, status: "Borrador" as any } } 
-          : b
-      ));
-    }
-
-    if (activeRes.hotelName === "Boleto Aéreo GDS" && onBoletosChange) {
-      const boletoId = activeRes.servicios?.[0]?.id;
-      const boleto = boletos.find(b => b.id === boletoId);
-      if (boleto && boleto.expedienteAereo) {
-        onBoletosChange(prev => prev.map(b => b.id === boleto.id ? { ...b, expedienteAereo: { ...b.expedienteAereo!, status: "Borrador" as any } } : b));
-      }
-    } else {
-      onUpdateReservation(updatedRes);
-    }
-
-    setStatusMessage(`⚠ Solicitud de facturación rechazada para el Expediente ${activeRes.id}. Se ha devuelto al Dpto. de Reservas para su revisión.`);
-    setTimeout(() => setStatusMessage(""), 5000);
-
-    // Go back to Level 1
-    setSelectedResId(null);
+    setShowRejectModal(true);
   };
+
+  const confirmRejectBilling = async () => {
+    if (!activeRes || !rejectReason.trim()) return;
+    setIsRejecting(true);
+
+    try {
+      const pendingServices = (activeRes.servicios || []).filter(s => s.statusFacturacion === "Solicitado");
+      const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto && (b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador"));
+      if (pendingServices.length === 0 && jointFlights.length === 0) {
+        setIsRejecting(false);
+        return;
+      }
+
+      // Upload files if any
+      const uploadedUrls: string[] = [];
+      for (const file of rejectFiles) {
+        const fileRef = ref(storage, `rechazos/${activeRes.id}/${Date.now()}_${file.name}`);
+        await uploadBytes(fileRef, file);
+        const url = await getDownloadURL(fileRef);
+        uploadedUrls.push(url);
+      }
+
+      const updatedServices = (activeRes.servicios || []).map(s => {
+        if (s.statusFacturacion === "Solicitado") {
+          return { ...s, statusFacturacion: "Rechazado" as const };
+        }
+        return s;
+      });
+
+      const updatedRes: Reservation = {
+        ...activeRes,
+        servicios: updatedServices,
+        facturacionRechazoMotivo: rejectReason,
+        facturacionRechazoArchivos: JSON.stringify(uploadedUrls),
+        __billingOnly: true
+      } as any;
+      
+      if (onBoletosChange && jointFlights.length > 0) {
+        onBoletosChange(prev => prev.map(b => 
+          jointFlights.some(jf => jf.id === b.id) && b.expedienteAereo
+            ? { ...b, expedienteAereo: { ...b.expedienteAereo, status: "Borrador" as any } } 
+            : b
+        ));
+      }
+
+      if (activeRes.hotelName === "Boleto Aéreo GDS" && onBoletosChange) {
+        const boletoId = activeRes.servicios?.[0]?.id;
+        const boleto = boletos.find(b => b.id === boletoId);
+        if (boleto && boleto.expedienteAereo) {
+          onBoletosChange(prev => prev.map(b => b.id === boleto.id ? { ...b, expedienteAereo: { ...b.expedienteAereo!, status: "Borrador" as any } } : b));
+        }
+      } else {
+        onUpdateReservation(updatedRes);
+      }
+
+      setStatusMessage(`⚠ Solicitud de facturación rechazada para el Expediente ${activeRes.id}.`);
+      setTimeout(() => setStatusMessage(""), 5000);
+
+      setShowRejectModal(false);
+      setRejectReason("");
+      setRejectFiles([]);
+      setSelectedResId(null);
+    } catch (e) {
+      console.error(e);
+      alert("Error al procesar el rechazo.");
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
 
   const handleConfirmCancellation = () => {
     if (!activeRes) return;
@@ -964,7 +1168,7 @@ export default function FacturacionView({
     : [];
 
   return (
-    <div className="space-y-6 h-[calc(100vh-12rem)] overflow-y-auto pr-2 font-sans">
+    <div className="space-y-6 font-sans">
       
       {!activeRes ? (
         <>
@@ -1156,7 +1360,7 @@ export default function FacturacionView({
       ) : (
         <>
           {/* Back Button */}
-          <div className="flex justify-between items-center no-print">
+          <div className="flex justify-between items-center no-print sticky top-16 bg-zinc-50/95 backdrop-blur-xs py-3 border-b border-zinc-200 z-10 -mx-8 px-8 mb-4">
             <button
               onClick={() => setSelectedResId(null)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded text-[9.5px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer border border-zinc-200 shadow-3xs"
@@ -1275,7 +1479,7 @@ export default function FacturacionView({
                     Pendiente de Conciliación
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-left">
+                <div className="grid grid-cols-4 gap-2 text-left">
                   <div>
                     <span className="text-zinc-455 block text-[9px] uppercase font-bold">Referencia</span>
                     <span className="text-zinc-900 font-mono font-bold">{activeRes.comprobanteRef}</span>
@@ -1287,6 +1491,16 @@ export default function FacturacionView({
                   <div>
                     <span className="text-zinc-455 block text-[9px] uppercase font-bold">Monto Declarado</span>
                     <span className="text-zinc-900 font-extrabold font-mono">${activeRes.comprobanteMonto?.toLocaleString("es-ES")} USD</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-455 block text-[9px] uppercase font-bold">Archivo Adjunto</span>
+                    {activeRes.comprobanteArchivo ? (
+                      <span className="text-blue-600 font-bold flex items-center gap-1 hover:underline cursor-pointer">
+                        <FileText className="w-3 h-3" /> {activeRes.comprobanteArchivo}
+                      </span>
+                    ) : (
+                      <span className="text-zinc-400 font-medium text-[10px]">No adjunto</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1376,6 +1590,54 @@ export default function FacturacionView({
               </div>
             </div>
 
+            {/* Panel de Ajustes y Modificaciones Pendientes de Facturar */}
+            {(activeRes.variaciones || []).some((v: any) => !v.invoiceId) && (
+              <div className="space-y-3 mt-4">
+                <h5 className="text-[10px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-1.5">
+                  ⚠️ Ajustes y Modificaciones Pendientes de Facturación
+                </h5>
+                <div className="divide-y divide-zinc-150 border border-amber-200 rounded overflow-hidden bg-amber-50/10">
+                  {(activeRes.variaciones || []).filter((v: any) => !v.invoiceId).map((v: any) => {
+                    const isPositive = v.amountSale > 0;
+                    return (
+                      <div key={v.id} className="p-3 flex items-center justify-between gap-4 bg-white">
+                        <div className="space-y-0.5 text-left flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase ${isPositive ? "bg-emerald-50 text-emerald-700 border border-emerald-250" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                              {v.type}
+                            </span>
+                            <span className="text-[9px] font-mono text-zinc-400">{v.id}</span>
+                            <span className="text-[9px] font-sans text-zinc-400">{v.date}</span>
+                          </div>
+                          <p className="text-xs font-bold text-zinc-950 mt-1">{v.reason}</p>
+                          <span className={`text-xs font-black block mt-0.5 ${isPositive ? "text-emerald-700" : "text-red-750"}`}>
+                            {isPositive ? "+" : ""}${v.amountSale.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                          </span>
+                        </div>
+                        <div className="flex-shrink-0">
+                          {isPositive ? (
+                            <button
+                              onClick={() => handleInvoiceVariation(v)}
+                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9.5px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs flex items-center gap-1 transition-all"
+                            >
+                              Facturar Suplemento
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleCreditNoteVariation(v)}
+                              className="px-2.5 py-1.5 bg-red-650 hover:bg-red-750 text-white rounded text-[9.5px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs flex items-center gap-1 transition-all"
+                            >
+                              Emitir Nota de Crédito
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Action Panel */}
             {(() => {
               const isCancelled = activeRes.status === "Cancelada";
@@ -1458,7 +1720,7 @@ export default function FacturacionView({
 
                     <button
                       onClick={handleConfirmCancellation}
-                      className="w-full py-2.5 bg-red-750 hover:bg-red-800 text-white border border-red-750 rounded text-xs font-black uppercase tracking-wider cursor-pointer shadow-md transition-all flex items-center justify-center gap-1.5"
+                      className="w-full py-2.5 bg-red-700 hover:bg-red-800 text-white border border-red-700 rounded text-xs font-black uppercase tracking-wider cursor-pointer shadow-md transition-all flex items-center justify-center gap-1.5"
                     >
                       <AlertTriangle className="w-4 h-4 text-red-300" />
                       Procesar Anulación y Reintegros
@@ -1663,10 +1925,15 @@ export default function FacturacionView({
                 <h5 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Comprobantes de Cobro Emitidos</h5>
                 <div className="space-y-1.5 font-mono">
                   {activeInvoices.map((inv) => (
-                    <div key={inv.id} className="p-2 bg-zinc-50 border border-zinc-150 rounded text-[10px] flex items-center justify-between">
+                    <div 
+                      key={inv.id} 
+                      onClick={() => setSelectedInvoiceForModal(inv)}
+                      className="p-2 bg-zinc-50 hover:bg-zinc-100 border border-zinc-150 rounded text-[10px] flex items-center justify-between cursor-pointer transition-colors"
+                      title="Ver / Imprimir Factura Comercial"
+                    >
                       <div className="flex items-center gap-1.5 text-zinc-800">
-                        <FileText className="w-3.5 h-3.5 text-zinc-455" />
-                        <span>{inv.id}</span>
+                        <FileText className="w-3.5 h-3.5 text-zinc-500" />
+                        <span className="font-bold underline text-blue-600">{inv.id}</span>
                         <span className="text-zinc-400">({inv.date})</span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1862,7 +2129,7 @@ export default function FacturacionView({
                                     <span className="font-bold text-zinc-900">Itinerario Vuelo - PNR: {vuelo.pnr}</span>
                                   </div>
                                   <div className="mt-2 text-[10px] text-zinc-605 bg-white p-2 rounded border border-zinc-200 space-y-1 text-left font-sans shadow-2xs">
-                                    {vuelo.segmentos.map((seg, i) => (
+                                    {(vuelo.segmentos?.map ? vuelo.segmentos : []).map((seg, i) => (
                                       <div key={i} className="flex gap-2 font-mono">
                                         <span className="font-bold text-zinc-800">{seg.origen} → {seg.destino}</span>
                                         <span>({seg.aerolinea}{seg.numeroVuelo})</span>
@@ -2040,7 +2307,7 @@ export default function FacturacionView({
                     <h5 className="text-[9.5px] font-black text-zinc-455 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Itinerario de Vuelo Aéreo</h5>
                     <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30">
                       {vuelosFacturados.map((vuelo) => (
-                        <div key={vuelo.id} className="p-4 bg-white space-y-3">
+                        <div key={vuelo.id} className="p-4 bg-white space-y-3 break-inside-avoid print:break-inside-avoid">
                           <div className="flex justify-between items-center">
                             <span className="px-2 py-0.5 bg-blue-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
                               BOLETO AÉREO GDS
@@ -2049,7 +2316,7 @@ export default function FacturacionView({
                           </div>
                           
                           <div className="space-y-2 mt-2">
-                            {vuelo.segmentos.map((seg, i) => (
+                            {(vuelo.segmentos?.map ? vuelo.segmentos : []).map((seg, i) => (
                               <div key={i} className="flex items-center gap-3 text-xs">
                                 <span className="font-mono font-bold text-zinc-400 text-[10px]">{String(i + 1).padStart(2, "0")}</span>
                                 <span className="font-bold text-zinc-800 font-mono">{seg.aerolinea}{seg.numeroVuelo}</span>
@@ -2081,7 +2348,7 @@ export default function FacturacionView({
                 <h5 className="text-[9.5px] font-black text-zinc-450 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Servicios Confirmados</h5>
                 <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30">
                   {activeRes.servicios?.filter(s => s.statusFacturacion === "Facturado").map((s) => (
-                    <div key={s.id} className="p-4 bg-white space-y-2">
+                    <div key={s.id} className="p-4 bg-white space-y-2 break-inside-avoid print:break-inside-avoid">
                       <div className="flex justify-between items-center">
                         <span className="px-2 py-0.5 bg-zinc-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
                           {s.tipo}
@@ -2127,8 +2394,8 @@ export default function FacturacionView({
 
               {/* Legal disclaimer */}
               <div className="mt-10 border-t border-zinc-200 pt-6 text-center text-[10px] text-zinc-400 font-medium space-y-1 font-sans">
-                <p>Este voucher sirve como constancia oficial de servicios. Foratour opera como consolidador mayorista y no se hace responsable por retrasos, cancelaciones fortuitas o modificaciones imputables directamente a los proveedores de servicio final.</p>
-                <p>Foratour S.A. | RIF: J-30495810-9 | Caracas, Venezuela | Email: operaciones@foratour-erp.com</p>
+                <p>Este voucher sirve como constancia oficial de servicios. {companyConfig.name} opera como consolidador mayorista y no se hace responsable por retrasos, cancelaciones fortuitas o modificaciones imputables directamente a los proveedores de servicio final.</p>
+                <p>{companyConfig.name} | RIF: {companyConfig.rif} | {companyConfig.address} | Email: {companyConfig.email}</p>
               </div>
             </div>
 
@@ -2274,6 +2541,272 @@ export default function FacturacionView({
             }
           }
         `}} />
+      )}
+
+      {/* COMMERCIAL INVOICE PREVIEW MODAL */}
+      {selectedInvoiceForModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 backdrop-blur-sm no-print">
+          <div className="bg-white rounded-lg shadow-2xl w-[90%] max-w-3xl max-h-[90vh] overflow-y-auto animate-fade-in relative border border-zinc-200 print-modal-container">
+            
+            {/* Modal Header Controls (hidden in print) */}
+            <div className="bg-zinc-900 px-6 py-4 flex justify-between items-center text-white sticky top-0 z-10 no-print rounded-t-lg">
+              <div className="flex items-center gap-2">
+                <Printer className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-extrabold text-sm uppercase tracking-wider font-sans">
+                  Imprimir / Descargar Factura Comercial
+                </h3>
+              </div>
+              <button 
+                onClick={() => setSelectedInvoiceForModal(null)}
+                className="p-1 hover:bg-zinc-800 rounded transition-colors text-zinc-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Printable Content Container */}
+            <div id="printable-invoice-doc" className="p-10 bg-white text-zinc-900 font-sans print-modal-content">
+              
+              {/* Invoice Header */}
+              <div className="flex justify-between items-start border-b-2 border-zinc-900 pb-6 mb-6">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded bg-zinc-955 text-white flex items-center justify-center font-black text-xl shadow-xs flex-shrink-0 print:border print:border-zinc-950">
+                      {companyConfig.logoLetter}
+                    </div>
+                    <div>
+                      <h1 className="text-2xl font-black tracking-tight text-zinc-955 uppercase leading-none">{companyConfig.name}</h1>
+                      <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mt-1">{companyConfig.subtitle}</p>
+                    </div>
+                  </div>
+                  <div className="text-xs text-zinc-650 mt-3 space-y-0.5">
+                    <p><span className="font-bold text-zinc-700">RIF:</span> {companyConfig.rif}</p>
+                    <p>{companyConfig.address}</p>
+                    <p>Tel: {companyConfig.phone} | Email: {companyConfig.email}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="inline-block px-3 py-1 bg-zinc-950 text-white text-[10px] font-black uppercase tracking-widest rounded-sm">
+                    FACTURA COMERCIAL
+                  </span>
+                  <h2 className="text-xl font-mono font-black text-zinc-950 mt-2">{selectedInvoiceForModal.id}</h2>
+                  <div className="text-xs text-zinc-650 mt-3 space-y-1">
+                    <p><span className="font-bold text-zinc-700">Fecha Emisión:</span> {formatDate(selectedInvoiceForModal.date)}</p>
+                    <p><span className="font-bold text-zinc-700">Vencimiento:</span> {formatDate(selectedInvoiceForModal.dueDate)}</p>
+                    <p>
+                      <span className="font-bold text-zinc-700">Estado Pago:</span>{" "}
+                      <span className={`font-bold uppercase ${selectedInvoiceForModal.status === "Pagado" ? "text-emerald-600" : "text-amber-600"}`}>
+                        {selectedInvoiceForModal.status}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Invoice Customer Info */}
+              <div className="grid grid-cols-2 gap-6 bg-zinc-50 border border-zinc-200 rounded-lg p-5 mb-6 text-xs">
+                <div>
+                  <h4 className="text-[9px] font-black text-zinc-400 uppercase tracking-wider mb-2">FACTURADO A (CLIENTE B2B)</h4>
+                  <p className="font-black text-sm text-zinc-900 uppercase">
+                    {activeRes?.agenciaName || "Cliente Directo"}
+                  </p>
+                  <p className="text-zinc-600 mt-1 font-semibold">
+                    RIF: {clients.find(c => activeRes?.agenciaName && c.nombre.toLowerCase() === activeRes.agenciaName.toLowerCase())?.rif || "N/A"}
+                  </p>
+                  <p className="text-zinc-500 mt-0.5">
+                    Canal: {clients.find(c => activeRes?.agenciaName && c.nombre.toLowerCase() === activeRes.agenciaName.toLowerCase())?.canalComercial || "B2B Mayorista"}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-[9px] font-black text-zinc-400 uppercase tracking-wider mb-2">DETALLES DE RESERVA</h4>
+                  {activeRes && (
+                    <div className="space-y-1">
+                      <p><span className="font-bold text-zinc-700">Pasajero Titular:</span> <span className="uppercase font-semibold text-zinc-800">{activeRes.holder}</span></p>
+                      <p><span className="font-bold text-zinc-700">Localizador ID:</span> <span className="font-mono font-bold text-zinc-800">{activeRes.id}</span></p>
+                      <p><span className="font-bold text-zinc-700">Fecha de Viaje:</span> {formatDate(activeRes.checkIn)}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Invoice Items Table */}
+              <div className="mb-6">
+                <table className="w-full text-left text-xs divide-y divide-zinc-200 border border-zinc-200">
+                  <thead>
+                    <tr className="bg-zinc-950 text-white font-bold uppercase tracking-wider text-[9px]">
+                      <th className="p-3">Concepto / Descripción</th>
+                      <th className="p-3 text-right w-24">Subtotal (USD)</th>
+                      <th className="p-3 text-right w-24">IVA 16% (USD)</th>
+                      <th className="p-3 text-right w-24">Total (USD)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 font-medium text-zinc-800">
+                    <tr>
+                      <td className="p-3.5">
+                        <p className="font-bold text-zinc-950 uppercase">
+                          {selectedInvoiceForModal.clientName.split("(")[1]?.replace(")", "") || "Facturación de Servicios Turísticos Receptivos"}
+                        </p>
+                        <p className="text-[10px] text-zinc-400 mt-1">
+                          Servicios asociados al expediente de reserva para el pasajero titular {activeRes?.holder || "registrado en sistema"}.
+                        </p>
+                      </td>
+                      <td className="p-3.5 text-right font-mono">
+                        ${(selectedInvoiceForModal.amount - selectedInvoiceForModal.vatAmount).toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3.5 text-right font-mono text-zinc-650">
+                        ${selectedInvoiceForModal.vatAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="p-3.5 text-right font-mono font-bold text-zinc-950">
+                        ${selectedInvoiceForModal.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Booking Services Breakdown for customer context */}
+              {activeRes && activeRes.services && activeRes.services.length > 0 && (
+                <div className="mb-8 border border-zinc-200 rounded-lg p-4 bg-zinc-50/50">
+                  <h4 className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-2.5">
+                    Servicios Consolidados en el Expediente (RES-{(activeRes.id).substring(4)})
+                  </h4>
+                  <div className="divide-y divide-zinc-200/60 text-[10px] space-y-2">
+                    {activeRes.services.map((srv, idx) => (
+                      <div key={srv.id || idx} className="pt-2 first:pt-0 flex justify-between items-start">
+                        <div>
+                          <span className="inline-block px-1.5 py-0.5 bg-zinc-200 text-zinc-800 font-bold rounded-sm uppercase tracking-wide text-[8px] mr-2">
+                            {srv.tipo}
+                          </span>
+                          <span className="font-bold text-zinc-900">{srv.proveedorNombre}</span>
+                          <p className="text-zinc-500 mt-0.5">{srv.descripcion}</p>
+                        </div>
+                        <span className="font-mono text-zinc-800 font-bold">
+                          ${srv.precioB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Legal Notes */}
+              <div className="border-t border-zinc-300 pt-6 text-[9.5px] text-zinc-455 leading-relaxed font-sans space-y-1.5">
+                <p className="font-bold text-zinc-500">Condiciones de Facturación y Pago:</p>
+                <p>1. Esta factura comercial representa transacciones comerciales asociadas a la reserva de servicios turísticos descrita.</p>
+                <p>2. Todos los pagos deben ser realizados en la cuenta oficial de {companyConfig.name} antes de la fecha de vencimiento indicada para garantizar los bloqueos de servicios con proveedores locales.</p>
+                <p>3. Modificaciones de servicios posteriores a la emisión de esta factura pueden acarrear cargos adicionales o penalidades del operador final.</p>
+                <p className="text-center font-bold pt-4 text-zinc-400">{companyConfig.name} | RIF: {companyConfig.rif} | {companyConfig.address}</p>
+              </div>
+
+            </div>
+
+            {/* Modal Footer Actions (hidden in print) */}
+            <div className="bg-zinc-50 border-t border-zinc-200 px-6 py-4 flex justify-end gap-2.5 no-print font-sans">
+              <button
+                onClick={() => setSelectedInvoiceForModal(null)}
+                className="px-4.5 py-2 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={handlePrintInvoice}
+                className="px-5 py-2 bg-zinc-900 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <Printer className="w-4 h-4 text-emerald-400" />
+                <span>Imprimir / Descargar PDF</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+      
+      {showRejectModal && activeRes && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/40 backdrop-blur-sm no-print">
+          <div className="bg-white rounded-lg shadow-2xl w-[90%] max-w-md p-6 animate-fade-in relative border border-zinc-200">
+            <button 
+              onClick={() => { setShowRejectModal(false); setRejectReason(""); setRejectFiles([]); }}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <div className="flex items-center gap-3 text-red-650 mb-4">
+              <div className="bg-red-50 p-2 rounded-full">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h2 className="text-lg font-black uppercase tracking-tight">Rechazar Facturación</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1">
+                  Motivo del Rechazo <span className="text-red-500">*</span>
+                </label>
+                <textarea 
+                  className="w-full text-sm border border-zinc-200 rounded p-2.5 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none min-h-[100px] resize-y"
+                  placeholder="Explica claramente por qué se rechaza esta facturación..."
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1">
+                  Adjuntar Archivos / Imágenes (Opcional)
+                </label>
+                <input 
+                  type="file" 
+                  multiple 
+                  accept="image/*,.pdf"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      setRejectFiles(Array.from(e.target.files));
+                    }
+                  }}
+                  className="block w-full text-xs text-zinc-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded file:border-0
+                    file:text-xs file:font-semibold
+                    file:bg-zinc-100 file:text-zinc-700
+                    hover:file:bg-zinc-200 cursor-pointer"
+                />
+                {rejectFiles.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {rejectFiles.map((f, i) => (
+                      <li key={i} className="text-[10px] text-zinc-600 font-medium flex items-center gap-1.5">
+                        <FileCheck className="w-3 h-3 text-emerald-500" />
+                        {f.name} ({(f.size / 1024).toFixed(1)} KB)
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-zinc-100">
+              <button 
+                onClick={() => { setShowRejectModal(false); setRejectReason(""); setRejectFiles([]); }}
+                className="px-4 py-2 text-xs font-bold text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 rounded transition-colors"
+                disabled={isRejecting}
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmRejectBilling}
+                disabled={!rejectReason.trim() || isRejecting}
+                className="px-4 py-2 text-xs font-black text-white bg-red-650 hover:bg-red-700 rounded shadow transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider"
+              >
+                {isRejecting ? "Procesando..." : (
+                  <>
+                    <ThumbsDown className="w-4 h-4" />
+                    Confirmar Rechazo
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       
     </div>

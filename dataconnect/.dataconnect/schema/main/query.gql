@@ -1,0 +1,350 @@
+extend type Query {
+  """
+  ✨ Look up a single `B2BClient` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  b2BClient(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: B2BClient_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: B2BClient_FirstRow
+  ): B2BClient @fdc_generated(from: "B2BClient", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `FinancialInvoice` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  financialInvoice(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: FinancialInvoice_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: FinancialInvoice_FirstRow
+  ): FinancialInvoice @fdc_generated(from: "FinancialInvoice", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `FlightLeg` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  flightLeg(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: FlightLeg_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: FlightLeg_FirstRow
+  ): FlightLeg @fdc_generated(from: "FlightLeg", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `HotelProperty` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  hotelProperty(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: HotelProperty_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: HotelProperty_FirstRow
+  ): HotelProperty @fdc_generated(from: "HotelProperty", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `Reservation` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  reservation(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Reservation_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Reservation_FirstRow
+  ): Reservation @fdc_generated(from: "Reservation", purpose: QUERY_SINGLE)
+  """
+  ✨ Look up a single `TransferService` based on `id`, `key` or `first` and return selected fields (or `null` if not found).
+  """
+  transferService(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: TransferService_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: TransferService_FirstRow
+  ): TransferService @fdc_generated(from: "TransferService", purpose: QUERY_SINGLE)
+  """
+  ✨ List `B2BClient` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  b2BClients(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: B2BClient_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [B2BClient_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: B2BClient_Having
+  ): [B2BClient!]! @fdc_generated(from: "B2BClient", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `FinancialInvoice` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  financialInvoices(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: FinancialInvoice_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [FinancialInvoice_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: FinancialInvoice_Having
+  ): [FinancialInvoice!]! @fdc_generated(from: "FinancialInvoice", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `FlightLeg` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  flightLegs(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: FlightLeg_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [FlightLeg_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: FlightLeg_Having
+  ): [FlightLeg!]! @fdc_generated(from: "FlightLeg", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `HotelProperty` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  hotelProperties(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: HotelProperty_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [HotelProperty_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: HotelProperty_Having
+  ): [HotelProperty!]! @fdc_generated(from: "HotelProperty", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `Reservation` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  reservations(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: Reservation_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [Reservation_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: Reservation_Having
+  ): [Reservation!]! @fdc_generated(from: "Reservation", purpose: QUERY_MULTIPLE)
+  """
+  ✨ List `TransferService` objects in the table and return selected fields, optionally filtered by `where` conditions
+  """
+  transferServices(
+    """
+    Filter condition to narrow down the query results.
+    """
+    where: TransferService_Filter
+
+    """
+    Order the query results by specific fields.
+    """
+    orderBy: [TransferService_Order!]
+
+    """
+    Number of rows to skip before starting to return the results.
+    """
+    offset: Int
+
+    """
+    Maximum number of rows to return (defaults to 100 rows).
+    """
+    limit: Int = 100
+
+    """
+    Set to true to return distinct results.
+    """
+    distinct: Boolean = false
+
+    """
+    Filter condition to apply to the groups of aggregate queries.
+    """
+    having: TransferService_Having
+  ): [TransferService!]! @fdc_generated(from: "TransferService", purpose: QUERY_MULTIPLE)
+}

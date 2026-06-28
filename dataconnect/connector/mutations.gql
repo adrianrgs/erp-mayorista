@@ -1,0 +1,681 @@
+mutation InsertReservation(
+  $id: String!,
+  $holder: String!,
+  $hotelName: String!,
+  $checkIn: String!,
+  $checkOut: String!,
+  $pax: Int!,
+  $status: String!,
+  $totalPrice: Float!,
+  $netPrice: Float!,
+  $agenciaName: String,
+  $tipo: String,
+  $servicios: Any,
+  $telefono: String,
+  $email: String,
+  $flightNo: String,
+  $specialRequests: String,
+  $mercado: String,
+  $createdAt: String,
+  $comprobanteRef: String,
+  $comprobanteMonto: Float,
+  $comprobanteMetodo: String,
+  $facturacionTipo: String,
+  $facturacionRechazoMotivo: String,
+  $facturacionRechazoArchivos: String,
+  $variaciones: Any
+, $updatedAt: String) @auth(level: PUBLIC) {
+  reservation_insert(data: {
+    id: $id,
+    updatedAt: $updatedAt,
+    holder: $holder,
+    hotelName: $hotelName,
+    checkIn: $checkIn,
+    checkOut: $checkOut,
+    pax: $pax,
+    status: $status,
+    totalPrice: $totalPrice,
+    netPrice: $netPrice,
+    agenciaName: $agenciaName,
+    tipo: $tipo,
+    servicios: $servicios,
+    variaciones: $variaciones,
+    telefono: $telefono,
+    email: $email,
+    flightNo: $flightNo,
+    specialRequests: $specialRequests,
+    mercado: $mercado,
+    createdAt: $createdAt,
+    comprobanteRef: $comprobanteRef,
+    comprobanteMonto: $comprobanteMonto,
+    comprobanteMetodo: $comprobanteMetodo,
+    facturacionTipo: $facturacionTipo,
+    facturacionRechazoMotivo: $facturacionRechazoMotivo,
+    facturacionRechazoArchivos: $facturacionRechazoArchivos
+  })
+}
+
+mutation UpdateReservationStatus($id: String!, $status: String!, $updatedAt: String) @auth(level: PUBLIC) {
+  reservation_update(id: $id,
+    data: {
+    updatedAt: $updatedAt, status: $status })
+}
+
+mutation UpdateReservation(
+  $id: String!,
+  $holder: String,
+  $hotelName: String,
+  $checkIn: String,
+  $checkOut: String,
+  $pax: Int,
+  $status: String,
+  $totalPrice: Float,
+  $netPrice: Float,
+  $agenciaName: String,
+  $tipo: String,
+  $servicios: Any,
+  $telefono: String,
+  $email: String,
+  $flightNo: String,
+  $specialRequests: String,
+  $mercado: String,
+  $createdAt: String,
+  $comprobanteRef: String,
+  $comprobanteMonto: Float,
+  $comprobanteMetodo: String,
+  $facturacionTipo: String,
+  $facturacionRechazoMotivo: String,
+  $facturacionRechazoArchivos: String,
+  $variaciones: Any
+, $updatedAt: String) @auth(level: PUBLIC) {
+  reservation_update(id: $id,
+    data: {
+    updatedAt: $updatedAt,
+    holder: $holder,
+    hotelName: $hotelName,
+    checkIn: $checkIn,
+    checkOut: $checkOut,
+    pax: $pax,
+    status: $status,
+    totalPrice: $totalPrice,
+    netPrice: $netPrice,
+    agenciaName: $agenciaName,
+    tipo: $tipo,
+    servicios: $servicios,
+    variaciones: $variaciones,
+    telefono: $telefono,
+    email: $email,
+    flightNo: $flightNo,
+    specialRequests: $specialRequests,
+    mercado: $mercado,
+    createdAt: $createdAt,
+    comprobanteRef: $comprobanteRef,
+    comprobanteMonto: $comprobanteMonto,
+    comprobanteMetodo: $comprobanteMetodo,
+    facturacionTipo: $facturacionTipo,
+    facturacionRechazoMotivo: $facturacionRechazoMotivo,
+    facturacionRechazoArchivos: $facturacionRechazoArchivos
+  })
+}
+
+mutation InsertClient(
+  $id: String!,
+  $nombre: String!,
+  $rif: String!,
+  $tipo: String!,
+  $status: String!,
+  $contactoNombre: String!,
+  $email: String!,
+  $telefono: String!,
+  $saldoFavor: Float!,
+  $saldoDeber: Float!,
+  $moroso: Boolean!,
+  $limiteCredito: Float,
+  $diasCredito: Int,
+  $observaciones: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  b2BClient_insert(data: {
+    id: $id,
+    updatedAt: $updatedAt,
+    nombre: $nombre,
+    rif: $rif,
+    tipo: $tipo,
+    status: $status,
+    contactoNombre: $contactoNombre,
+    email: $email,
+    telefono: $telefono,
+    saldoFavor: $saldoFavor,
+    saldoDeber: $saldoDeber,
+    moroso: $moroso,
+    limiteCredito: $limiteCredito,
+    diasCredito: $diasCredito,
+    observaciones: $observaciones
+  })
+}
+
+mutation InsertInvoice(
+  $id: String!,
+  $clientName: String!,
+  $date: String!,
+  $dueDate: String!,
+  $amount: Float!,
+  $vatAmount: Float!,
+  $type: String!,
+  $status: String!
+, $updatedAt: String) @auth(level: PUBLIC) {
+  financialInvoice_insert(data: {
+    id: $id,
+    updatedAt: $updatedAt,
+    clientName: $clientName,
+    date: $date,
+    dueDate: $dueDate,
+    amount: $amount,
+    vatAmount: $vatAmount,
+    type: $type,
+    status: $status
+  })
+}
+
+mutation InsertDetailedProperty($id: String!, $nombre: String!, $pais: String!, $estado: String!, $ciudad: String!, $categoria: Int!, $status: String!, $politicasGenerales: String!, $imagen: String, $supplierName: String, $updatedAt: String) @auth(level: PUBLIC) {
+  detailedProperty_insert(data: { id: $id,
+    updatedAt: $updatedAt, nombre: $nombre, pais: $pais, estado: $estado, ciudad: $ciudad, categoria: $categoria, status: $status, politicasGenerales: $politicasGenerales, imagen: $imagen, supplierName: $supplierName })
+}
+
+mutation UpdateDetailedProperty($id: String!, $nombre: String, $pais: String, $estado: String, $ciudad: String, $categoria: Int, $status: String, $politicasGenerales: String, $imagen: String, $supplierName: String, $updatedAt: String) @auth(level: PUBLIC) {
+  detailedProperty_update(id: $id,
+    data: {
+    updatedAt: $updatedAt, nombre: $nombre, pais: $pais, estado: $estado, ciudad: $ciudad, categoria: $categoria, status: $status, politicasGenerales: $politicasGenerales, imagen: $imagen, supplierName: $supplierName })
+}
+
+mutation InsertRoomType($id: String!, $propertyId: String!, $nombre: String!, $regimenAlimentacion: String!, $capacidadMax: Int!, $ocupacionBase: Int, $updatedAt: String) @auth(level: PUBLIC) {
+  roomType_insert(data: { id: $id,
+    updatedAt: $updatedAt, propertyId: $propertyId, nombre: $nombre, regimenAlimentacion: $regimenAlimentacion, capacidadMax: $capacidadMax, ocupacionBase: $ocupacionBase })
+}
+
+mutation UpdateRoomType($id: String!, $propertyId: String, $nombre: String, $regimenAlimentacion: String, $capacidadMax: Int, $ocupacionBase: Int, $updatedAt: String) @auth(level: PUBLIC) {
+  roomType_update(id: $id,
+    data: {
+    updatedAt: $updatedAt, propertyId: $propertyId, nombre: $nombre, regimenAlimentacion: $regimenAlimentacion, capacidadMax: $capacidadMax, ocupacionBase: $ocupacionBase })
+}
+
+mutation InsertRatePlan($id: String!, $propertyId: String!, $roomTypeId: String!, $nombrePromocion: String!, $fechaInicio: String!, $fechaFin: String!, $tipoCobro: String!, $tarifaBase: Float!, $tarifaExtraAdulto: Float!, $tarifaExtraNino: Float!, $politicasCancelacion: String!, $mercado: String!, $updatedAt: String) @auth(level: PUBLIC) {
+  ratePlan_insert(data: { id: $id,
+    updatedAt: $updatedAt, propertyId: $propertyId, roomTypeId: $roomTypeId, nombrePromocion: $nombrePromocion, fechaInicio: $fechaInicio, fechaFin: $fechaFin, tipoCobro: $tipoCobro, tarifaBase: $tarifaBase, tarifaExtraAdulto: $tarifaExtraAdulto, tarifaExtraNino: $tarifaExtraNino, politicasCancelacion: $politicasCancelacion, mercado: $mercado })
+}
+
+mutation UpdateRatePlan($id: String!, $propertyId: String, $roomTypeId: String, $nombrePromocion: String, $fechaInicio: String, $fechaFin: String, $tipoCobro: String, $tarifaBase: Float, $tarifaExtraAdulto: Float, $tarifaExtraNino: Float, $politicasCancelacion: String, $mercado: String, $updatedAt: String) @auth(level: PUBLIC) {
+  ratePlan_update(id: $id,
+    data: {
+    updatedAt: $updatedAt, propertyId: $propertyId, roomTypeId: $roomTypeId, nombrePromocion: $nombrePromocion, fechaInicio: $fechaInicio, fechaFin: $fechaFin, tipoCobro: $tipoCobro, tarifaBase: $tarifaBase, tarifaExtraAdulto: $tarifaExtraAdulto, tarifaExtraNino: $tarifaExtraNino, politicasCancelacion: $politicasCancelacion, mercado: $mercado })
+}
+
+mutation InsertStopSale($id: String!, $propertyId: String!, $fechaInicio: String!, $fechaFin: String!, $motivo: String, $updatedAt: String) @auth(level: PUBLIC) {
+  stopSale_insert(data: { id: $id,
+    updatedAt: $updatedAt, propertyId: $propertyId, fechaInicio: $fechaInicio, fechaFin: $fechaFin, motivo: $motivo })
+}
+
+mutation UpdateStopSale($id: String!, $propertyId: String, $fechaInicio: String, $fechaFin: String, $motivo: String, $updatedAt: String) @auth(level: PUBLIC) {
+  stopSale_update(id: $id,
+    data: {
+    updatedAt: $updatedAt, propertyId: $propertyId, fechaInicio: $fechaInicio, fechaFin: $fechaFin, motivo: $motivo })
+}
+
+mutation InsertFlightTicket(
+  $id: String!, $pnr: String!, $pasajeros: Any!, $segmentos: Any!,
+  $costoNeto: Float!, $precioVenta: Float!, $precioPvp: Float,
+  $comisionB2B: Float, $comisionMayorista: Float, $tipoComision: String, $fee: Float, $vinculadoAExpediente: Boolean!,
+  $facturarConjunto: Boolean, $expedienteId: String, $agenteNombre: String,
+  $createdAt: String, $ticketNumero: String, $aerolineaValidadora: String,
+  $notas: String, $expedienteAereo: Any
+, $updatedAt: String) @auth(level: PUBLIC) {
+  flightTicket_insert(data: {
+    id: $id,
+    updatedAt: $updatedAt, pnr: $pnr, pasajeros: $pasajeros, segmentos: $segmentos,
+    costoNeto: $costoNeto, precioVenta: $precioVenta, precioPvp: $precioPvp,
+    comisionB2B: $comisionB2B, comisionMayorista: $comisionMayorista,
+    tipoComision: $tipoComision, fee: $fee,
+    vinculadoAExpediente: $vinculadoAExpediente, facturarConjunto: $facturarConjunto,
+    expedienteId: $expedienteId, agenteNombre: $agenteNombre,
+    createdAt: $createdAt, ticketNumero: $ticketNumero, aerolineaValidadora: $aerolineaValidadora,
+    notas: $notas, expedienteAereo: $expedienteAereo
+  })
+}
+
+mutation UpdateFlightTicket(
+  $id: String!, $pnr: String, $pasajeros: Any, $segmentos: Any,
+  $costoNeto: Float, $precioVenta: Float, $precioPvp: Float,
+  $comisionB2B: Float, $comisionMayorista: Float, $tipoComision: String, $fee: Float, $vinculadoAExpediente: Boolean,
+  $facturarConjunto: Boolean, $expedienteId: String, $agenteNombre: String,
+  $createdAt: String, $ticketNumero: String, $aerolineaValidadora: String,
+  $notas: String, $expedienteAereo: Any
+, $updatedAt: String) @auth(level: PUBLIC) {
+  flightTicket_update(id: $id,
+    data: {
+    updatedAt: $updatedAt,
+    pnr: $pnr, pasajeros: $pasajeros, segmentos: $segmentos,
+    costoNeto: $costoNeto, precioVenta: $precioVenta, precioPvp: $precioPvp,
+    comisionB2B: $comisionB2B, comisionMayorista: $comisionMayorista,
+    tipoComision: $tipoComision, fee: $fee,
+    vinculadoAExpediente: $vinculadoAExpediente, facturarConjunto: $facturarConjunto,
+    expedienteId: $expedienteId, agenteNombre: $agenteNombre,
+    createdAt: $createdAt, ticketNumero: $ticketNumero, aerolineaValidadora: $aerolineaValidadora,
+    notas: $notas, expedienteAereo: $expedienteAereo
+  })
+}
+
+mutation DeleteFlightTicket($id: String!) @auth(level: PUBLIC) {
+  flightTicket_delete(id: $id
+    )
+}
+
+mutation InsertTransferService(
+  $id: String!, $leadPassenger: String!, $paxCount: Int!, $pickupLocation: String!,
+  $dropoffLocation: String!, $date: String!, $time: String!, $provider: String!,
+  $driverName: String, $driverId: String, $vehicleId: String, $reservationId: String,
+  $flightRef: String, $notes: String, $status: String!, $vehicleType: String!,
+  $direction: String, $legIndex: Int, $tipoTraslado: String, $telefono: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  transferService_insert(data: {
+    id: $id,
+    updatedAt: $updatedAt, leadPassenger: $leadPassenger, paxCount: $paxCount, pickupLocation: $pickupLocation,
+    dropoffLocation: $dropoffLocation, date: $date, time: $time, provider: $provider,
+    driverName: $driverName, driverId: $driverId, vehicleId: $vehicleId, reservationId: $reservationId,
+    flightRef: $flightRef, notes: $notes, status: $status, vehicleType: $vehicleType,
+    direction: $direction, legIndex: $legIndex, tipoTraslado: $tipoTraslado, telefono: $telefono
+  })
+}
+
+mutation UpdateTransferService(
+  $id: String!, $leadPassenger: String, $paxCount: Int, $pickupLocation: String,
+  $dropoffLocation: String, $date: String, $time: String, $provider: String,
+  $driverName: String, $driverId: String, $vehicleId: String, $reservationId: String,
+  $flightRef: String, $notes: String, $status: String, $vehicleType: String,
+  $direction: String, $legIndex: Int, $tipoTraslado: String, $telefono: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  transferService_update(id: $id,
+    data: {
+    updatedAt: $updatedAt,
+    leadPassenger: $leadPassenger, paxCount: $paxCount, pickupLocation: $pickupLocation,
+    dropoffLocation: $dropoffLocation, date: $date, time: $time, provider: $provider,
+    driverName: $driverName, driverId: $driverId, vehicleId: $vehicleId, reservationId: $reservationId,
+    flightRef: $flightRef, notes: $notes, status: $status, vehicleType: $vehicleType,
+    direction: $direction, legIndex: $legIndex, tipoTraslado: $tipoTraslado, telefono: $telefono
+  })
+}
+
+mutation DeleteTransferService($id: String!) @auth(level: PUBLIC) {
+  transferService_delete(id: $id
+    )
+}
+
+mutation InsertFleetVehicle(
+  $id: String!, $placa: String!, $tipo: String!, $marca: String!, $modelo: String!,
+  $capacidad: Int!, $proveedor: String!, $status: String!, $conductorAsignadoId: String,
+  $observaciones: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  fleetVehicle_insert(data: {
+    id: $id,
+    updatedAt: $updatedAt, placa: $placa, tipo: $tipo, marca: $marca, modelo: $modelo,
+    capacidad: $capacidad, proveedor: $proveedor, status: $status,
+    conductorAsignadoId: $conductorAsignadoId, observaciones: $observaciones
+  })
+}
+
+mutation UpdateFleetVehicle(
+  $id: String!, $placa: String, $tipo: String, $marca: String, $modelo: String,
+  $capacidad: Int, $proveedor: String, $status: String, $conductorAsignadoId: String,
+  $observaciones: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  fleetVehicle_update(id: $id,
+    data: {
+    updatedAt: $updatedAt,
+    placa: $placa, tipo: $tipo, marca: $marca, modelo: $modelo,
+    capacidad: $capacidad, proveedor: $proveedor, status: $status,
+    conductorAsignadoId: $conductorAsignadoId, observaciones: $observaciones
+  })
+}
+
+mutation DeleteFleetVehicle($id: String!) @auth(level: PUBLIC) {
+  fleetVehicle_delete(id: $id
+    )
+}
+
+mutation InsertFleetDriver(
+  $id: String!, $nombre: String!, $telefono: String!, $licencia: String!,
+  $vehiculoAsignadoId: String, $status: String!, $observaciones: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  fleetDriver_insert(data: {
+    id: $id,
+    updatedAt: $updatedAt, nombre: $nombre, telefono: $telefono, licencia: $licencia,
+    vehiculoAsignadoId: $vehiculoAsignadoId, status: $status, observaciones: $observaciones
+  })
+}
+
+mutation UpdateFleetDriver(
+  $id: String!, $nombre: String, $telefono: String, $licencia: String,
+  $vehiculoAsignadoId: String, $status: String, $observaciones: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  fleetDriver_update(id: $id,
+    data: {
+    updatedAt: $updatedAt,
+    nombre: $nombre, telefono: $telefono, licencia: $licencia,
+    vehiculoAsignadoId: $vehiculoAsignadoId, status: $status, observaciones: $observaciones
+  })
+}
+
+mutation DeleteFleetDriver($id: String!) @auth(level: PUBLIC) {
+  fleetDriver_delete(id: $id
+    )
+}
+
+mutation UpdateInvoice(
+  $id: String!
+  $amount: Float
+  $vatAmount: Float
+  $status: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  financialInvoice_update(
+    id: $id
+    
+    data: {
+    updatedAt: $updatedAt,
+      amount: $amount
+      vatAmount: $vatAmount
+      status: $status
+    }
+  )
+}
+
+mutation UpdateClient(
+  $id: String!
+  $saldoFavor: Float
+  $saldoDeber: Float
+  $status: String
+  $moroso: Boolean
+, $updatedAt: String) @auth(level: PUBLIC) {
+  b2BClient_update(
+    id: $id
+    
+    data: {
+    updatedAt: $updatedAt,
+      saldoFavor: $saldoFavor
+      saldoDeber: $saldoDeber
+      status: $status
+      moroso: $moroso
+    }
+  )
+}
+
+mutation DeleteInvoice($id: String!) @auth(level: PUBLIC) {
+  financialInvoice_delete(id: $id
+    )
+}
+
+mutation DeleteClient($id: String!) @auth(level: PUBLIC) {
+  b2BClient_delete(id: $id
+    )
+}
+
+mutation DeletePaymentVoucher($id: String!) @auth(level: PUBLIC) {
+  paymentVoucher_delete(id: $id
+    )
+}
+
+mutation DeleteReservation($id: String!) @auth(level: PUBLIC) {
+  reservation_delete(id: $id
+    )
+}
+
+mutation DeleteDetailedProperty($id: String!) @auth(level: PUBLIC) {
+  detailedProperty_delete(id: $id
+    )
+}
+
+mutation DeleteRoomType($id: String!) @auth(level: PUBLIC) {
+  roomType_delete(id: $id
+    )
+}
+
+mutation DeleteRatePlan($id: String!) @auth(level: PUBLIC) {
+  ratePlan_delete(id: $id
+    )
+}
+
+mutation DeleteStopSale($id: String!) @auth(level: PUBLIC) {
+  stopSale_delete(id: $id
+    )
+}
+
+mutation InsertPayableObligation(
+  $id: String!
+  $dueDate: String!
+  $providerName: String!
+  $serviceDetail: String!
+  $locatorId: String!
+  $netCost: Float!
+  $paidAmount: Float!
+  $status: String!
+  $paymentMethod: String
+  $reference: String
+  $notes: String
+  $date: String
+  $currency: String
+  $attachedFile: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  payableObligation_insert(
+    data: {
+      id: $id
+      
+    updatedAt: $updatedAt,dueDate: $dueDate
+      providerName: $providerName
+      serviceDetail: $serviceDetail
+      locatorId: $locatorId
+      netCost: $netCost
+      paidAmount: $paidAmount
+      status: $status
+      paymentMethod: $paymentMethod
+      reference: $reference
+      notes: $notes
+      date: $date
+      currency: $currency
+      attachedFile: $attachedFile
+    }
+  )
+}
+
+mutation UpdatePayableObligation(
+  $id: String!
+  $dueDate: String
+  $providerName: String
+  $serviceDetail: String
+  $locatorId: String
+  $netCost: Float
+  $paidAmount: Float
+  $status: String
+  $paymentMethod: String
+  $reference: String
+  $notes: String
+  $date: String
+  $currency: String
+  $attachedFile: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  payableObligation_update(
+    id: $id
+    
+    data: {
+    updatedAt: $updatedAt,
+      dueDate: $dueDate
+      providerName: $providerName
+      serviceDetail: $serviceDetail
+      locatorId: $locatorId
+      netCost: $netCost
+      paidAmount: $paidAmount
+      status: $status
+      paymentMethod: $paymentMethod
+      reference: $reference
+      notes: $notes
+      date: $date
+      currency: $currency
+      attachedFile: $attachedFile
+    }
+  )
+}
+
+mutation DeletePayableObligation($id: String!) @auth(level: PUBLIC) {
+  payableObligation_delete(id: $id
+    )
+}
+
+mutation InsertProviderStatement(
+  $id: String!
+  $providerName: String!
+  $date: String!
+  $type: String!
+  $amount: Float!
+  $reference: String!
+  $status: String!
+, $updatedAt: String) @auth(level: PUBLIC) {
+  providerStatement_insert(
+    data: {
+      id: $id
+      
+    updatedAt: $updatedAt,providerName: $providerName
+      date: $date
+      type: $type
+      amount: $amount
+      reference: $reference
+      status: $status
+    }
+  )
+}
+
+mutation DeleteProviderStatement($id: String!) @auth(level: PUBLIC) {
+  providerStatement_delete(id: $id
+    )
+}
+
+mutation InsertExtraService(
+  $id: String!
+  $nombre: String!
+  $providerName: String!
+  $category: String!
+  $ubicacion: String!
+  $descripcion: String!
+  $politicasCancelacion: String!
+  $status: String!
+, $updatedAt: String) @auth(level: PUBLIC) {
+  extraService_insert(
+    data: {
+      id: $id
+      
+    updatedAt: $updatedAt,nombre: $nombre
+      providerName: $providerName
+      category: $category
+      ubicacion: $ubicacion
+      descripcion: $descripcion
+      politicasCancelacion: $politicasCancelacion
+      status: $status
+    }
+  )
+}
+
+mutation UpdateExtraService(
+  $id: String!
+  $nombre: String
+  $providerName: String
+  $category: String
+  $ubicacion: String
+  $descripcion: String
+  $politicasCancelacion: String
+  $status: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  extraService_update(
+    id: $id
+    
+    data: {
+    updatedAt: $updatedAt,
+      nombre: $nombre
+      providerName: $providerName
+      category: $category
+      ubicacion: $ubicacion
+      descripcion: $descripcion
+      politicasCancelacion: $politicasCancelacion
+      status: $status
+    }
+  )
+}
+
+mutation DeleteExtraService($id: String!) @auth(level: PUBLIC) {
+  extraService_delete(id: $id
+    )
+}
+
+mutation InsertServiceRate(
+  $id: String!
+  $extraServiceId: String!
+  $temporadaInicio: String!
+  $temporadaFin: String!
+  $pricingModel: String!
+  $netoAdulto: Float
+  $ventaAdulto: Float
+  $netoNino: Float
+  $ventaNino: Float
+  $capacidadMaxima: Int
+  $netoTotal: Float
+  $ventaTotal: Float
+, $updatedAt: String) @auth(level: PUBLIC) {
+  serviceRate_insert(
+    data: {
+      id: $id
+      
+    updatedAt: $updatedAt,extraServiceId: $extraServiceId
+      temporadaInicio: $temporadaInicio
+      temporadaFin: $temporadaFin
+      pricingModel: $pricingModel
+      netoAdulto: $netoAdulto
+      ventaAdulto: $ventaAdulto
+      netoNino: $netoNino
+      ventaNino: $ventaNino
+      capacidadMaxima: $capacidadMaxima
+      netoTotal: $netoTotal
+      ventaTotal: $ventaTotal
+    }
+  )
+}
+
+mutation UpdateServiceRate(
+  $id: String!
+  $temporadaInicio: String
+  $temporadaFin: String
+  $pricingModel: String
+  $netoAdulto: Float
+  $ventaAdulto: Float
+  $netoNino: Float
+  $ventaNino: Float
+  $capacidadMaxima: Int
+  $netoTotal: Float
+  $ventaTotal: Float
+, $updatedAt: String) @auth(level: PUBLIC) {
+  serviceRate_update(
+    id: $id
+    
+    data: {
+    updatedAt: $updatedAt,
+      temporadaInicio: $temporadaInicio
+      temporadaFin: $temporadaFin
+      pricingModel: $pricingModel
+      netoAdulto: $netoAdulto
+      ventaAdulto: $ventaAdulto
+      netoNino: $netoNino
+      ventaNino: $ventaNino
+      capacidadMaxima: $capacidadMaxima
+      netoTotal: $netoTotal
+      ventaTotal: $ventaTotal
+    }
+  )
+}
+
+mutation DeleteServiceRate($id: String!) @auth(level: PUBLIC) {
+  serviceRate_delete(id: $id
+    )
+}

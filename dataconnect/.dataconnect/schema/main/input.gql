@@ -1,0 +1,2946 @@
+"""
+✨ `B2BClient_KeyOutput` returns the primary key fields of table type `B2BClient`.
+
+It has the same format as `B2BClient_Key`, but is only used as mutation return value.
+"""
+scalar B2BClient_KeyOutput
+"""
+✨ `FinancialInvoice_KeyOutput` returns the primary key fields of table type `FinancialInvoice`.
+
+It has the same format as `FinancialInvoice_Key`, but is only used as mutation return value.
+"""
+scalar FinancialInvoice_KeyOutput
+"""
+✨ `FlightLeg_KeyOutput` returns the primary key fields of table type `FlightLeg`.
+
+It has the same format as `FlightLeg_Key`, but is only used as mutation return value.
+"""
+scalar FlightLeg_KeyOutput
+"""
+✨ `HotelProperty_KeyOutput` returns the primary key fields of table type `HotelProperty`.
+
+It has the same format as `HotelProperty_Key`, but is only used as mutation return value.
+"""
+scalar HotelProperty_KeyOutput
+"""
+✨ `Reservation_KeyOutput` returns the primary key fields of table type `Reservation`.
+
+It has the same format as `Reservation_Key`, but is only used as mutation return value.
+"""
+scalar Reservation_KeyOutput
+"""
+✨ `TransferService_KeyOutput` returns the primary key fields of table type `TransferService`.
+
+It has the same format as `TransferService_Key`, but is only used as mutation return value.
+"""
+scalar TransferService_KeyOutput
+"""
+✨ Generated data input type for table 'B2BClient'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input B2BClient_Data {
+  """
+  ✨ Generated from Field `B2BClient`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `B2BClient`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+  """
+  ✨ Generated from Field `B2BClient`.`balance` of type `Float!`
+  """
+  balance: Float
+  """
+  ✨ `_expr` server value variant of `balance` (✨ Generated from Field `B2BClient`.`balance` of type `Float!`)
+  """
+  balance_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `balance` (✨ Generated from Field `B2BClient`.`balance` of type `Float!`)
+  """
+  balance_update: [Float_Update!]
+  """
+  ✨ Generated from Field `B2BClient`.`email` of type `String!`
+  """
+  email: String
+  """
+  ✨ `_expr` server value variant of `email` (✨ Generated from Field `B2BClient`.`email` of type `String!`)
+  """
+  email_expr: String_Expr
+  """
+  ✨ Generated from Field `B2BClient`.`nombre` of type `String!`
+  """
+  nombre: String
+  """
+  ✨ `_expr` server value variant of `nombre` (✨ Generated from Field `B2BClient`.`nombre` of type `String!`)
+  """
+  nombre_expr: String_Expr
+  """
+  ✨ Generated from Field `B2BClient`.`status` of type `String!`
+  """
+  status: String
+  """
+  ✨ `_expr` server value variant of `status` (✨ Generated from Field `B2BClient`.`status` of type `String!`)
+  """
+  status_expr: String_Expr
+  """
+  ✨ Generated from Field `B2BClient`.`telefono` of type `String!`
+  """
+  telefono: String
+  """
+  ✨ `_expr` server value variant of `telefono` (✨ Generated from Field `B2BClient`.`telefono` of type `String!`)
+  """
+  telefono_expr: String_Expr
+  """
+  ✨ Generated from Field `B2BClient`.`tier` of type `String!`
+  """
+  tier: String
+  """
+  ✨ `_expr` server value variant of `tier` (✨ Generated from Field `B2BClient`.`tier` of type `String!`)
+  """
+  tier_expr: String_Expr
+  """
+  ✨ Generated from Field `B2BClient`.`type` of type `String!`
+  """
+  type: String
+  """
+  ✨ `_expr` server value variant of `type` (✨ Generated from Field `B2BClient`.`type` of type `String!`)
+  """
+  type_expr: String_Expr
+}
+"""
+✨ Generated filter input type for table 'B2BClient'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input B2BClient_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [B2BClient_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: B2BClient_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [B2BClient_Filter!]
+  """
+  ✨ Generated from Field `B2BClient`.`id` of type `String!`
+  """
+  id: String_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`balance` of type `Float!`
+  """
+  balance: Float_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`email` of type `String!`
+  """
+  email: String_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`nombre` of type `String!`
+  """
+  nombre: String_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`status` of type `String!`
+  """
+  status: String_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`telefono` of type `String!`
+  """
+  telefono: String_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`tier` of type `String!`
+  """
+  tier: String_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`type` of type `String!`
+  """
+  type: String_Filter
+}
+"""
+✨ Generated first-row input type for table 'B2BClient'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input B2BClient_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [B2BClient_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: B2BClient_Filter
+}
+"""
+✨ Generated having input type for table 'B2BClient'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input B2BClient_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [B2BClient_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: B2BClient_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [B2BClient_Having!]
+  """
+  ✨ Generated from Field `B2BClient`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`balance_count` of type `Int!`
+  """
+  balance_count: Int_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`email_count` of type `Int!`
+  """
+  email_count: Int_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`nombre_count` of type `Int!`
+  """
+  nombre_count: Int_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`status_count` of type `Int!`
+  """
+  status_count: Int_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`telefono_count` of type `Int!`
+  """
+  telefono_count: Int_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`tier_count` of type `Int!`
+  """
+  tier_count: Int_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`type_count` of type `Int!`
+  """
+  type_count: Int_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`balance_sum` of type `Float`
+  """
+  balance_sum: Float_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`balance_avg` of type `Float`
+  """
+  balance_avg: Float_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`balance_min` of type `Float`
+  """
+  balance_min: Float_Filter
+  """
+  ✨ Generated from Field `B2BClient`.`balance_max` of type `Float`
+  """
+  balance_max: Float_Filter
+}
+"""
+✨ Generated key input type for table 'B2BClient'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input B2BClient_Key {
+  """
+  ✨ Generated from Field `B2BClient`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `B2BClient`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+}
+"""
+✨ Generated list filter input type for table 'B2BClient'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input B2BClient_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: B2BClient_Filter
+}
+"""
+✨ Generated order input type for table 'B2BClient'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input B2BClient_Order {
+  """
+  ✨ Generated from Field `B2BClient`.`id` of type `String!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`balance` of type `Float!`
+  """
+  balance: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`email` of type `String!`
+  """
+  email: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`nombre` of type `String!`
+  """
+  nombre: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`status` of type `String!`
+  """
+  status: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`telefono` of type `String!`
+  """
+  telefono: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`tier` of type `String!`
+  """
+  tier: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`type` of type `String!`
+  """
+  type: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`balance_count` of type `Int!`
+  """
+  balance_count: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`email_count` of type `Int!`
+  """
+  email_count: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`nombre_count` of type `Int!`
+  """
+  nombre_count: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`status_count` of type `Int!`
+  """
+  status_count: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`telefono_count` of type `Int!`
+  """
+  telefono_count: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`tier_count` of type `Int!`
+  """
+  tier_count: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`type_count` of type `Int!`
+  """
+  type_count: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`balance_sum` of type `Float`
+  """
+  balance_sum: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`balance_avg` of type `Float`
+  """
+  balance_avg: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`balance_min` of type `Float`
+  """
+  balance_min: OrderDirection
+  """
+  ✨ Generated from Field `B2BClient`.`balance_max` of type `Float`
+  """
+  balance_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'FinancialInvoice'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input FinancialInvoice_Data {
+  """
+  ✨ Generated from Field `FinancialInvoice`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `FinancialInvoice`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount` of type `Float!`
+  """
+  amount: Float
+  """
+  ✨ `_expr` server value variant of `amount` (✨ Generated from Field `FinancialInvoice`.`amount` of type `Float!`)
+  """
+  amount_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `amount` (✨ Generated from Field `FinancialInvoice`.`amount` of type `Float!`)
+  """
+  amount_update: [Float_Update!]
+  """
+  ✨ Generated from Field `FinancialInvoice`.`clientName` of type `String!`
+  """
+  clientName: String
+  """
+  ✨ `_expr` server value variant of `clientName` (✨ Generated from Field `FinancialInvoice`.`clientName` of type `String!`)
+  """
+  clientName_expr: String_Expr
+  """
+  ✨ Generated from Field `FinancialInvoice`.`date` of type `String!`
+  """
+  date: String
+  """
+  ✨ `_expr` server value variant of `date` (✨ Generated from Field `FinancialInvoice`.`date` of type `String!`)
+  """
+  date_expr: String_Expr
+  """
+  ✨ Generated from Field `FinancialInvoice`.`dueDate` of type `String!`
+  """
+  dueDate: String
+  """
+  ✨ `_expr` server value variant of `dueDate` (✨ Generated from Field `FinancialInvoice`.`dueDate` of type `String!`)
+  """
+  dueDate_expr: String_Expr
+  """
+  ✨ Generated from Field `FinancialInvoice`.`status` of type `String!`
+  """
+  status: String
+  """
+  ✨ `_expr` server value variant of `status` (✨ Generated from Field `FinancialInvoice`.`status` of type `String!`)
+  """
+  status_expr: String_Expr
+  """
+  ✨ Generated from Field `FinancialInvoice`.`type` of type `String!`
+  """
+  type: String
+  """
+  ✨ `_expr` server value variant of `type` (✨ Generated from Field `FinancialInvoice`.`type` of type `String!`)
+  """
+  type_expr: String_Expr
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount` of type `Float!`
+  """
+  vatAmount: Float
+  """
+  ✨ `_expr` server value variant of `vatAmount` (✨ Generated from Field `FinancialInvoice`.`vatAmount` of type `Float!`)
+  """
+  vatAmount_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `vatAmount` (✨ Generated from Field `FinancialInvoice`.`vatAmount` of type `Float!`)
+  """
+  vatAmount_update: [Float_Update!]
+}
+"""
+✨ Generated filter input type for table 'FinancialInvoice'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input FinancialInvoice_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [FinancialInvoice_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: FinancialInvoice_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [FinancialInvoice_Filter!]
+  """
+  ✨ Generated from Field `FinancialInvoice`.`id` of type `String!`
+  """
+  id: String_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount` of type `Float!`
+  """
+  amount: Float_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`clientName` of type `String!`
+  """
+  clientName: String_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`date` of type `String!`
+  """
+  date: String_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`dueDate` of type `String!`
+  """
+  dueDate: String_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`status` of type `String!`
+  """
+  status: String_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`type` of type `String!`
+  """
+  type: String_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount` of type `Float!`
+  """
+  vatAmount: Float_Filter
+}
+"""
+✨ Generated first-row input type for table 'FinancialInvoice'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input FinancialInvoice_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [FinancialInvoice_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: FinancialInvoice_Filter
+}
+"""
+✨ Generated having input type for table 'FinancialInvoice'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input FinancialInvoice_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [FinancialInvoice_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: FinancialInvoice_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [FinancialInvoice_Having!]
+  """
+  ✨ Generated from Field `FinancialInvoice`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount_count` of type `Int!`
+  """
+  amount_count: Int_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`clientName_count` of type `Int!`
+  """
+  clientName_count: Int_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`date_count` of type `Int!`
+  """
+  date_count: Int_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`dueDate_count` of type `Int!`
+  """
+  dueDate_count: Int_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`status_count` of type `Int!`
+  """
+  status_count: Int_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`type_count` of type `Int!`
+  """
+  type_count: Int_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount_count` of type `Int!`
+  """
+  vatAmount_count: Int_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount_sum` of type `Float`
+  """
+  amount_sum: Float_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount_sum` of type `Float`
+  """
+  vatAmount_sum: Float_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount_avg` of type `Float`
+  """
+  amount_avg: Float_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount_avg` of type `Float`
+  """
+  vatAmount_avg: Float_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount_min` of type `Float`
+  """
+  amount_min: Float_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount_min` of type `Float`
+  """
+  vatAmount_min: Float_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount_max` of type `Float`
+  """
+  amount_max: Float_Filter
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount_max` of type `Float`
+  """
+  vatAmount_max: Float_Filter
+}
+"""
+✨ Generated key input type for table 'FinancialInvoice'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input FinancialInvoice_Key {
+  """
+  ✨ Generated from Field `FinancialInvoice`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `FinancialInvoice`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+}
+"""
+✨ Generated list filter input type for table 'FinancialInvoice'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input FinancialInvoice_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: FinancialInvoice_Filter
+}
+"""
+✨ Generated order input type for table 'FinancialInvoice'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input FinancialInvoice_Order {
+  """
+  ✨ Generated from Field `FinancialInvoice`.`id` of type `String!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount` of type `Float!`
+  """
+  amount: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`clientName` of type `String!`
+  """
+  clientName: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`date` of type `String!`
+  """
+  date: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`dueDate` of type `String!`
+  """
+  dueDate: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`status` of type `String!`
+  """
+  status: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`type` of type `String!`
+  """
+  type: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount` of type `Float!`
+  """
+  vatAmount: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount_count` of type `Int!`
+  """
+  amount_count: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`clientName_count` of type `Int!`
+  """
+  clientName_count: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`date_count` of type `Int!`
+  """
+  date_count: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`dueDate_count` of type `Int!`
+  """
+  dueDate_count: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`status_count` of type `Int!`
+  """
+  status_count: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`type_count` of type `Int!`
+  """
+  type_count: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount_count` of type `Int!`
+  """
+  vatAmount_count: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount_sum` of type `Float`
+  """
+  amount_sum: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount_sum` of type `Float`
+  """
+  vatAmount_sum: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount_avg` of type `Float`
+  """
+  amount_avg: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount_avg` of type `Float`
+  """
+  vatAmount_avg: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount_min` of type `Float`
+  """
+  amount_min: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount_min` of type `Float`
+  """
+  vatAmount_min: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`amount_max` of type `Float`
+  """
+  amount_max: OrderDirection
+  """
+  ✨ Generated from Field `FinancialInvoice`.`vatAmount_max` of type `Float`
+  """
+  vatAmount_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'FlightLeg'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input FlightLeg_Data {
+  """
+  ✨ Generated from Field `FlightLeg`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `FlightLeg`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+  """
+  ✨ Generated from Field `FlightLeg`.`airline` of type `String!`
+  """
+  airline: String
+  """
+  ✨ `_expr` server value variant of `airline` (✨ Generated from Field `FlightLeg`.`airline` of type `String!`)
+  """
+  airline_expr: String_Expr
+  """
+  ✨ Generated from Field `FlightLeg`.`arrTime` of type `String!`
+  """
+  arrTime: String
+  """
+  ✨ `_expr` server value variant of `arrTime` (✨ Generated from Field `FlightLeg`.`arrTime` of type `String!`)
+  """
+  arrTime_expr: String_Expr
+  """
+  ✨ Generated from Field `FlightLeg`.`arrival` of type `String!`
+  """
+  arrival: String
+  """
+  ✨ `_expr` server value variant of `arrival` (✨ Generated from Field `FlightLeg`.`arrival` of type `String!`)
+  """
+  arrival_expr: String_Expr
+  """
+  ✨ Generated from Field `FlightLeg`.`depTime` of type `String!`
+  """
+  depTime: String
+  """
+  ✨ `_expr` server value variant of `depTime` (✨ Generated from Field `FlightLeg`.`depTime` of type `String!`)
+  """
+  depTime_expr: String_Expr
+  """
+  ✨ Generated from Field `FlightLeg`.`departure` of type `String!`
+  """
+  departure: String
+  """
+  ✨ `_expr` server value variant of `departure` (✨ Generated from Field `FlightLeg`.`departure` of type `String!`)
+  """
+  departure_expr: String_Expr
+  """
+  ✨ Generated from Field `FlightLeg`.`flightNo` of type `String!`
+  """
+  flightNo: String
+  """
+  ✨ `_expr` server value variant of `flightNo` (✨ Generated from Field `FlightLeg`.`flightNo` of type `String!`)
+  """
+  flightNo_expr: String_Expr
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining` of type `Int!`
+  """
+  seatsRemaining: Int
+  """
+  ✨ `_expr` server value variant of `seatsRemaining` (✨ Generated from Field `FlightLeg`.`seatsRemaining` of type `Int!`)
+  """
+  seatsRemaining_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `seatsRemaining` (✨ Generated from Field `FlightLeg`.`seatsRemaining` of type `Int!`)
+  """
+  seatsRemaining_update: [Int_Update!]
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal` of type `Int!`
+  """
+  seatsTotal: Int
+  """
+  ✨ `_expr` server value variant of `seatsTotal` (✨ Generated from Field `FlightLeg`.`seatsTotal` of type `Int!`)
+  """
+  seatsTotal_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `seatsTotal` (✨ Generated from Field `FlightLeg`.`seatsTotal` of type `Int!`)
+  """
+  seatsTotal_update: [Int_Update!]
+  """
+  ✨ Generated from Field `FlightLeg`.`status` of type `String!`
+  """
+  status: String
+  """
+  ✨ `_expr` server value variant of `status` (✨ Generated from Field `FlightLeg`.`status` of type `String!`)
+  """
+  status_expr: String_Expr
+  """
+  ✨ Generated from Field `FlightLeg`.`terminal` of type `String!`
+  """
+  terminal: String
+  """
+  ✨ `_expr` server value variant of `terminal` (✨ Generated from Field `FlightLeg`.`terminal` of type `String!`)
+  """
+  terminal_expr: String_Expr
+}
+"""
+✨ Generated filter input type for table 'FlightLeg'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input FlightLeg_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [FlightLeg_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: FlightLeg_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [FlightLeg_Filter!]
+  """
+  ✨ Generated from Field `FlightLeg`.`id` of type `String!`
+  """
+  id: String_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`airline` of type `String!`
+  """
+  airline: String_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`arrTime` of type `String!`
+  """
+  arrTime: String_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`arrival` of type `String!`
+  """
+  arrival: String_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`depTime` of type `String!`
+  """
+  depTime: String_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`departure` of type `String!`
+  """
+  departure: String_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`flightNo` of type `String!`
+  """
+  flightNo: String_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining` of type `Int!`
+  """
+  seatsRemaining: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal` of type `Int!`
+  """
+  seatsTotal: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`status` of type `String!`
+  """
+  status: String_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`terminal` of type `String!`
+  """
+  terminal: String_Filter
+}
+"""
+✨ Generated first-row input type for table 'FlightLeg'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input FlightLeg_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [FlightLeg_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: FlightLeg_Filter
+}
+"""
+✨ Generated having input type for table 'FlightLeg'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input FlightLeg_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [FlightLeg_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: FlightLeg_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [FlightLeg_Having!]
+  """
+  ✨ Generated from Field `FlightLeg`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`airline_count` of type `Int!`
+  """
+  airline_count: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`arrTime_count` of type `Int!`
+  """
+  arrTime_count: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`arrival_count` of type `Int!`
+  """
+  arrival_count: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`depTime_count` of type `Int!`
+  """
+  depTime_count: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`departure_count` of type `Int!`
+  """
+  departure_count: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`flightNo_count` of type `Int!`
+  """
+  flightNo_count: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining_count` of type `Int!`
+  """
+  seatsRemaining_count: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal_count` of type `Int!`
+  """
+  seatsTotal_count: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`status_count` of type `Int!`
+  """
+  status_count: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`terminal_count` of type `Int!`
+  """
+  terminal_count: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining_sum` of type `Int`
+  """
+  seatsRemaining_sum: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal_sum` of type `Int`
+  """
+  seatsTotal_sum: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining_avg` of type `Float`
+  """
+  seatsRemaining_avg: Float_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal_avg` of type `Float`
+  """
+  seatsTotal_avg: Float_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining_min` of type `Int`
+  """
+  seatsRemaining_min: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal_min` of type `Int`
+  """
+  seatsTotal_min: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining_max` of type `Int`
+  """
+  seatsRemaining_max: Int_Filter
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal_max` of type `Int`
+  """
+  seatsTotal_max: Int_Filter
+}
+"""
+✨ Generated key input type for table 'FlightLeg'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input FlightLeg_Key {
+  """
+  ✨ Generated from Field `FlightLeg`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `FlightLeg`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+}
+"""
+✨ Generated list filter input type for table 'FlightLeg'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input FlightLeg_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: FlightLeg_Filter
+}
+"""
+✨ Generated order input type for table 'FlightLeg'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input FlightLeg_Order {
+  """
+  ✨ Generated from Field `FlightLeg`.`id` of type `String!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`airline` of type `String!`
+  """
+  airline: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`arrTime` of type `String!`
+  """
+  arrTime: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`arrival` of type `String!`
+  """
+  arrival: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`depTime` of type `String!`
+  """
+  depTime: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`departure` of type `String!`
+  """
+  departure: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`flightNo` of type `String!`
+  """
+  flightNo: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining` of type `Int!`
+  """
+  seatsRemaining: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal` of type `Int!`
+  """
+  seatsTotal: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`status` of type `String!`
+  """
+  status: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`terminal` of type `String!`
+  """
+  terminal: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`airline_count` of type `Int!`
+  """
+  airline_count: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`arrTime_count` of type `Int!`
+  """
+  arrTime_count: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`arrival_count` of type `Int!`
+  """
+  arrival_count: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`depTime_count` of type `Int!`
+  """
+  depTime_count: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`departure_count` of type `Int!`
+  """
+  departure_count: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`flightNo_count` of type `Int!`
+  """
+  flightNo_count: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining_count` of type `Int!`
+  """
+  seatsRemaining_count: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal_count` of type `Int!`
+  """
+  seatsTotal_count: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`status_count` of type `Int!`
+  """
+  status_count: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`terminal_count` of type `Int!`
+  """
+  terminal_count: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining_sum` of type `Int`
+  """
+  seatsRemaining_sum: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal_sum` of type `Int`
+  """
+  seatsTotal_sum: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining_avg` of type `Float`
+  """
+  seatsRemaining_avg: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal_avg` of type `Float`
+  """
+  seatsTotal_avg: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining_min` of type `Int`
+  """
+  seatsRemaining_min: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal_min` of type `Int`
+  """
+  seatsTotal_min: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsRemaining_max` of type `Int`
+  """
+  seatsRemaining_max: OrderDirection
+  """
+  ✨ Generated from Field `FlightLeg`.`seatsTotal_max` of type `Int`
+  """
+  seatsTotal_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'HotelProperty'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input HotelProperty_Data {
+  """
+  ✨ Generated from Field `HotelProperty`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `HotelProperty`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment` of type `Int!`
+  """
+  allotment: Int
+  """
+  ✨ `_expr` server value variant of `allotment` (✨ Generated from Field `HotelProperty`.`allotment` of type `Int!`)
+  """
+  allotment_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `allotment` (✨ Generated from Field `HotelProperty`.`allotment` of type `Int!`)
+  """
+  allotment_update: [Int_Update!]
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate` of type `Float!`
+  """
+  baseRate: Float
+  """
+  ✨ `_expr` server value variant of `baseRate` (✨ Generated from Field `HotelProperty`.`baseRate` of type `Float!`)
+  """
+  baseRate_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `baseRate` (✨ Generated from Field `HotelProperty`.`baseRate` of type `Float!`)
+  """
+  baseRate_update: [Float_Update!]
+  """
+  ✨ Generated from Field `HotelProperty`.`category` of type `String!`
+  """
+  category: String
+  """
+  ✨ `_expr` server value variant of `category` (✨ Generated from Field `HotelProperty`.`category` of type `String!`)
+  """
+  category_expr: String_Expr
+  """
+  ✨ Generated from Field `HotelProperty`.`destination` of type `String!`
+  """
+  destination: String
+  """
+  ✨ `_expr` server value variant of `destination` (✨ Generated from Field `HotelProperty`.`destination` of type `String!`)
+  """
+  destination_expr: String_Expr
+  """
+  ✨ Generated from Field `HotelProperty`.`image` of type `String!`
+  """
+  image: String
+  """
+  ✨ `_expr` server value variant of `image` (✨ Generated from Field `HotelProperty`.`image` of type `String!`)
+  """
+  image_expr: String_Expr
+  """
+  ✨ Generated from Field `HotelProperty`.`name` of type `String!`
+  """
+  name: String
+  """
+  ✨ `_expr` server value variant of `name` (✨ Generated from Field `HotelProperty`.`name` of type `String!`)
+  """
+  name_expr: String_Expr
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy` of type `Int!`
+  """
+  occupancy: Int
+  """
+  ✨ `_expr` server value variant of `occupancy` (✨ Generated from Field `HotelProperty`.`occupancy` of type `Int!`)
+  """
+  occupancy_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `occupancy` (✨ Generated from Field `HotelProperty`.`occupancy` of type `Int!`)
+  """
+  occupancy_update: [Int_Update!]
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount` of type `Int!`
+  """
+  roomsCount: Int
+  """
+  ✨ `_expr` server value variant of `roomsCount` (✨ Generated from Field `HotelProperty`.`roomsCount` of type `Int!`)
+  """
+  roomsCount_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `roomsCount` (✨ Generated from Field `HotelProperty`.`roomsCount` of type `Int!`)
+  """
+  roomsCount_update: [Int_Update!]
+  """
+  ✨ Generated from Field `HotelProperty`.`stars` of type `Int!`
+  """
+  stars: Int
+  """
+  ✨ `_expr` server value variant of `stars` (✨ Generated from Field `HotelProperty`.`stars` of type `Int!`)
+  """
+  stars_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `stars` (✨ Generated from Field `HotelProperty`.`stars` of type `Int!`)
+  """
+  stars_update: [Int_Update!]
+  """
+  ✨ Generated from Field `HotelProperty`.`supplierName` of type `String!`
+  """
+  supplierName: String
+  """
+  ✨ `_expr` server value variant of `supplierName` (✨ Generated from Field `HotelProperty`.`supplierName` of type `String!`)
+  """
+  supplierName_expr: String_Expr
+}
+"""
+✨ Generated filter input type for table 'HotelProperty'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input HotelProperty_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [HotelProperty_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: HotelProperty_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [HotelProperty_Filter!]
+  """
+  ✨ Generated from Field `HotelProperty`.`id` of type `String!`
+  """
+  id: String_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment` of type `Int!`
+  """
+  allotment: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate` of type `Float!`
+  """
+  baseRate: Float_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`category` of type `String!`
+  """
+  category: String_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`destination` of type `String!`
+  """
+  destination: String_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`image` of type `String!`
+  """
+  image: String_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`name` of type `String!`
+  """
+  name: String_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy` of type `Int!`
+  """
+  occupancy: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount` of type `Int!`
+  """
+  roomsCount: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`stars` of type `Int!`
+  """
+  stars: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`supplierName` of type `String!`
+  """
+  supplierName: String_Filter
+}
+"""
+✨ Generated first-row input type for table 'HotelProperty'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input HotelProperty_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [HotelProperty_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: HotelProperty_Filter
+}
+"""
+✨ Generated having input type for table 'HotelProperty'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input HotelProperty_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [HotelProperty_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: HotelProperty_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [HotelProperty_Having!]
+  """
+  ✨ Generated from Field `HotelProperty`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment_count` of type `Int!`
+  """
+  allotment_count: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate_count` of type `Int!`
+  """
+  baseRate_count: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`category_count` of type `Int!`
+  """
+  category_count: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`destination_count` of type `Int!`
+  """
+  destination_count: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`image_count` of type `Int!`
+  """
+  image_count: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`name_count` of type `Int!`
+  """
+  name_count: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy_count` of type `Int!`
+  """
+  occupancy_count: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount_count` of type `Int!`
+  """
+  roomsCount_count: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`stars_count` of type `Int!`
+  """
+  stars_count: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`supplierName_count` of type `Int!`
+  """
+  supplierName_count: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment_sum` of type `Int`
+  """
+  allotment_sum: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate_sum` of type `Float`
+  """
+  baseRate_sum: Float_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy_sum` of type `Int`
+  """
+  occupancy_sum: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount_sum` of type `Int`
+  """
+  roomsCount_sum: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`stars_sum` of type `Int`
+  """
+  stars_sum: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment_avg` of type `Float`
+  """
+  allotment_avg: Float_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate_avg` of type `Float`
+  """
+  baseRate_avg: Float_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy_avg` of type `Float`
+  """
+  occupancy_avg: Float_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount_avg` of type `Float`
+  """
+  roomsCount_avg: Float_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`stars_avg` of type `Float`
+  """
+  stars_avg: Float_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment_min` of type `Int`
+  """
+  allotment_min: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate_min` of type `Float`
+  """
+  baseRate_min: Float_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy_min` of type `Int`
+  """
+  occupancy_min: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount_min` of type `Int`
+  """
+  roomsCount_min: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`stars_min` of type `Int`
+  """
+  stars_min: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment_max` of type `Int`
+  """
+  allotment_max: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate_max` of type `Float`
+  """
+  baseRate_max: Float_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy_max` of type `Int`
+  """
+  occupancy_max: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount_max` of type `Int`
+  """
+  roomsCount_max: Int_Filter
+  """
+  ✨ Generated from Field `HotelProperty`.`stars_max` of type `Int`
+  """
+  stars_max: Int_Filter
+}
+"""
+✨ Generated key input type for table 'HotelProperty'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input HotelProperty_Key {
+  """
+  ✨ Generated from Field `HotelProperty`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `HotelProperty`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+}
+"""
+✨ Generated list filter input type for table 'HotelProperty'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input HotelProperty_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: HotelProperty_Filter
+}
+"""
+✨ Generated order input type for table 'HotelProperty'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input HotelProperty_Order {
+  """
+  ✨ Generated from Field `HotelProperty`.`id` of type `String!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment` of type `Int!`
+  """
+  allotment: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate` of type `Float!`
+  """
+  baseRate: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`category` of type `String!`
+  """
+  category: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`destination` of type `String!`
+  """
+  destination: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`image` of type `String!`
+  """
+  image: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`name` of type `String!`
+  """
+  name: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy` of type `Int!`
+  """
+  occupancy: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount` of type `Int!`
+  """
+  roomsCount: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`stars` of type `Int!`
+  """
+  stars: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`supplierName` of type `String!`
+  """
+  supplierName: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment_count` of type `Int!`
+  """
+  allotment_count: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate_count` of type `Int!`
+  """
+  baseRate_count: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`category_count` of type `Int!`
+  """
+  category_count: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`destination_count` of type `Int!`
+  """
+  destination_count: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`image_count` of type `Int!`
+  """
+  image_count: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`name_count` of type `Int!`
+  """
+  name_count: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy_count` of type `Int!`
+  """
+  occupancy_count: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount_count` of type `Int!`
+  """
+  roomsCount_count: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`stars_count` of type `Int!`
+  """
+  stars_count: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`supplierName_count` of type `Int!`
+  """
+  supplierName_count: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment_sum` of type `Int`
+  """
+  allotment_sum: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate_sum` of type `Float`
+  """
+  baseRate_sum: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy_sum` of type `Int`
+  """
+  occupancy_sum: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount_sum` of type `Int`
+  """
+  roomsCount_sum: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`stars_sum` of type `Int`
+  """
+  stars_sum: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment_avg` of type `Float`
+  """
+  allotment_avg: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate_avg` of type `Float`
+  """
+  baseRate_avg: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy_avg` of type `Float`
+  """
+  occupancy_avg: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount_avg` of type `Float`
+  """
+  roomsCount_avg: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`stars_avg` of type `Float`
+  """
+  stars_avg: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment_min` of type `Int`
+  """
+  allotment_min: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate_min` of type `Float`
+  """
+  baseRate_min: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy_min` of type `Int`
+  """
+  occupancy_min: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount_min` of type `Int`
+  """
+  roomsCount_min: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`stars_min` of type `Int`
+  """
+  stars_min: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`allotment_max` of type `Int`
+  """
+  allotment_max: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`baseRate_max` of type `Float`
+  """
+  baseRate_max: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`occupancy_max` of type `Int`
+  """
+  occupancy_max: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`roomsCount_max` of type `Int`
+  """
+  roomsCount_max: OrderDirection
+  """
+  ✨ Generated from Field `HotelProperty`.`stars_max` of type `Int`
+  """
+  stars_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'Reservation'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input Reservation_Data {
+  """
+  ✨ Generated from Field `Reservation`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Reservation`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`agenciaName` of type `String`
+  """
+  agenciaName: String
+  """
+  ✨ `_expr` server value variant of `agenciaName` (✨ Generated from Field `Reservation`.`agenciaName` of type `String`)
+  """
+  agenciaName_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`checkIn` of type `String!`
+  """
+  checkIn: String
+  """
+  ✨ `_expr` server value variant of `checkIn` (✨ Generated from Field `Reservation`.`checkIn` of type `String!`)
+  """
+  checkIn_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`checkOut` of type `String!`
+  """
+  checkOut: String
+  """
+  ✨ `_expr` server value variant of `checkOut` (✨ Generated from Field `Reservation`.`checkOut` of type `String!`)
+  """
+  checkOut_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMetodo` of type `String`
+  """
+  comprobanteMetodo: String
+  """
+  ✨ `_expr` server value variant of `comprobanteMetodo` (✨ Generated from Field `Reservation`.`comprobanteMetodo` of type `String`)
+  """
+  comprobanteMetodo_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto` of type `Float`
+  """
+  comprobanteMonto: Float
+  """
+  ✨ `_expr` server value variant of `comprobanteMonto` (✨ Generated from Field `Reservation`.`comprobanteMonto` of type `Float`)
+  """
+  comprobanteMonto_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `comprobanteMonto` (✨ Generated from Field `Reservation`.`comprobanteMonto` of type `Float`)
+  """
+  comprobanteMonto_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteRef` of type `String`
+  """
+  comprobanteRef: String
+  """
+  ✨ `_expr` server value variant of `comprobanteRef` (✨ Generated from Field `Reservation`.`comprobanteRef` of type `String`)
+  """
+  comprobanteRef_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`createdAt` of type `String`
+  """
+  createdAt: String
+  """
+  ✨ `_expr` server value variant of `createdAt` (✨ Generated from Field `Reservation`.`createdAt` of type `String`)
+  """
+  createdAt_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`email` of type `String`
+  """
+  email: String
+  """
+  ✨ `_expr` server value variant of `email` (✨ Generated from Field `Reservation`.`email` of type `String`)
+  """
+  email_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`facturacionTipo` of type `String`
+  """
+  facturacionTipo: String
+  """
+  ✨ `_expr` server value variant of `facturacionTipo` (✨ Generated from Field `Reservation`.`facturacionTipo` of type `String`)
+  """
+  facturacionTipo_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`flightNo` of type `String`
+  """
+  flightNo: String
+  """
+  ✨ `_expr` server value variant of `flightNo` (✨ Generated from Field `Reservation`.`flightNo` of type `String`)
+  """
+  flightNo_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`holder` of type `String!`
+  """
+  holder: String
+  """
+  ✨ `_expr` server value variant of `holder` (✨ Generated from Field `Reservation`.`holder` of type `String!`)
+  """
+  holder_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`hotelName` of type `String!`
+  """
+  hotelName: String
+  """
+  ✨ `_expr` server value variant of `hotelName` (✨ Generated from Field `Reservation`.`hotelName` of type `String!`)
+  """
+  hotelName_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`mercado` of type `String`
+  """
+  mercado: String
+  """
+  ✨ `_expr` server value variant of `mercado` (✨ Generated from Field `Reservation`.`mercado` of type `String`)
+  """
+  mercado_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`netPrice` of type `Float!`
+  """
+  netPrice: Float
+  """
+  ✨ `_expr` server value variant of `netPrice` (✨ Generated from Field `Reservation`.`netPrice` of type `Float!`)
+  """
+  netPrice_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `netPrice` (✨ Generated from Field `Reservation`.`netPrice` of type `Float!`)
+  """
+  netPrice_update: [Float_Update!]
+  """
+  ✨ Generated from Field `Reservation`.`pax` of type `Int!`
+  """
+  pax: Int
+  """
+  ✨ `_expr` server value variant of `pax` (✨ Generated from Field `Reservation`.`pax` of type `Int!`)
+  """
+  pax_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `pax` (✨ Generated from Field `Reservation`.`pax` of type `Int!`)
+  """
+  pax_update: [Int_Update!]
+  """
+  ✨ Generated from Field `Reservation`.`specialRequests` of type `String`
+  """
+  specialRequests: String
+  """
+  ✨ `_expr` server value variant of `specialRequests` (✨ Generated from Field `Reservation`.`specialRequests` of type `String`)
+  """
+  specialRequests_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`status` of type `String!`
+  """
+  status: String
+  """
+  ✨ `_expr` server value variant of `status` (✨ Generated from Field `Reservation`.`status` of type `String!`)
+  """
+  status_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`telefono` of type `String`
+  """
+  telefono: String
+  """
+  ✨ `_expr` server value variant of `telefono` (✨ Generated from Field `Reservation`.`telefono` of type `String`)
+  """
+  telefono_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`tipo` of type `String`
+  """
+  tipo: String
+  """
+  ✨ `_expr` server value variant of `tipo` (✨ Generated from Field `Reservation`.`tipo` of type `String`)
+  """
+  tipo_expr: String_Expr
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice` of type `Float!`
+  """
+  totalPrice: Float
+  """
+  ✨ `_expr` server value variant of `totalPrice` (✨ Generated from Field `Reservation`.`totalPrice` of type `Float!`)
+  """
+  totalPrice_expr: Float_Expr
+  """
+  ✨ `_update` server value variant of `totalPrice` (✨ Generated from Field `Reservation`.`totalPrice` of type `Float!`)
+  """
+  totalPrice_update: [Float_Update!]
+}
+"""
+✨ Generated filter input type for table 'Reservation'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Reservation_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [Reservation_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: Reservation_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [Reservation_Filter!]
+  """
+  ✨ Generated from Field `Reservation`.`id` of type `String!`
+  """
+  id: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`agenciaName` of type `String`
+  """
+  agenciaName: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`checkIn` of type `String!`
+  """
+  checkIn: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`checkOut` of type `String!`
+  """
+  checkOut: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMetodo` of type `String`
+  """
+  comprobanteMetodo: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto` of type `Float`
+  """
+  comprobanteMonto: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteRef` of type `String`
+  """
+  comprobanteRef: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`createdAt` of type `String`
+  """
+  createdAt: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`email` of type `String`
+  """
+  email: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`facturacionTipo` of type `String`
+  """
+  facturacionTipo: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`flightNo` of type `String`
+  """
+  flightNo: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`holder` of type `String!`
+  """
+  holder: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`hotelName` of type `String!`
+  """
+  hotelName: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`mercado` of type `String`
+  """
+  mercado: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`netPrice` of type `Float!`
+  """
+  netPrice: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`pax` of type `Int!`
+  """
+  pax: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`specialRequests` of type `String`
+  """
+  specialRequests: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`status` of type `String!`
+  """
+  status: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`telefono` of type `String`
+  """
+  telefono: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`tipo` of type `String`
+  """
+  tipo: String_Filter
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice` of type `Float!`
+  """
+  totalPrice: Float_Filter
+}
+"""
+✨ Generated first-row input type for table 'Reservation'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input Reservation_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [Reservation_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: Reservation_Filter
+}
+"""
+✨ Generated having input type for table 'Reservation'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input Reservation_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [Reservation_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: Reservation_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [Reservation_Having!]
+  """
+  ✨ Generated from Field `Reservation`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`agenciaName_count` of type `Int!`
+  """
+  agenciaName_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`checkIn_count` of type `Int!`
+  """
+  checkIn_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`checkOut_count` of type `Int!`
+  """
+  checkOut_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMetodo_count` of type `Int!`
+  """
+  comprobanteMetodo_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto_count` of type `Int!`
+  """
+  comprobanteMonto_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteRef_count` of type `Int!`
+  """
+  comprobanteRef_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`email_count` of type `Int!`
+  """
+  email_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`facturacionTipo_count` of type `Int!`
+  """
+  facturacionTipo_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`flightNo_count` of type `Int!`
+  """
+  flightNo_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`holder_count` of type `Int!`
+  """
+  holder_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`hotelName_count` of type `Int!`
+  """
+  hotelName_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`mercado_count` of type `Int!`
+  """
+  mercado_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`netPrice_count` of type `Int!`
+  """
+  netPrice_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`pax_count` of type `Int!`
+  """
+  pax_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`specialRequests_count` of type `Int!`
+  """
+  specialRequests_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`status_count` of type `Int!`
+  """
+  status_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`telefono_count` of type `Int!`
+  """
+  telefono_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`tipo_count` of type `Int!`
+  """
+  tipo_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice_count` of type `Int!`
+  """
+  totalPrice_count: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto_sum` of type `Float`
+  """
+  comprobanteMonto_sum: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`netPrice_sum` of type `Float`
+  """
+  netPrice_sum: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`pax_sum` of type `Int`
+  """
+  pax_sum: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice_sum` of type `Float`
+  """
+  totalPrice_sum: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto_avg` of type `Float`
+  """
+  comprobanteMonto_avg: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`netPrice_avg` of type `Float`
+  """
+  netPrice_avg: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`pax_avg` of type `Float`
+  """
+  pax_avg: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice_avg` of type `Float`
+  """
+  totalPrice_avg: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto_min` of type `Float`
+  """
+  comprobanteMonto_min: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`netPrice_min` of type `Float`
+  """
+  netPrice_min: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`pax_min` of type `Int`
+  """
+  pax_min: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice_min` of type `Float`
+  """
+  totalPrice_min: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto_max` of type `Float`
+  """
+  comprobanteMonto_max: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`netPrice_max` of type `Float`
+  """
+  netPrice_max: Float_Filter
+  """
+  ✨ Generated from Field `Reservation`.`pax_max` of type `Int`
+  """
+  pax_max: Int_Filter
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice_max` of type `Float`
+  """
+  totalPrice_max: Float_Filter
+}
+"""
+✨ Generated key input type for table 'Reservation'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input Reservation_Key {
+  """
+  ✨ Generated from Field `Reservation`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `Reservation`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+}
+"""
+✨ Generated list filter input type for table 'Reservation'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input Reservation_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: Reservation_Filter
+}
+"""
+✨ Generated order input type for table 'Reservation'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input Reservation_Order {
+  """
+  ✨ Generated from Field `Reservation`.`id` of type `String!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`agenciaName` of type `String`
+  """
+  agenciaName: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`checkIn` of type `String!`
+  """
+  checkIn: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`checkOut` of type `String!`
+  """
+  checkOut: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMetodo` of type `String`
+  """
+  comprobanteMetodo: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto` of type `Float`
+  """
+  comprobanteMonto: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteRef` of type `String`
+  """
+  comprobanteRef: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`createdAt` of type `String`
+  """
+  createdAt: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`email` of type `String`
+  """
+  email: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`facturacionTipo` of type `String`
+  """
+  facturacionTipo: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`flightNo` of type `String`
+  """
+  flightNo: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`holder` of type `String!`
+  """
+  holder: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`hotelName` of type `String!`
+  """
+  hotelName: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`mercado` of type `String`
+  """
+  mercado: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`netPrice` of type `Float!`
+  """
+  netPrice: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`pax` of type `Int!`
+  """
+  pax: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`specialRequests` of type `String`
+  """
+  specialRequests: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`status` of type `String!`
+  """
+  status: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`telefono` of type `String`
+  """
+  telefono: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`tipo` of type `String`
+  """
+  tipo: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice` of type `Float!`
+  """
+  totalPrice: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`agenciaName_count` of type `Int!`
+  """
+  agenciaName_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`checkIn_count` of type `Int!`
+  """
+  checkIn_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`checkOut_count` of type `Int!`
+  """
+  checkOut_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMetodo_count` of type `Int!`
+  """
+  comprobanteMetodo_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto_count` of type `Int!`
+  """
+  comprobanteMonto_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteRef_count` of type `Int!`
+  """
+  comprobanteRef_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`createdAt_count` of type `Int!`
+  """
+  createdAt_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`email_count` of type `Int!`
+  """
+  email_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`facturacionTipo_count` of type `Int!`
+  """
+  facturacionTipo_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`flightNo_count` of type `Int!`
+  """
+  flightNo_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`holder_count` of type `Int!`
+  """
+  holder_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`hotelName_count` of type `Int!`
+  """
+  hotelName_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`mercado_count` of type `Int!`
+  """
+  mercado_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`netPrice_count` of type `Int!`
+  """
+  netPrice_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`pax_count` of type `Int!`
+  """
+  pax_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`specialRequests_count` of type `Int!`
+  """
+  specialRequests_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`status_count` of type `Int!`
+  """
+  status_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`telefono_count` of type `Int!`
+  """
+  telefono_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`tipo_count` of type `Int!`
+  """
+  tipo_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice_count` of type `Int!`
+  """
+  totalPrice_count: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto_sum` of type `Float`
+  """
+  comprobanteMonto_sum: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`netPrice_sum` of type `Float`
+  """
+  netPrice_sum: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`pax_sum` of type `Int`
+  """
+  pax_sum: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice_sum` of type `Float`
+  """
+  totalPrice_sum: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto_avg` of type `Float`
+  """
+  comprobanteMonto_avg: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`netPrice_avg` of type `Float`
+  """
+  netPrice_avg: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`pax_avg` of type `Float`
+  """
+  pax_avg: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice_avg` of type `Float`
+  """
+  totalPrice_avg: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto_min` of type `Float`
+  """
+  comprobanteMonto_min: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`netPrice_min` of type `Float`
+  """
+  netPrice_min: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`pax_min` of type `Int`
+  """
+  pax_min: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice_min` of type `Float`
+  """
+  totalPrice_min: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`comprobanteMonto_max` of type `Float`
+  """
+  comprobanteMonto_max: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`netPrice_max` of type `Float`
+  """
+  netPrice_max: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`pax_max` of type `Int`
+  """
+  pax_max: OrderDirection
+  """
+  ✨ Generated from Field `Reservation`.`totalPrice_max` of type `Float`
+  """
+  totalPrice_max: OrderDirection
+}
+"""
+✨ Generated data input type for table 'TransferService'. It includes all necessary fields for creating or upserting rows into table.
+"""
+input TransferService_Data {
+  """
+  ✨ Generated from Field `TransferService`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `TransferService`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`date` of type `String!`
+  """
+  date: String
+  """
+  ✨ `_expr` server value variant of `date` (✨ Generated from Field `TransferService`.`date` of type `String!`)
+  """
+  date_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`driverId` of type `String`
+  """
+  driverId: String
+  """
+  ✨ `_expr` server value variant of `driverId` (✨ Generated from Field `TransferService`.`driverId` of type `String`)
+  """
+  driverId_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`driverName` of type `String`
+  """
+  driverName: String
+  """
+  ✨ `_expr` server value variant of `driverName` (✨ Generated from Field `TransferService`.`driverName` of type `String`)
+  """
+  driverName_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`dropoffLocation` of type `String!`
+  """
+  dropoffLocation: String
+  """
+  ✨ `_expr` server value variant of `dropoffLocation` (✨ Generated from Field `TransferService`.`dropoffLocation` of type `String!`)
+  """
+  dropoffLocation_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`flightRef` of type `String`
+  """
+  flightRef: String
+  """
+  ✨ `_expr` server value variant of `flightRef` (✨ Generated from Field `TransferService`.`flightRef` of type `String`)
+  """
+  flightRef_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`leadPassenger` of type `String!`
+  """
+  leadPassenger: String
+  """
+  ✨ `_expr` server value variant of `leadPassenger` (✨ Generated from Field `TransferService`.`leadPassenger` of type `String!`)
+  """
+  leadPassenger_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`notes` of type `String`
+  """
+  notes: String
+  """
+  ✨ `_expr` server value variant of `notes` (✨ Generated from Field `TransferService`.`notes` of type `String`)
+  """
+  notes_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`paxCount` of type `Int!`
+  """
+  paxCount: Int
+  """
+  ✨ `_expr` server value variant of `paxCount` (✨ Generated from Field `TransferService`.`paxCount` of type `Int!`)
+  """
+  paxCount_expr: Int_Expr
+  """
+  ✨ `_update` server value variant of `paxCount` (✨ Generated from Field `TransferService`.`paxCount` of type `Int!`)
+  """
+  paxCount_update: [Int_Update!]
+  """
+  ✨ Generated from Field `TransferService`.`pickupLocation` of type `String!`
+  """
+  pickupLocation: String
+  """
+  ✨ `_expr` server value variant of `pickupLocation` (✨ Generated from Field `TransferService`.`pickupLocation` of type `String!`)
+  """
+  pickupLocation_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`provider` of type `String!`
+  """
+  provider: String
+  """
+  ✨ `_expr` server value variant of `provider` (✨ Generated from Field `TransferService`.`provider` of type `String!`)
+  """
+  provider_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`reservationId` of type `String`
+  """
+  reservationId: String
+  """
+  ✨ `_expr` server value variant of `reservationId` (✨ Generated from Field `TransferService`.`reservationId` of type `String`)
+  """
+  reservationId_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`status` of type `String!`
+  """
+  status: String
+  """
+  ✨ `_expr` server value variant of `status` (✨ Generated from Field `TransferService`.`status` of type `String!`)
+  """
+  status_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`time` of type `String!`
+  """
+  time: String
+  """
+  ✨ `_expr` server value variant of `time` (✨ Generated from Field `TransferService`.`time` of type `String!`)
+  """
+  time_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`vehicleId` of type `String`
+  """
+  vehicleId: String
+  """
+  ✨ `_expr` server value variant of `vehicleId` (✨ Generated from Field `TransferService`.`vehicleId` of type `String`)
+  """
+  vehicleId_expr: String_Expr
+  """
+  ✨ Generated from Field `TransferService`.`vehicleType` of type `String!`
+  """
+  vehicleType: String
+  """
+  ✨ `_expr` server value variant of `vehicleType` (✨ Generated from Field `TransferService`.`vehicleType` of type `String!`)
+  """
+  vehicleType_expr: String_Expr
+}
+"""
+✨ Generated filter input type for table 'TransferService'. This input allows filtering objects using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input TransferService_Filter {
+  """
+  Apply multiple filter conditions using `AND` logic.
+  """
+  _and: [TransferService_Filter!]
+  """
+  Negate the result of the provided filter condition.
+  """
+  _not: TransferService_Filter
+  """
+  Apply multiple filter conditions using `OR` logic.
+  """
+  _or: [TransferService_Filter!]
+  """
+  ✨ Generated from Field `TransferService`.`id` of type `String!`
+  """
+  id: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`date` of type `String!`
+  """
+  date: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`driverId` of type `String`
+  """
+  driverId: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`driverName` of type `String`
+  """
+  driverName: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`dropoffLocation` of type `String!`
+  """
+  dropoffLocation: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`flightRef` of type `String`
+  """
+  flightRef: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`leadPassenger` of type `String!`
+  """
+  leadPassenger: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`notes` of type `String`
+  """
+  notes: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`paxCount` of type `Int!`
+  """
+  paxCount: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`pickupLocation` of type `String!`
+  """
+  pickupLocation: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`provider` of type `String!`
+  """
+  provider: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`reservationId` of type `String`
+  """
+  reservationId: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`status` of type `String!`
+  """
+  status: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`time` of type `String!`
+  """
+  time: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`vehicleId` of type `String`
+  """
+  vehicleId: String_Filter
+  """
+  ✨ Generated from Field `TransferService`.`vehicleType` of type `String!`
+  """
+  vehicleType: String_Filter
+}
+"""
+✨ Generated first-row input type for table 'TransferService'. This input selects the first row matching the filter criteria, ordered according to the specified conditions.
+"""
+input TransferService_FirstRow {
+  """
+  Order the result by the specified fields.
+  """
+  orderBy: [TransferService_Order!]
+  """
+  Filters rows based on the specified conditions.
+  """
+  where: TransferService_Filter
+}
+"""
+✨ Generated having input type for table 'TransferService'. This input allows you to filter groups during aggregate queries using various conditions. Use `_or`, `_and`, and `_not` to compose complex filters.
+"""
+input TransferService_Having {
+  """
+  Apply multiple Having conditions using `AND` logic.
+  """
+  _and: [TransferService_Having!]
+  """
+  Whether to apply DISTINCT to the aggregate function.
+  """
+  _distinct: Boolean
+  """
+  Negate the result of the provided Having condition.
+  """
+  _not: TransferService_Having
+  """
+  Apply multiple Having conditions using `OR` logic.
+  """
+  _or: [TransferService_Having!]
+  """
+  ✨ Generated from Field `TransferService`.`_count` of type `Int!`
+  """
+  _count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`date_count` of type `Int!`
+  """
+  date_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`driverId_count` of type `Int!`
+  """
+  driverId_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`driverName_count` of type `Int!`
+  """
+  driverName_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`dropoffLocation_count` of type `Int!`
+  """
+  dropoffLocation_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`flightRef_count` of type `Int!`
+  """
+  flightRef_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`id_count` of type `Int!`
+  """
+  id_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`leadPassenger_count` of type `Int!`
+  """
+  leadPassenger_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`notes_count` of type `Int!`
+  """
+  notes_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`paxCount_count` of type `Int!`
+  """
+  paxCount_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`pickupLocation_count` of type `Int!`
+  """
+  pickupLocation_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`provider_count` of type `Int!`
+  """
+  provider_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`reservationId_count` of type `Int!`
+  """
+  reservationId_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`status_count` of type `Int!`
+  """
+  status_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`time_count` of type `Int!`
+  """
+  time_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`vehicleId_count` of type `Int!`
+  """
+  vehicleId_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`vehicleType_count` of type `Int!`
+  """
+  vehicleType_count: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`paxCount_sum` of type `Int`
+  """
+  paxCount_sum: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`paxCount_avg` of type `Float`
+  """
+  paxCount_avg: Float_Filter
+  """
+  ✨ Generated from Field `TransferService`.`paxCount_min` of type `Int`
+  """
+  paxCount_min: Int_Filter
+  """
+  ✨ Generated from Field `TransferService`.`paxCount_max` of type `Int`
+  """
+  paxCount_max: Int_Filter
+}
+"""
+✨ Generated key input type for table 'TransferService'. It represents the primary key fields used to uniquely identify a row in the table.
+"""
+input TransferService_Key {
+  """
+  ✨ Generated from Field `TransferService`.`id` of type `String!`
+  """
+  id: String
+  """
+  ✨ `_expr` server value variant of `id` (✨ Generated from Field `TransferService`.`id` of type `String!`)
+  """
+  id_expr: String_Expr
+}
+"""
+✨ Generated list filter input type for table 'TransferService'. This input applies filtering logic based on the count or existence of related objects that matches certain criteria.
+"""
+input TransferService_ListFilter {
+  """
+  The desired number of objects that match the condition (defaults to at least one).
+  """
+  count: Int_Filter = {gt:0}
+  """
+  Condition of the related objects to filter for.
+  """
+  exist: TransferService_Filter
+}
+"""
+✨ Generated order input type for table 'TransferService'. This input defines the sorting order of rows in query results based on one or more fields.
+"""
+input TransferService_Order {
+  """
+  ✨ Generated from Field `TransferService`.`id` of type `String!`
+  """
+  id: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`date` of type `String!`
+  """
+  date: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`driverId` of type `String`
+  """
+  driverId: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`driverName` of type `String`
+  """
+  driverName: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`dropoffLocation` of type `String!`
+  """
+  dropoffLocation: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`flightRef` of type `String`
+  """
+  flightRef: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`leadPassenger` of type `String!`
+  """
+  leadPassenger: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`notes` of type `String`
+  """
+  notes: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`paxCount` of type `Int!`
+  """
+  paxCount: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`pickupLocation` of type `String!`
+  """
+  pickupLocation: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`provider` of type `String!`
+  """
+  provider: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`reservationId` of type `String`
+  """
+  reservationId: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`status` of type `String!`
+  """
+  status: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`time` of type `String!`
+  """
+  time: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`vehicleId` of type `String`
+  """
+  vehicleId: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`vehicleType` of type `String!`
+  """
+  vehicleType: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`_count` of type `Int!`
+  """
+  _count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`date_count` of type `Int!`
+  """
+  date_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`driverId_count` of type `Int!`
+  """
+  driverId_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`driverName_count` of type `Int!`
+  """
+  driverName_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`dropoffLocation_count` of type `Int!`
+  """
+  dropoffLocation_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`flightRef_count` of type `Int!`
+  """
+  flightRef_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`id_count` of type `Int!`
+  """
+  id_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`leadPassenger_count` of type `Int!`
+  """
+  leadPassenger_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`notes_count` of type `Int!`
+  """
+  notes_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`paxCount_count` of type `Int!`
+  """
+  paxCount_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`pickupLocation_count` of type `Int!`
+  """
+  pickupLocation_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`provider_count` of type `Int!`
+  """
+  provider_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`reservationId_count` of type `Int!`
+  """
+  reservationId_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`status_count` of type `Int!`
+  """
+  status_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`time_count` of type `Int!`
+  """
+  time_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`vehicleId_count` of type `Int!`
+  """
+  vehicleId_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`vehicleType_count` of type `Int!`
+  """
+  vehicleType_count: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`paxCount_sum` of type `Int`
+  """
+  paxCount_sum: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`paxCount_avg` of type `Float`
+  """
+  paxCount_avg: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`paxCount_min` of type `Int`
+  """
+  paxCount_min: OrderDirection
+  """
+  ✨ Generated from Field `TransferService`.`paxCount_max` of type `Int`
+  """
+  paxCount_max: OrderDirection
+}

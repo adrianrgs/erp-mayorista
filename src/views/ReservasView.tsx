@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient } from "../types";
-import { Property, RoomType, RatePlan, TipoCobro } from "../types/producto";
+import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient, FleetVehicle, CompanyConfig } from "../types";
+import { Property, RoomType, RatePlan, TipoCobro, ExtraService, ServiceRate } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
 import { buildRoute, formatGDSDate } from "../lib/parsers/pnrParser";
 import { 
@@ -12,6 +12,8 @@ import {
   Search,
   Filter,
   AlertCircle,
+  AlertTriangle,
+  Compass,
   TrendingUp,
   XCircle,
   FileText,
@@ -37,9 +39,12 @@ import {
   FileCheck,
   Send,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Activity
 } from "lucide-react";
 import { FinancialInvoice, PayableObligation } from "../types";
+import { useDialog } from "../components/ui/DialogProvider";
+import { reconcileDossierUpdate } from "../lib/financialReconciler";
 
 interface ReservasViewProps {
   reservations: Reservation[];
@@ -47,15 +52,22 @@ interface ReservasViewProps {
   clients: B2BClient[];
   onAddReservation: (newRes: Reservation) => void;
   onUpdateReservation?: (updatedRes: Reservation) => void;
+  onDeleteReservation?: (id: string) => void;
   onAddInvoice?: (newInv: FinancialInvoice) => void;
   detailedProperties: Property[];
   roomTypes: RoomType[];
   ratePlans: RatePlan[];
   invoices: FinancialInvoice[];
   payableObligations: PayableObligation[];
+  vouchers?: PaymentVoucher[];
   // ── Conexión con Módulo de Vuelos ──────────────────────────────────────────
   boletos?: FlightTicket[];
   onBoletosChange?: React.Dispatch<React.SetStateAction<FlightTicket[]>>;
+  onUpdateBoleto?: (b: FlightTicket) => void;
+  fleetVehicles?: FleetVehicle[];
+  extraServices?: ExtraService[];
+  serviceRates?: ServiceRate[];
+  companyConfig: CompanyConfig;
 }
 
 // Helper to calculate pricing for an individual room
@@ -117,19 +129,29 @@ export default function ReservasView({
   clients, 
   onAddReservation,
   onUpdateReservation,
+  onDeleteReservation,
   onAddInvoice,
   detailedProperties,
   roomTypes,
   ratePlans,
   invoices,
   payableObligations,
+  vouchers = [],
   boletos = [],
-  onBoletosChange
+  onBoletosChange,
+  onUpdateBoleto,
+  fleetVehicles = [],
+  extraServices = [],
+  serviceRates = [],
+  companyConfig
 }: ReservasViewProps) {
+  const { showAlert, showConfirm } = useDialog();
   // Navigation inside the module:
   // 1: List (dashboard), 2: Expediente (details), 3: Crear Expediente (Cart), 4: Configurar Servicio
   const [viewLevel, setViewLevel] = useState<1 | 2 | 3 | 4>(1);
   const [selectedResId, setSelectedResId] = useState<string | null>(reservations[0]?.id || null);
+  const [financialImpactPreview, setFinancialImpactPreview] = useState<any | null>(null);
+  const [pendingSaveReservation, setPendingSaveReservation] = useState<Reservation | null>(null);
   
   // Search & Filters (Level 1)
   const [search, setSearch] = useState("");
@@ -168,9 +190,10 @@ export default function ReservasView({
 
   // --- SEND TO BILLING MODAL STATES ---
   const [showSendBillingModal, setShowSendBillingModal] = useState(false);
-  const [billingRef, setBillingRef] = useState("");
   const [billingMetodo, setBillingMetodo] = useState("Transferencia Bancaria");
+  const [billingRef, setBillingRef] = useState("");
   const [billingMonto, setBillingMonto] = useState("");
+  const [billingFile, setBillingFile] = useState("");
   const [billingFacturacionTipo, setBillingFacturacionTipo] = useState<"Crédito" | "Pago Contado">("Pago Contado");
   const [billingModalError, setBillingModalError] = useState("");
 
@@ -189,9 +212,8 @@ export default function ReservasView({
   const [cartTipo, setCartTipo] = useState<"Cotización" | "Reserva Real">("Reserva Real");
 
   // ── Estado de vinculación con Módulo de Vuelos ─────────────────────────────
-  /** ID del boleto seleccionado para vincular al expediente */
-  const [cartBoletoId, setCartBoletoId] = useState<string | null>(null);
-  const [cartFacturarConjunto, setCartFacturarConjunto] = useState<boolean>(false);
+  // Multiple linked flights
+  const [cartLinkedFlights, setCartLinkedFlights] = useState<{id: string, facturarConjunto: boolean}[]>([]);
   /** Controla apertura del drawer de búsqueda de boletos */
   const [showBoletoDrawer, setShowBoletoDrawer] = useState(false);
   /** Query de búsqueda dentro del drawer */
@@ -261,12 +283,15 @@ export default function ReservasView({
   const [transPickup, setTransPickup] = useState("");
   const [transDropoff, setTransDropoff] = useState("");
   const [transDate, setTransDate] = useState("2026-06-20");
+  const [transTime, setTransTime] = useState("14:00");
   const [transVehicle, setTransVehicle] = useState("Berlina Ejecutiva");
   const [transTripType, setTransTripType] = useState<"one-way" | "round-trip">("one-way");
   const [transReturnDropoff, setTransReturnDropoff] = useState("");
   const [transReturnDate, setTransReturnDate] = useState("2026-06-27");
+  const [transReturnTime, setTransReturnTime] = useState("14:00");
   const [transServiceType, setTransServiceType] = useState<"privado" | "compartido">("privado");
   const [transPax, setTransPax] = useState(2);
+  const [transSupplier, setTransSupplier] = useState("Foratour Receptivo S.A.");
 
   // Car Rental states
   const [carCategory, setCarCategory] = useState("Compacto Automático");
@@ -281,10 +306,18 @@ export default function ReservasView({
   const [insEndDate, setInsEndDate] = useState("");
   const [insDays, setInsDays] = useState(7);
   const [insPax, setInsPax] = useState(1);
+  const [insSupplier, setInsSupplier] = useState("Asistencia Global Travel");
 
   // Manual Entry states
   const [manualDescription, setManualDescription] = useState("");
   const [manualSupplier, setManualSupplier] = useState("");
+
+  // Servicio Vario states
+  const [svExtraServiceId, setSvExtraServiceId] = useState("");
+  const [svRateId, setSvRateId] = useState("");
+  const [svAdults, setSvAdults] = useState(1);
+  const [svChildren, setSvChildren] = useState(0);
+  const [svVehicles, setSvVehicles] = useState(1);
 
   // Common Pricing states for Level 4
   const [netPrice, setNetPrice] = useState("");
@@ -293,6 +326,93 @@ export default function ReservasView({
   const [submitSuccess, setSubmitSuccess] = useState("");
 
   const activeRes = reservations.find(r => r.id === selectedResId);
+
+  const handleAutofillTransfer = () => {
+    // Buscar vuelo vinculado (priorizar el seleccionado en el carrito, luego el de la base de datos)
+    let linkedFlight = cartLinkedFlights.length > 0 
+      ? boletos.find(b => b.id === cartLinkedFlights[0].id)
+      : (activeRes ? boletos.find(b => b.expedienteId === activeRes.id) : undefined);
+
+    // Si no se vinculó con el botón, pero el agente escribió el PNR en "Vuelo Asociado"
+    if (!linkedFlight && cartFlightNo) {
+      const cleanFlightNo = cartFlightNo.trim().toUpperCase();
+      linkedFlight = boletos.find(b => b.pnr.toUpperCase() === cleanFlightNo || b.id === cleanFlightNo);
+    }
+
+    let origin = "";
+    let firstArrTime = "14:00";
+    let lastDepTime = "14:00";
+
+    if (linkedFlight?.segmentos && linkedFlight.segmentos.length > 0) {
+      const firstSegment = linkedFlight.segmentos[0];
+      const lastSegment = linkedFlight.segmentos[linkedFlight.segmentos.length - 1];
+      
+      origin = `Aeropuerto ${firstSegment.destino || ""}`;
+      
+      // La hora de pick-up del traslado de ida es la llegada del vuelo
+      if (firstSegment.horaLlegada) {
+        const cleanTime = firstSegment.horaLlegada.slice(0, 5);
+        firstArrTime = cleanTime.includes(':') 
+          ? cleanTime 
+          : `${cleanTime.slice(0, 2)}:${cleanTime.slice(2, 4)}`;
+      }
+      
+      // La hora de pick-up del retorno (si hay) es la salida del vuelo de vuelta
+      if (lastSegment.horaSalida) {
+        const cleanTime = lastSegment.horaSalida.slice(0, 5);
+        lastDepTime = cleanTime.includes(':')
+          ? cleanTime
+          : `${cleanTime.slice(0, 2)}:${cleanTime.slice(2, 4)}`;
+      }
+    } else if (cartFlightNo || activeRes?.flightNo) {
+      origin = `Llegadas Aeropuerto (Vuelo ${cartFlightNo || activeRes?.flightNo})`;
+    } else {
+      origin = "Aeropuerto Internacional";
+    }
+
+    // Buscar hotel reservado en los servicios (priorizar carrito sobre expediente activo)
+    const currentServices = cartServices.length > 0 ? cartServices : (activeRes?.servicios || []);
+    const hotelService = currentServices.find(s => s.tipo === ServiceType.ALOJAMIENTO);
+    let destination = activeRes?.hotelName || "Hotel del cliente";
+    
+    // Priorizar si el agente acaba de llenar el formulario de Alojamiento pero no lo ha guardado al carrito
+    if (hotelId) {
+      const h = detailedProperties.find(p => p.id === hotelId);
+      if (h) destination = h.nombre;
+    } else if (hotelSearchQuery) {
+      destination = hotelSearchQuery;
+    } else if (hotelService?.detalles?.hotelId) {
+      const h = detailedProperties.find(p => p.id === hotelService.detalles.hotelId);
+      if (h) destination = h.nombre;
+    } else if (hotelService) {
+      destination = hotelService.descripcion.split(" (")[0]?.replace("Hotel: ", "") || destination;
+    }
+
+    setTransPickup(origin);
+    setTransDropoff(destination);
+    setTransTime(firstArrTime);
+    
+    // Auto-detect round trip if we have a flight and we found a lastDepTime
+    const isProbablyRoundTrip = linkedFlight?.segmentos && linkedFlight.segmentos.length > 1;
+    if (transTripType === "round-trip" || isProbablyRoundTrip) {
+      if (isProbablyRoundTrip && transTripType !== "round-trip") {
+        setTransTripType("round-trip");
+      }
+      setTransReturnDropoff(origin); // Return is usually from hotel to airport
+      setTransReturnTime(lastDepTime);
+    }
+    
+    // Auto-fill date if hotel exists
+    if (hotelService?.detalles?.checkInDate) {
+      setTransDate(hotelService.detalles.checkInDate);
+      if (hotelService.detalles.checkOutDate) {
+        setTransReturnDate(hotelService.detalles.checkOutDate);
+      }
+    } else if (checkInDate) {
+      setTransDate(checkInDate);
+      setTransReturnDate(checkOutDate);
+    }
+  };
 
   const handleOpenSendBillingModal = () => {
     if (!activeRes) return;
@@ -342,32 +462,31 @@ export default function ReservasView({
       servicios: updatedServices,
       facturacionTipo: billingFacturacionTipo,
       comprobanteRef: billingFacturacionTipo === "Pago Contado" ? billingRef.trim() : undefined,
+      comprobanteMonto: billingFacturacionTipo === "Pago Contado" ? (parseFloat(billingMonto) || 0) : undefined,
       comprobanteMetodo: billingFacturacionTipo === "Pago Contado" ? billingMetodo : undefined,
-      comprobanteMonto: billingFacturacionTipo === "Pago Contado" ? parseFloat(billingMonto) || 0 : undefined
-    };
+      comprobanteArchivo: billingFacturacionTipo === "Pago Contado" ? billingFile : undefined,
+      facturacionRechazoMotivo: "",
+      facturacionRechazoArchivos: "",
+      __billingOnly: true
+    } as any;
 
-    if (onBoletosChange) {
-      onBoletosChange(prev => prev.map(b => {
+    if (onUpdateBoleto) {
+      boletos?.forEach(b => {
         if (b.expedienteId === activeRes.id && b.facturarConjunto && (!b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined)) {
-          return {
+          const updatedB = {
             ...b,
             expedienteAereo: b.expedienteAereo
               ? { ...b.expedienteAereo, status: "Solicitado" as const }
               : {
                   id: `EXP-AER-${b.id}`,
-                  pnr: b.pnr,
-                  pasajerosCount: b.pasajeros.length,
                   status: "Solicitado" as const,
-                  totalNeto: b.costoNeto || 0,
-                  totalVenta: b.precioVenta || 0,
-                  fees: 0,
-                  currency: "USD",
-                  fechaCreacion: new Date().toISOString()
+                  titular: b.pasajeros?.[0]?.nombre || "Pasajero",
+                  createdAt: new Date().toISOString()
                 }
           };
+          onUpdateBoleto(updatedB);
         }
-        return b;
-      }));
+      });
     }
 
     if (onUpdateReservation) {
@@ -385,9 +504,15 @@ export default function ReservasView({
   const totalPendientes = reservations.filter(r => r.status === "Pendiente de Pago" || r.status === "Petición Especial" || r.status === "Modificada").length;
   const totalCanceladas = reservations.filter(r => r.status === "Cancelada").length;
 
+  const [activeTab, setActiveTab] = useState<"Activos" | "Canceladas">("Activos");
+
   // Filter and Sort (Level 1)
   const filteredAndSorted = reservations
     .filter((r) => {
+      const isCancelada = r.status === "Cancelada";
+      if (activeTab === "Activos" && isCancelada) return false;
+      if (activeTab === "Canceladas" && !isCancelada) return false;
+
       const matchesSearch = 
         r.id.toLowerCase().includes(search.toLowerCase()) ||
         r.holder.toLowerCase().includes(search.toLowerCase()) ||
@@ -402,6 +527,8 @@ export default function ReservasView({
         matchesStatus = true;
       } else if (filterStatus === "Pendientes") {
         matchesStatus = r.status === "Pendiente de Pago" || r.status === "Petición Especial" || r.status === "Modificada";
+      } else if (filterStatus === "Rechazadas") {
+        matchesStatus = !!r.facturacionRechazoMotivo || !!(r.servicios && r.servicios.some(s => s.statusFacturacion === "Rechazado"));
       } else {
         matchesStatus = r.status === filterStatus;
       }
@@ -639,7 +766,7 @@ export default function ReservasView({
 
   const handleRemoveRoom = (roomId: string) => {
     if (lodgingRooms.length === 1) {
-      alert("Debe incluir al menos 1 habitación para el alojamiento.");
+      showAlert({ title: "Atención", message: "Debe incluir al menos 1 habitación para el alojamiento.", type: "warning" });
       return;
     }
     setLodgingRooms(prev => prev.filter(r => r.id !== roomId));
@@ -652,11 +779,11 @@ export default function ReservasView({
 
     if (activeServiceType === ServiceType.ALOJAMIENTO) {
       if (!hotelId) {
-        alert("Por favor seleccione un hotel.");
+        showAlert({ title: "Atención", message: "Por favor seleccione un hotel.", type: "warning" });
         return;
       }
       if (!selectedRatePlanId) {
-        alert("Por favor seleccione un plan de tarifa.");
+        showAlert({ title: "Atención", message: "Por favor seleccione un plan de tarifa.", type: "warning" });
         return;
       }
     }
@@ -699,7 +826,9 @@ export default function ReservasView({
           ? `${transPickup} ➔ ${transDropoff}`
           : `${transPickup} ➔ ${transDropoff} ➔ ${transReturnDropoff || transPickup} (Retorno: ${formatDate(transReturnDate)})`;
 
-        desc = `Traslado (${tripTypeLabel} - ${serviceTypeLabel}): ${routeDesc} - ${transPax} Pax - Fecha: ${formatDate(transDate)} (${transVehicle})`;
+        const srv = extraServices?.find(s => s.id === svExtraServiceId);
+        const providerText = srv ? srv.nombre : (transSupplier || "Local");
+        desc = `Traslado (${tripTypeLabel} - ${serviceTypeLabel}): ${routeDesc} - ${transPax} Pax - Fecha: ${formatDate(transDate)} (${transVehicle}) - Op. ${providerText}`;
         break;
       }
       case ServiceType.RENT_A_CAR:
@@ -719,6 +848,23 @@ export default function ReservasView({
         desc = `Entrada Manual: ${manualDescription} (Proveedor: ${manualSupplier || "Directo"})`;
         sPrice = (parseFloat(salePrice) || 0) * (1 - comisionB2B / 100);
         break;
+      case ServiceType.SERVICIO_VARIO: {
+        const srv = extraServices?.find(s => s.id === svExtraServiceId);
+        const rate = serviceRates?.find(r => r.id === svRateId);
+        if (srv && rate) {
+          const pvpVal = parseFloat(salePrice) || 0;
+          const b2bComVal = comisionB2B;
+          const ownComVal = comisionPropia;
+          sPrice = Math.round(pvpVal * (1 - b2bComVal / 100) * 100) / 100;
+          nPrice = Math.round(pvpVal * (1 - (b2bComVal + ownComVal) / 100) * 100) / 100;
+          if (rate.pricingModel === "Por Persona") {
+            desc = `Servicio Adicional: ${srv.nombre} - ${svAdults} Adultos, ${svChildren} Niños (Del ${rate.temporadaInicio} al ${rate.temporadaFin})`;
+          } else {
+            desc = `Servicio Adicional: ${srv.nombre} - ${svVehicles} Vehículo(s)/Grupo(s) (Del ${rate.temporadaInicio} al ${rate.temporadaFin})`;
+          }
+        }
+        break;
+      }
     }
 
     let det: any = {};
@@ -739,10 +885,12 @@ export default function ReservasView({
         transPickup,
         transDropoff,
         transDate,
+        transTime,
         transVehicle,
         transTripType,
         transReturnDropoff,
         transReturnDate,
+        transReturnTime,
         transServiceType,
         transPax,
         netPrice: nPrice,
@@ -781,13 +929,25 @@ export default function ReservasView({
         salePrice: salePrice,
         comisionB2B: comisionB2B
       };
+    } else if (activeServiceType === ServiceType.SERVICIO_VARIO) {
+      det = {
+        svExtraServiceId,
+        svRateId,
+        svAdults,
+        svChildren,
+        svVehicles,
+        netPrice: nPrice,
+        salePrice: sPrice
+      };
     }
 
     const calculatedPvp = activeServiceType === ServiceType.ALOJAMIENTO 
       ? calculateTotalPvpLodgingPrice() 
       : activeServiceType === ServiceType.SEGURO
         ? (parseFloat(salePrice) || 0) * insPax
-        : (parseFloat(salePrice) || 0);
+        : activeServiceType === ServiceType.SERVICIO_VARIO
+          ? sPrice
+          : (parseFloat(salePrice) || 0);
 
     if (editingServiceId) {
       setCartServices(prev => prev.map(s => {
@@ -799,6 +959,11 @@ export default function ReservasView({
             precioVenta: sPrice,
             precioPvp: calculatedPvp,
             comisionB2B: comisionB2B,
+            proveedor: activeServiceType === ServiceType.TRASLADO ? transSupplier :
+                       activeServiceType === ServiceType.RENT_A_CAR ? carSupplier :
+                       activeServiceType === ServiceType.SEGURO ? insSupplier :
+                       activeServiceType === ServiceType.MANUAL ? manualSupplier :
+                       activeServiceType === ServiceType.SERVICIO_VARIO ? extraServices?.find(s => s.id === svExtraServiceId)?.providerName : undefined,
             detalles: det
           };
         }
@@ -808,13 +973,18 @@ export default function ReservasView({
       setEditingServiceId(null);
     } else {
       const newService: ServiceItem = {
-        id: `SRV-${Math.floor(100 + Math.random() * 900)}`,
+        id: `SRV-${Math.floor(1000 + Math.random() * 9000)}-${Math.random().toString(36).substring(2, 5)}`,
         tipo: activeServiceType,
         descripcion: desc,
         precioNeto: nPrice,
         precioVenta: sPrice,
         precioPvp: calculatedPvp,
         comisionB2B: comisionB2B,
+        proveedor: activeServiceType === ServiceType.TRASLADO ? transSupplier :
+                   activeServiceType === ServiceType.RENT_A_CAR ? carSupplier :
+                   activeServiceType === ServiceType.SEGURO ? insSupplier :
+                   activeServiceType === ServiceType.MANUAL ? manualSupplier :
+                   activeServiceType === ServiceType.SERVICIO_VARIO ? extraServices?.find(s => s.id === svExtraServiceId)?.providerName : undefined,
         detalles: det,
         statusFacturacion: "Borrador"
       };
@@ -878,7 +1048,16 @@ export default function ReservasView({
     setCartFlightNo(activeRes.flightNo || "");
     
     if (activeRes.servicios && activeRes.servicios.length > 0) {
-      setCartServices(activeRes.servicios ? [...activeRes.servicios] : []);
+      const seenIds = new Set<string>();
+      const sanitizedServices = activeRes.servicios.map(s => {
+        let sid = s.id;
+        if (!sid || seenIds.has(sid)) {
+          sid = `SRV-${Math.floor(1000 + Math.random() * 9000)}-${Math.random().toString(36).substring(2, 5)}`;
+        }
+        seenIds.add(sid);
+        return { ...s, id: sid };
+      });
+      setCartServices(sanitizedServices);
     } else {
       // Legacy reservation service mapping
       const legacyService: ServiceItem = {
@@ -933,13 +1112,14 @@ export default function ReservasView({
         setTransReturnDate(det.transReturnDate || "");
         setTransServiceType(det.transServiceType || "privado");
         setTransPax(det.transPax !== undefined ? det.transPax : 2);
+        setTransSupplier(service.proveedor || "Foratour Receptivo S.A.");
         setNetPrice(det.netPrice || "");
         setSalePrice(det.salePrice || "");
         setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : 10);
         setComisionPropia(det.comisionPropia !== undefined ? det.comisionPropia : 5);
       } else if (service.tipo === ServiceType.RENT_A_CAR) {
         setCarCategory(det.carCategory || "Compacto Automático");
-        setCarSupplier(det.carSupplier || "");
+        setCarSupplier(service.proveedor || det.carSupplier || "");
         setCarStartDate(det.carStartDate || "");
         setCarEndDate(det.carEndDate || "");
         setCarDays(det.carDays || 7);
@@ -952,16 +1132,23 @@ export default function ReservasView({
         setInsEndDate(det.insEndDate || "");
         setInsDays(det.insDays || 7);
         setInsPax(det.insPax !== undefined ? det.insPax : 1);
+        setInsSupplier(service.proveedor || "Asistencia Global Travel");
         setNetPrice(det.netPrice || "");
         setSalePrice(det.salePrice || "");
         setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : 10);
         setComisionPropia(det.comisionPropia !== undefined ? det.comisionPropia : 5);
       } else if (service.tipo === ServiceType.MANUAL) {
         setManualDescription(det.manualDescription || "");
-        setManualSupplier(det.manualSupplier || "");
+        setManualSupplier(service.proveedor || det.manualSupplier || "");
         setNetPrice(det.netPrice || "");
         setSalePrice(det.salePrice || "");
         setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : 10);
+      } else if (service.tipo === ServiceType.SERVICIO_VARIO) {
+        setSvExtraServiceId(det.svExtraServiceId || "");
+        setSvRateId(det.svRateId || "");
+        setSvAdults(det.svAdults !== undefined ? det.svAdults : 1);
+        setSvChildren(det.svChildren !== undefined ? det.svChildren : 0);
+        setSvVehicles(det.svVehicles !== undefined ? det.svVehicles : 1);
       }
     } else {
       // Legacy fallback
@@ -1021,29 +1208,23 @@ export default function ReservasView({
   const handleConfirmExpediente = (e: React.FormEvent) => {
     e.preventDefault();
     if (!cartHolder.trim()) {
-      alert("Por favor ingrese el titular del viaje.");
+      showAlert({ title: "Atención", message: "Por favor ingrese el titular del viaje.", type: "warning" });
       return;
     }
-    if (cartServices.length === 0) {
-      alert("Debe agregar al menos un servicio al carrito para generar el expediente.");
+    if (cartServices.length === 0 && cartLinkedFlights.filter(f => f.facturarConjunto).length === 0) {
+      showAlert({ title: "Atención", message: "Debe agregar al menos un servicio o vuelo facturado conjuntamente al carrito para generar el expediente.", type: "warning" });
       return;
     }
 
     let totalNeto = cartServices.reduce((sum, s) => sum + s.precioNeto, 0);
     let totalVenta = cartServices.reduce((sum, s) => sum + s.precioVenta, 0);
 
-    const targetResId = isEditingReservationId || cartId;
-    const existingJointFlights = boletos.filter(b => b.expedienteId === targetResId && b.facturarConjunto);
-    const newJointFlight = (cartBoletoId && cartFacturarConjunto) ? boletos.find(b => b.id === cartBoletoId) : null;
-
-    existingJointFlights.forEach(f => {
+    // Si hay boletos vinculados que se deben facturar conjuntamente
+    const jointFlights = cartLinkedFlights.filter(f => f.facturarConjunto).map(f => boletos.find(b => b.id === f.id)).filter(Boolean) as any[];
+    jointFlights.forEach(f => {
       totalNeto += f.costoNeto;
       totalVenta += f.precioVenta;
     });
-    if (newJointFlight) {
-      totalNeto += newJointFlight.costoNeto;
-      totalVenta += newJointFlight.precioVenta;
-    }
 
     const hotelSrv = cartServices.find(s => s.tipo === ServiceType.ALOJAMIENTO);
     const hotelName = hotelSrv ? hotelSrv.descripcion.split(" - ")[0].replace("Hotel: ", "") : "Multi-servicio Terrestre";
@@ -1070,17 +1251,41 @@ export default function ReservasView({
         tipo: cartTipo
       };
 
-      if (cartBoletoId && onBoletosChange) {
-        onBoletosChange(prev =>
-          prev.map(b =>
-            b.id === cartBoletoId
-              ? { ...b, vinculadoAExpediente: true, expedienteId: isEditingReservationId, facturarConjunto: cartFacturarConjunto }
-              : b
-          )
-        );
+      // ── AUTO-VINCULAR boletos seleccionados (EDICION) ──────────────────────────────
+      if (onUpdateBoleto) {
+        cartLinkedFlights.forEach(linked => {
+          const b = boletos.find(x => x.id === linked.id);
+          if (b && (!b.vinculadoAExpediente || b.expedienteId !== isEditingReservationId || b.facturarConjunto !== linked.facturarConjunto)) {
+            onUpdateBoleto({ ...b, vinculadoAExpediente: true, expedienteId: isEditingReservationId, facturarConjunto: linked.facturarConjunto });
+          }
+        });
+        // Si se quitaron vuelos que antes estaban vinculados, desvincularlos
+        const prevLinked = boletos.filter(b => b.expedienteId === isEditingReservationId);
+        prevLinked.forEach(b => {
+          if (!cartLinkedFlights.find(linked => linked.id === b.id)) {
+            onUpdateBoleto({ ...b, vinculadoAExpediente: false, expedienteId: undefined, facturarConjunto: false });
+          }
+        });
       }
-      setCartBoletoId(null);
-      setCartFacturarConjunto(false);
+      setCartLinkedFlights([]);
+
+      // ── PREVISUALIZAR IMPACTO FINANCIERO ANTES DE GUARDAR ──
+      const oldRes = reservations.find(r => r.id === isEditingReservationId);
+      if (oldRes) {
+        const result = reconcileDossierUpdate(oldRes, updatedRes, clients, payableObligations);
+        const hasImpact = result.newVariations.length > 0 || 
+                          result.newWalletTransactions.length > 0 || 
+                          result.updatedPayableObligations.some(o => {
+                            const prev = payableObligations.find(po => po.id === o.id);
+                            return !prev || prev.status !== o.status || prev.netCost !== o.netCost;
+                          });
+
+        if (hasImpact) {
+          setFinancialImpactPreview(result);
+          setPendingSaveReservation(updatedRes);
+          return;
+        }
+      }
 
       if (onUpdateReservation) {
         onUpdateReservation(updatedRes);
@@ -1113,18 +1318,16 @@ export default function ReservasView({
 
       onAddReservation(newRes);
 
-      // ── AUTO-VINCULAR el boleto seleccionado ──────────────────────────────
-      if (cartBoletoId && onBoletosChange) {
-        onBoletosChange(prev =>
-          prev.map(b =>
-            b.id === cartBoletoId
-              ? { ...b, vinculadoAExpediente: true, expedienteId: cartId, facturarConjunto: cartFacturarConjunto }
-              : b
-          )
-        );
+      // ── AUTO-VINCULAR boletos seleccionados (NUEVO) ──────────────────────────────
+      if (onUpdateBoleto) {
+        cartLinkedFlights.forEach(linked => {
+          const b = boletos.find(x => x.id === linked.id);
+          if (b) {
+            onUpdateBoleto({ ...b, vinculadoAExpediente: true, expedienteId: cartId, facturarConjunto: linked.facturarConjunto });
+          }
+        });
       }
-      setCartBoletoId(null);
-      setCartFacturarConjunto(false);
+      setCartLinkedFlights([]);
       // ─────────────────────────────────────────────────────────────────────
 
       setSelectedResId(cartId);
@@ -1132,6 +1335,19 @@ export default function ReservasView({
       setSubmitSuccess(`✓ Expediente "${cartId}" creado exitosamente.`);
     }
 
+    setTimeout(() => setSubmitSuccess(""), 4000);
+  };
+
+  const handleConfirmFinancialImpactSave = () => {
+    if (pendingSaveReservation && onUpdateReservation) {
+      onUpdateReservation(pendingSaveReservation);
+      setSelectedResId(pendingSaveReservation.id);
+      setIsEditingReservationId(null);
+      setViewLevel(2);
+      setSubmitSuccess(`✓ Cambios guardados en el expediente "${pendingSaveReservation.id}".`);
+    }
+    setFinancialImpactPreview(null);
+    setPendingSaveReservation(null);
     setTimeout(() => setSubmitSuccess(""), 4000);
   };
 
@@ -1160,6 +1376,8 @@ export default function ReservasView({
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   };
 
+  const rejectedReservations = reservations.filter(r => r.facturacionRechazoMotivo || (r.servicios && r.servicios.some(s => s.statusFacturacion === "Rechazado")));
+
   return (
     <div className="space-y-6 font-sans">
       {/* Toast Notification */}
@@ -1186,8 +1404,28 @@ export default function ReservasView({
             </button>
           </div>
 
+          {/* Tabs */}
+          <div className="flex items-center gap-4 border-b border-zinc-200">
+            <button
+              onClick={() => setActiveTab("Activos")}
+              className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors cursor-pointer ${
+                activeTab === "Activos" ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-400 hover:text-zinc-600"
+              }`}
+            >
+              Activos ({reservations.filter((r) => r.status !== "Cancelada").length})
+            </button>
+            <button
+              onClick={() => setActiveTab("Canceladas")}
+              className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors cursor-pointer ${
+                activeTab === "Canceladas" ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-400 hover:text-zinc-600"
+              }`}
+            >
+              Anuladas ({totalCanceladas})
+            </button>
+          </div>
+
           {/* KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <div 
               onClick={() => setFilterStatus("Todas")}
               className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
@@ -1257,6 +1495,24 @@ export default function ReservasView({
               </div>
               <div className={`p-2.5 rounded-md border ${filterStatus === "Cancelada" ? "bg-red-50 border-red-200 text-red-600" : "bg-zinc-50 border-zinc-200 text-zinc-650"}`}>
                 <XCircle className="w-5.5 h-5.5" />
+              </div>
+            </div>
+
+            <div 
+              onClick={() => setFilterStatus("Rechazadas")}
+              className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
+                filterStatus === "Rechazadas"
+                  ? "bg-red-100 border-red-600 ring-2 ring-red-500/20"
+                  : "bg-white border-zinc-200 hover:border-zinc-350 hover:shadow-xs"
+              }`}
+            >
+              <div className="space-y-1">
+                <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block">Rechazadas</span>
+                <span className="text-2xl font-black text-red-700 block">{rejectedReservations.length}</span>
+                <span className="text-[9.5px] text-red-600 font-semibold block">Facturas devueltas</span>
+              </div>
+              <div className={`p-2.5 rounded-md border ${filterStatus === "Rechazadas" ? "bg-red-200 border-red-300 text-red-700" : "bg-zinc-50 border-zinc-200 text-zinc-650"}`}>
+                <AlertTriangle className="w-5.5 h-5.5" />
               </div>
             </div>
           </div>
@@ -1344,11 +1600,11 @@ export default function ReservasView({
                     </tr>
                   ) : (
                     filteredAndSorted.map((r) => (
-                      <tr 
-                        key={r.id} 
-                        onClick={() => { setSelectedResId(r.id); setViewLevel(2); }}
-                        className="hover:bg-zinc-50/60 transition-colors cursor-pointer group"
-                      >
+                      <React.Fragment key={r.id}>
+                        <tr 
+                          onClick={() => { setSelectedResId(r.id); setViewLevel(2); }}
+                          className="hover:bg-zinc-50/60 transition-colors cursor-pointer group"
+                        >
                         <td className="px-2 py-2.5 font-mono font-bold text-zinc-900 whitespace-nowrap truncate text-[11px]">
                           {r.id}
                           <span className={`ml-1.5 px-1 py-0.5 rounded text-[7px] font-extrabold uppercase border ${
@@ -1419,7 +1675,42 @@ export default function ReservasView({
                             <ChevronRight className="w-3.5 h-3.5" />
                           </button>
                         </td>
-                      </tr>
+                        </tr>
+                        {filterStatus === "Rechazadas" && (r.facturacionRechazoMotivo || (r.servicios && r.servicios.some(s => s.statusFacturacion === "Rechazado"))) && (
+                          <tr className="bg-red-50 border-b border-red-100 hover:bg-red-50 cursor-pointer" onClick={() => { setSelectedResId(r.id); setViewLevel(2); }}>
+                            <td colSpan={10} className="px-4 py-3">
+                              <div className="flex flex-col gap-2">
+                                <div className="text-zinc-700 text-xs flex gap-2">
+                                  <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                                  <div>
+                                    <span className="font-bold block text-red-800 mb-0.5">Motivo del rechazo de facturación:</span>
+                                    {r.facturacionRechazoMotivo || "Sin motivo especificado."}
+                                  </div>
+                                </div>
+                                {r.facturacionRechazoArchivos && (
+                                  <div className="ml-6 text-[10px] flex items-center gap-2">
+                                    <span className="font-bold text-zinc-600">Adjuntos:</span>
+                                    <div className="flex gap-2 flex-wrap">
+                                      {JSON.parse(r.facturacionRechazoArchivos).map((url: string, idx: number) => (
+                                        <a 
+                                          key={idx}
+                                          href={url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-blue-600 hover:underline flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-100"
+                                        >
+                                          <FileText className="w-3 h-3" /> Ver Adjunto {idx + 1}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))
                   )}
                 </tbody>
@@ -1433,7 +1724,7 @@ export default function ReservasView({
       {viewLevel === 2 && activeRes && (
         <div className="space-y-6 animate-fade-in">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+          <div className="flex items-center justify-between border-b border-zinc-200 pb-4 sticky top-16 bg-zinc-50/95 backdrop-blur-xs pt-2 z-10 -mx-8 px-8">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setViewLevel(1)}
@@ -1492,6 +1783,78 @@ export default function ReservasView({
                 <Share2 className="w-3.5 h-3.5" />
                 <span>Formato B2B</span>
               </button>
+
+              {activeRes.status !== "Cancelada" ? (
+                <button
+                  onClick={() => {
+                    showConfirm({
+                      title: "Anular Expediente de Reserva",
+                      message: "Escriba el Localizador exacto para confirmar la anulación. El expediente cambiará a estado Cancelada.",
+                      requireInputToConfirm: activeRes.id,
+                      type: "danger",
+                      confirmText: "Sí, Anular",
+                      onConfirm: () => {
+                        if (onUpdateReservation) {
+                          onUpdateReservation({ ...activeRes, status: "Cancelada" });
+                          showAlert({ title: "Expediente Anulado", message: "El expediente ha sido anulado correctamente.", type: "success" });
+                        }
+                      }
+                    });
+                  }}
+                  className="px-3 py-1.5 border border-red-200 bg-red-50 hover:bg-red-100 rounded text-red-600 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
+                  title="Anular Expediente"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span>Anular</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      showConfirm({
+                        title: "Reactivar Expediente",
+                        message: "¿Está seguro que desea reactivar este expediente? Volverá al estado Pendiente de Pago.",
+                        type: "warning",
+                        confirmText: "Sí, Reactivar",
+                        onConfirm: () => {
+                          if (onUpdateReservation) {
+                            onUpdateReservation({ ...activeRes, status: "Pendiente de Pago" });
+                            showAlert({ title: "Expediente Reactivado", message: "El expediente ha sido devuelto al estado Pendiente de Pago.", type: "success" });
+                          }
+                        }
+                      });
+                    }}
+                    className="px-3 py-1.5 border border-amber-200 bg-amber-50 hover:bg-amber-100 rounded text-amber-700 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
+                    title="Reactivar Expediente"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Reactivar</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      showConfirm({
+                        title: "Eliminar Permanentemente",
+                        message: "Esta acción no se puede deshacer. El expediente y sus traslados serán eliminados de la base de datos de manera definitiva, liberando su identificador.",
+                        requireInputToConfirm: activeRes.id,
+                        type: "danger",
+                        confirmText: "Sí, Eliminar Permanentemente",
+                        onConfirm: () => {
+                          if (onDeleteReservation) {
+                            onDeleteReservation(activeRes.id);
+                            showAlert({ title: "Expediente Eliminado", message: "El expediente ha sido eliminado de forma permanente.", type: "success" });
+                            setViewLevel(1);
+                          }
+                        }
+                      });
+                    }}
+                    className="px-3 py-1.5 border border-red-300 bg-red-100 hover:bg-red-200 rounded text-red-700 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
+                    title="Eliminar Permanente"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Eliminar Permanente</span>
+                  </button>
+                </>
+              )}
 
               {activeRes.servicios?.some(s => s.statusFacturacion === "Facturado") && (
                 <button
@@ -1586,8 +1949,19 @@ export default function ReservasView({
                                     );
                                   }
                                 })()}
+                                {s.status && (
+                                  <span className={`px-1.5 py-0.25 rounded-full text-[7.5px] font-bold uppercase tracking-wider ${
+                                    s.status === "Cancelado" 
+                                      ? "bg-red-100 border border-red-300 text-red-800" 
+                                      : s.status === "Modificado"
+                                        ? "bg-indigo-50 border border-indigo-250 text-indigo-700"
+                                        : "bg-emerald-50 border border-emerald-200 text-emerald-700"
+                                  }`}>
+                                    {s.status === "Cancelado" ? "Cancelado (Servicio)" : s.status}
+                                  </span>
+                                )}
                               </div>
-                              <p className="text-xs font-bold text-zinc-900 leading-tight">
+                              <p className={`text-xs font-bold leading-tight ${s.status === "Cancelado" ? "text-red-700/60 line-through font-semibold" : "text-zinc-900"}`}>
                                 {s.tipo === ServiceType.ALOJAMIENTO && s.detalles?.lodgingRooms
                                   ? (detailedProperties.find(p => p.id === s.detalles.hotelId)?.nombre || s.descripcion.split(" (")[0]?.replace("Hotel: ", "") || "Hotel")
                                   : s.descripcion
@@ -1742,7 +2116,7 @@ export default function ReservasView({
                             </div>
                             <p className="text-xs font-bold text-zinc-900 mt-1 truncate">Itinerario Vuelo - PNR: {vuelo.pnr}</p>
                             <div className="text-[9px] text-zinc-500 font-mono mt-0.5">
-                              {vuelo.segmentos.map((s, i) => <span key={i} className="mr-2">{s.origen} ➔ {s.destino}</span>)}
+                              {(vuelo.segmentos?.map ? vuelo.segmentos : []).map((s, i) => <span key={i} className="mr-2">{s.origen} ➔ {s.destino}</span>)}
                             </div>
                           </div>
                           
@@ -1855,6 +2229,115 @@ export default function ReservasView({
                   );
                 })()}
               </div>
+
+              {/* Resumen de Salud Financiera (Widget de Conciliación) */}
+              <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2 flex items-center gap-1.5 text-zinc-650">
+                  🛡️ Estado de Caja y Saldos
+                </h4>
+                {(() => {
+                  const resInvoices = invoices.filter(inv => inv.clientName.includes(`Localizador ${activeRes.id}`) && inv.type === "Cobro");
+                  const paidInvoicesTotal = resInvoices.filter(inv => inv.status === "Pagado").reduce((sum, inv) => sum + inv.amount, 0);
+                  const unpaidInvoiceIds = resInvoices.filter(inv => inv.status !== "Pagado").map(inv => inv.id);
+                  const partialVerifiedVouchers = (vouchers || []).filter(v => 
+                    v.status === "Verificado" && 
+                    (v.locatorId === activeRes.id || (v.invoiceId && unpaidInvoiceIds.includes(v.invoiceId)))
+                  );
+                  const totalCobrado = paidInvoicesTotal + partialVerifiedVouchers.reduce((sum, v) => sum + v.amount, 0);
+                  const adjustments = (activeRes.variaciones || []).reduce((sum, v) => sum + v.amountSale, 0);
+                  const originalPrice = activeRes.totalPrice - adjustments;
+                  const pctCobrado = activeRes.totalPrice > 0 ? Math.min(100, Math.round((totalCobrado / activeRes.totalPrice) * 100)) : 0;
+
+                  return (
+                    <div className="space-y-3.5">
+                      {/* KPIs */}
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-left">
+                          <span className="text-[9px] uppercase font-bold text-zinc-450 block">Precio Original</span>
+                          <span className="font-mono text-zinc-700 font-bold block mt-0.5">${originalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-left">
+                          <span className="text-[9px] uppercase font-bold text-zinc-455 block">Ajustes (Modif.)</span>
+                          <span className={`font-mono font-bold block mt-0.5 ${adjustments >= 0 ? "text-amber-600" : "text-emerald-700"}`}>
+                            {adjustments >= 0 ? "+" : ""}${adjustments.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Bar indicator */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-zinc-650">
+                          <span>Total Cobrado (${totalCobrado.toFixed(2)})</span>
+                          <span>{pctCobrado}%</span>
+                        </div>
+                        <div className="w-full bg-zinc-100 h-2.5 rounded-full overflow-hidden border border-zinc-200">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              pctCobrado === 100 ? "bg-emerald-650" : "bg-amber-500"
+                            }`}
+                            style={{ width: `${pctCobrado}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Pending to collect */}
+                      <div className="flex justify-between items-center bg-zinc-50 border border-zinc-150 rounded p-2.5">
+                        <span className="text-[10px] font-bold text-zinc-500">Saldo Pendiente de Cobro:</span>
+                        <span className={`font-mono font-black text-sm ${pctCobrado === 100 ? "text-emerald-700" : "text-red-650 animate-pulse"}`}>
+                          ${Math.max(0, activeRes.totalPrice - totalCobrado).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Historial de Variaciones y Ajustes como Línea de Tiempo */}
+              {activeRes.variaciones && activeRes.variaciones.length > 0 && (
+                <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
+                  <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2 flex items-center gap-1.5 text-zinc-650">
+                    <Activity className="w-4 h-4 text-zinc-500" /> Línea de Tiempo Contable
+                  </h4>
+                  
+                  {/* Timeline layout */}
+                  <div className="relative pl-5 border-l-2 border-zinc-150 ml-1.5 space-y-4 py-1 text-left">
+                    {activeRes.variaciones.map((v, idx) => {
+                      const isSupplement = v.type === "Suplemento";
+                      return (
+                        <div key={v.id || idx} className="relative">
+                          {/* Dot marker */}
+                          <span className={`absolute -left-[26px] top-1.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-xs ${
+                            isSupplement ? "bg-amber-500" : "bg-red-500"
+                          }`} />
+                          
+                          <div className="space-y-0.5 text-xs">
+                            <div className="flex justify-between items-center">
+                              <span className={`px-1.5 py-0.25 rounded text-[8px] font-black uppercase tracking-wider ${
+                                isSupplement ? "bg-amber-50 border border-amber-250 text-amber-700" : "bg-red-50 border border-red-200 text-red-750"
+                              }`}>
+                                {isSupplement ? "Suplemento" : "Crédito"}
+                              </span>
+                              <span className="font-mono text-[9px] text-zinc-400 font-semibold">{v.date}</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-800 leading-tight font-bold mt-1">{v.reason}</p>
+                            <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-1 font-semibold">
+                              <span>Monto Venta:</span>
+                              <span className={`font-mono font-black ${isSupplement ? "text-amber-600" : "text-emerald-700"}`}>
+                                {isSupplement ? "+" : ""}${v.amountSale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                              </span>
+                              <span className="text-zinc-300">|</span>
+                              <span>Neto:</span>
+                              <span className="font-mono font-bold text-zinc-650">
+                                {isSupplement ? "+" : ""}${v.amountNet.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Tipo de Expediente y Facturación */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
@@ -2068,7 +2551,7 @@ export default function ReservasView({
       {viewLevel === 3 && (
         <div className="space-y-6 animate-fade-in">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+          <div className="flex items-center justify-between border-b border-zinc-200 pb-4 sticky top-16 bg-zinc-50/95 backdrop-blur-xs pt-2 z-10 -mx-8 px-8">
             <div className="flex items-center gap-3">
               <button
                 onClick={handleCancelCart}
@@ -2361,14 +2844,11 @@ export default function ReservasView({
 
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 hidden">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Vuelo Asociado (Opcional)</label>
                     <input
                       type="text"
-                      placeholder="Ej: AA-942"
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs uppercase font-bold text-zinc-900 focus:outline-none"
-                      value={cartFlightNo}
-                      onChange={(e) => setCartFlightNo(e.target.value)}
+                      className="hidden"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -2388,71 +2868,71 @@ export default function ReservasView({
                   <div className="flex items-center justify-between">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
                       <Plane className="w-3.5 h-3.5" />
-                      Boleto Aéreo Vinculado
+                      Boletos Aéreos Vinculados ({cartLinkedFlights.length})
                     </label>
-                    {cartBoletoId && (
-                      <button
-                        type="button"
-                        onClick={() => { setCartBoletoId(null); setCartFlightNo(""); }}
-                        className="text-[10px] text-red-500 hover:text-red-700 font-bold uppercase tracking-wide cursor-pointer"
-                      >
-                        × Desvincular
-                      </button>
-                    )}
                   </div>
 
-                  {cartBoletoId ? (() => {
-                    const b = boletos.find(x => x.id === cartBoletoId);
-                    if (!b) return null;
-                    const ruta = buildRoute(b.segmentos);
-                    const primerSeg = b.segmentos[0];
-                    return (
-                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded bg-emerald-600 flex items-center justify-center flex-shrink-0">
-                              <Plane className="w-4 h-4 text-white" />
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold text-emerald-800 font-mono">{b.pnr} — {ruta}</p>
-                              <p className="text-[10px] text-emerald-600 font-medium">
-                                {b.pasajeros.map(p => p.nombre.split("/")[0]).join(" · ")} · {primerSeg ? formatGDSDate(primerSeg.fecha) : ""}
-                              </p>
+                  <div className="space-y-3">
+                    {cartLinkedFlights.map(linked => {
+                      const b = boletos.find(x => x.id === linked.id);
+                      if (!b) return null;
+                      const ruta = buildRoute(b.segmentos);
+                      const primerSeg = b.segmentos[0];
+                      return (
+                        <div key={b.id} className="p-3 bg-emerald-50 border border-emerald-200 rounded flex flex-col gap-3 relative">
+                          <button
+                            type="button"
+                            onClick={() => setCartLinkedFlights(prev => prev.filter(f => f.id !== b.id))}
+                            className="absolute top-2 right-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                            title="Desvincular"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                          <div className="flex items-center justify-between pr-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded bg-emerald-600 flex items-center justify-center flex-shrink-0">
+                                <Plane className="w-4 h-4 text-white" />
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-emerald-800 font-mono">{b.pnr} — {ruta}</p>
+                                <p className="text-[10px] text-emerald-600 font-medium">
+                                  {(b.pasajeros?.map ? b.pasajeros : []).map(p => p.nombre.split("/")[0]).join(" · ")} · {primerSeg ? formatGDSDate(primerSeg.fecha) : ""}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                          <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 bg-emerald-100 text-emerald-700 border border-emerald-300 rounded">Vinculado ✓</span>
+                          <label className="flex items-center gap-2 mt-1 cursor-pointer w-max">
+                            <input
+                              type="checkbox"
+                              className="w-3.5 h-3.5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-600"
+                              checked={linked.facturarConjunto}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setCartLinkedFlights(prev => prev.map(f => f.id === b.id ? { ...f, facturarConjunto: checked } : f));
+                              }}
+                            />
+                            <span className="text-[10px] font-bold text-emerald-800">
+                              Facturar conjuntamente con esta reserva terrestre (Unifica precios y voucher)
+                            </span>
+                          </label>
                         </div>
-                        <label className="flex items-center gap-2 mt-1 cursor-pointer w-max">
-                          <input
-                            type="checkbox"
-                            className="w-3.5 h-3.5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-600"
-                            checked={cartFacturarConjunto}
-                            onChange={(e) => setCartFacturarConjunto(e.target.checked)}
-                          />
-                          <span className="text-[10px] font-bold text-emerald-800">
-                            Facturar conjuntamente con esta reserva terrestre (Unifica precios y voucher)
-                          </span>
-                        </label>
-                      </div>
-                    );
-                  })() : (
-                    <button
-                      type="button"
-                      id="btn-buscar-boleto-drawer"
-                      onClick={() => { setBoletoSearch(""); setShowBoletoDrawer(true); }}
-                      className="w-full flex items-center justify-between p-3 border border-dashed border-zinc-300 rounded hover:border-zinc-500 hover:bg-zinc-50 transition-all cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2 text-zinc-400 group-hover:text-zinc-700 transition-colors">
-                        <Plane className="w-4 h-4" />
-                        <span className="text-xs font-semibold">
-                          {boletos.filter(b => !b.vinculadoAExpediente).length > 0
-                            ? `Buscar en ${boletos.filter(b => !b.vinculadoAExpediente).length} boleto${boletos.filter(b => !b.vinculadoAExpediente).length > 1 ? 's' : ''} libre${boletos.filter(b => !b.vinculadoAExpediente).length > 1 ? 's' : ''}...`
-                            : 'Sin boletos disponibles en el módulo de Vuelos'}
-                        </span>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600 transition-colors" />
-                    </button>
-                  )}
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => { setBoletoSearch(""); setShowBoletoDrawer(true); }}
+                    className="w-full flex items-center justify-between p-3 border border-dashed border-zinc-300 rounded hover:border-zinc-500 hover:bg-zinc-50 transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2 text-zinc-400 group-hover:text-zinc-700 transition-colors">
+                      <Plus className="w-4 h-4" />
+                      <span className="text-xs font-semibold">
+                        Vincular vuelo existente...
+                      </span>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600 transition-colors" />
+                  </button>
                 </div>
               </div>
 
@@ -2547,10 +3027,7 @@ export default function ReservasView({
                   
                   {(() => {
                     const targetResId = isEditingReservationId || cartId;
-                    const jointFlightsToRender = boletos.filter(b => 
-                      (b.expedienteId === targetResId && b.facturarConjunto && b.id !== cartBoletoId) || 
-                      (b.id === cartBoletoId && cartFacturarConjunto)
-                    );
+                    const jointFlightsToRender = cartLinkedFlights.filter(f => f.facturarConjunto).map(f => boletos.find(b => b.id === f.id)).filter(Boolean) as FlightTicket[];
                     
                     return jointFlightsToRender.map(vuelo => {
                       const vProfit = vuelo.precioVenta - vuelo.costoNeto;
@@ -2585,7 +3062,7 @@ export default function ReservasView({
                   Añadir Servicio a esta Reserva
                 </h4>
                 
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
                   {/* Alojamiento */}
                   <button
                     type="button"
@@ -2630,10 +3107,20 @@ export default function ReservasView({
                   <button
                     type="button"
                     onClick={() => handleOpenAddService(ServiceType.MANUAL)}
-                    className="p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950 col-span-2 sm:col-span-1"
+                    className="p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
                   >
                     <FileText className="w-6 h-6 text-zinc-500" />
                     <span className="text-[10px] font-bold uppercase tracking-wider">Entrada Manual</span>
+                  </button>
+
+                  {/* Servicio Vario */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAddService(ServiceType.SERVICIO_VARIO)}
+                    className="p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
+                  >
+                    <Compass className="w-6 h-6 text-zinc-500" />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Servicio Vario</span>
                   </button>
                 </div>
               </div>
@@ -2652,10 +3139,7 @@ export default function ReservasView({
                   let totalVenta = cartServices.reduce((sum, s) => sum + s.precioVenta, 0);
 
                   const targetResId = isEditingReservationId || cartId;
-                  const jointFlightsToRender = boletos.filter(b => 
-                    (b.expedienteId === targetResId && b.facturarConjunto && b.id !== cartBoletoId) || 
-                    (b.id === cartBoletoId && cartFacturarConjunto)
-                  );
+                  const jointFlightsToRender = cartLinkedFlights.filter(f => f.facturarConjunto).map(f => boletos.find(b => b.id === f.id)).filter(Boolean) as FlightTicket[];
 
                   jointFlightsToRender.forEach(f => {
                     totalNeto += f.costoNeto;
@@ -2696,7 +3180,7 @@ export default function ReservasView({
                 <button
                   type="submit"
                   className="w-full py-3 bg-zinc-950 hover:bg-zinc-850 text-white font-black text-xs uppercase tracking-wider rounded transition-all cursor-pointer text-center block shadow-sm disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed"
-                  disabled={(cartServices.length === 0 && !(cartBoletoId && cartFacturarConjunto)) || !cartHolder.trim()}
+                  disabled={(cartServices.length === 0 && (cartLinkedFlights.filter(f => f.facturarConjunto).length === 0)) || !cartHolder.trim()}
                 >
                   {isEditingReservationId ? "Guardar Cambios del Expediente" : "Confirmar y Generar Expediente"}
                 </button>
@@ -2713,7 +3197,7 @@ export default function ReservasView({
       {viewLevel === 4 && activeServiceType && (
         <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+          <div className="flex items-center justify-between border-b border-zinc-200 pb-4 sticky top-16 bg-zinc-50/95 backdrop-blur-xs pt-2 z-10">
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -3076,7 +3560,63 @@ export default function ReservasView({
             {/* 2. TRASLADOS */}
             {activeServiceType === ServiceType.TRASLADO && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block flex items-center gap-1">
+                      <Search className="w-3 h-3" /> Seleccionar del Catálogo
+                    </label>
+                    <select
+                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
+                      value={svExtraServiceId}
+                      onChange={(e) => {
+                        setSvExtraServiceId(e.target.value);
+                        setSvRateId("");
+                        const selected = extraServices?.find(s => s.id === e.target.value);
+                        if(selected) {
+                          setTransSupplier(selected.providerName);
+                        }
+                      }}
+                    >
+                      <option value="">-- Seleccione un Traslado (Opcional) --</option>
+                      {extraServices?.filter(s => s.category === "Traslado").map(s => (
+                        <option key={s.id} value={s.id}>{s.nombre} ({s.providerName})</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {svExtraServiceId && (
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Tarifa / Temporada</label>
+                      <select
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                        value={svRateId}
+                        onChange={(e) => {
+                          setSvRateId(e.target.value);
+                          const rate = serviceRates?.find(r => r.id === e.target.value);
+                          if (rate) {
+                            if (rate.pricingModel === "Por Persona") {
+                              const vta = ((rate.ventaAdulto || 0) * transPax).toFixed(2);
+                              const net = ((rate.netoAdulto || 0) * transPax).toFixed(2);
+                              setSalePrice(vta);
+                              setNetPrice(net);
+                            } else {
+                              // By default, 1 vehicle
+                              setSalePrice((rate.ventaTotal || 0).toFixed(2));
+                              setNetPrice((rate.netoTotal || 0).toFixed(2));
+                            }
+                          }
+                        }}
+                      >
+                        <option value="">-- Seleccione Tarifa --</option>
+                        {serviceRates?.filter(r => r.extraServiceId === svExtraServiceId).map(r => (
+                          <option key={r.id} value={r.id}>
+                            Del {r.temporadaInicio} al {r.temporadaFin}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Tipo de Traslado</label>
                     <select
@@ -3107,9 +3647,41 @@ export default function ReservasView({
                       required
                       className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
                       value={transPax}
-                      onChange={(e) => setTransPax(Math.max(1, parseInt(e.target.value) || 1))}
+                      onChange={(e) => {
+                        const newPax = Math.max(1, parseInt(e.target.value) || 1);
+                        setTransPax(newPax);
+                        if (svRateId) {
+                          const rate = serviceRates?.find(r => r.id === svRateId);
+                          if (rate && rate.pricingModel === "Por Persona") {
+                            setSalePrice(((rate.ventaAdulto || 0) * newPax).toFixed(2));
+                            setNetPrice(((rate.netoAdulto || 0) * newPax).toFixed(2));
+                          }
+                        }
+                      }}
                     />
                   </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Proveedor Operador</label>
+                    <input
+                      type="text"
+                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none placeholder:text-zinc-300"
+                      value={transSupplier}
+                      onChange={(e) => setTransSupplier(e.target.value)}
+                      placeholder="Ej. Foratour Receptivo S.A."
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-bold text-zinc-800">Ruta del Traslado</h4>
+                  <button 
+                    type="button" 
+                    onClick={handleAutofillTransfer}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded text-[10px] font-bold transition-colors"
+                  >
+                    <Plane className="w-3.5 h-3.5" />
+                    Autocompletar desde Vuelo/Hotel
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3138,7 +3710,7 @@ export default function ReservasView({
                 </div>
 
                 {transTripType === "round-trip" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fade-in">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Destino de Vuelta (Retorno)</label>
                       <input
@@ -3160,12 +3732,22 @@ export default function ReservasView({
                         onChange={(e) => setTransReturnDate(e.target.value)}
                       />
                     </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Hora de Retorno</label>
+                      <input
+                        type="time"
+                        required
+                        className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800 focus:outline-none"
+                        value={transReturnTime}
+                        onChange={(e) => setTransReturnTime(e.target.value)}
+                      />
+                    </div>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Servicio (Ida)</label>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha (Ida)</label>
                     <input
                       type="date"
                       required
@@ -3175,16 +3757,34 @@ export default function ReservasView({
                     />
                   </div>
                   <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Hora de Pick up</label>
+                    <input
+                      type="time"
+                      required
+                      className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800 focus:outline-none"
+                      value={transTime}
+                      onChange={(e) => setTransTime(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Categoría de Vehículo</label>
                     <select
                       className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
                       value={transVehicle}
                       onChange={(e) => setTransVehicle(e.target.value)}
                     >
-                      <option value="Berlina Ejecutiva">Berlina Ejecutiva (Sedán 1-3 Pax)</option>
-                      <option value="Minivan Ejecutiva">Minivan Ejecutiva (SUV 1-6 Pax)</option>
-                      <option value="Mini Bus Charter">Mini Bus Charter (Coaster 7-19 Pax)</option>
-                      <option value="Autobús de Línea">Autobús de Línea (Coach 20+ Pax)</option>
+                      {fleetVehicles.length > 0 ? (
+                        Array.from(new Set(fleetVehicles.map(v => v.tipo))).map(tipo => (
+                          <option key={tipo} value={tipo}>{tipo}</option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="Berlina Ejecutiva">Berlina Ejecutiva (Sedán 1-3 Pax)</option>
+                          <option value="Minivan Ejecutiva">Minivan Ejecutiva (SUV 1-6 Pax)</option>
+                          <option value="Mini Bus Charter">Mini Bus Charter (Coaster 7-19 Pax)</option>
+                          <option value="Autobús de Línea">Autobús de Línea (Coach 20+ Pax)</option>
+                        </>
+                      )}
                     </select>
                   </div>
                 </div>
@@ -3245,10 +3845,18 @@ export default function ReservasView({
                       value={carCategory}
                       onChange={(e) => setCarCategory(e.target.value)}
                     >
-                      <option value="Económico Mecánico">Económico Mecánico (Ford Ka o similar)</option>
-                      <option value="Compacto Automático">Compacto Automático (Toyota Yaris o similar)</option>
-                      <option value="SUV Familiar 4x2">SUV Familiar 4x2 (Hyundai Tucson o similar)</option>
-                      <option value="Camioneta Todo Terreno 4x4">Camioneta Todo Terreno 4x4 (Toyota Hilux o similar)</option>
+                      {fleetVehicles.length > 0 ? (
+                        Array.from(new Set(fleetVehicles.map(v => v.tipo))).map(tipo => (
+                          <option key={tipo} value={tipo}>{tipo}</option>
+                        ))
+                      ) : (
+                        <>
+                          <option value="Económico Mecánico">Económico Mecánico (Ford Ka o similar)</option>
+                          <option value="Compacto Automático">Compacto Automático (Toyota Yaris o similar)</option>
+                          <option value="SUV Familiar 4x2">SUV Familiar 4x2 (Hyundai Tucson o similar)</option>
+                          <option value="Camioneta Pick-Up">Camioneta Pick-Up (Toyota Hilux o similar)</option>
+                        </>
+                      )}
                     </select>
                   </div>
                   <div className="space-y-1.5">
@@ -3332,7 +3940,7 @@ export default function ReservasView({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Plan de Asistencia</label>
                     <input
@@ -3342,6 +3950,16 @@ export default function ReservasView({
                       className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
                       value={insPlan}
                       onChange={(e) => setInsPlan(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Proveedor Operador</label>
+                    <input
+                      type="text"
+                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none placeholder:text-zinc-300"
+                      value={insSupplier}
+                      onChange={(e) => setInsSupplier(e.target.value)}
+                      placeholder="Ej. Asistencia Global Travel"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -3385,6 +4003,118 @@ export default function ReservasView({
                     />
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* 6. SERVICIOS VARIOS */}
+            {activeServiceType === ServiceType.SERVICIO_VARIO && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Seleccionar Servicio del Catálogo</label>
+                    <select
+                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                      value={svExtraServiceId}
+                      onChange={(e) => {
+                        setSvExtraServiceId(e.target.value);
+                        setSvRateId("");
+                      }}
+                    >
+                      <option value="">-- Seleccione un Servicio --</option>
+                      {extraServices?.map(s => (
+                        <option key={s.id} value={s.id}>{s.nombre} ({s.providerName})</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  {svExtraServiceId && (
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Seleccionar Tarifa / Temporada</label>
+                      <select
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                        value={svRateId}
+                        onChange={(e) => {
+                          setSvRateId(e.target.value);
+                          const rate = serviceRates?.find(r => r.id === e.target.value);
+                          if (rate) {
+                            if (rate.pricingModel === "Por Persona") {
+                              const vta = (rate.ventaAdulto || 0) * svAdults + (rate.ventaNino || 0) * svChildren;
+                              const net = (rate.netoAdulto || 0) * svAdults + (rate.netoNino || 0) * svChildren;
+                              setSalePrice(vta.toFixed(2));
+                              setNetPrice(net.toFixed(2));
+                            } else {
+                              setSalePrice(((rate.ventaTotal || 0) * svVehicles).toFixed(2));
+                              setNetPrice(((rate.netoTotal || 0) * svVehicles).toFixed(2));
+                            }
+                          }
+                        }}
+                      >
+                        <option value="">-- Seleccione una Tarifa --</option>
+                        {serviceRates?.filter(r => r.extraServiceId === svExtraServiceId).map(r => (
+                          <option key={r.id} value={r.id}>
+                            Del {r.temporadaInicio} al {r.temporadaFin} - {r.pricingModel}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {svRateId && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {serviceRates?.find(r => r.id === svRateId)?.pricingModel === "Por Persona" ? (
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Cantidad Adultos</label>
+                          <input
+                            type="number"
+                            min="1"
+                            className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                            value={svAdults}
+                            onChange={(e) => {
+                              const newAd = Math.max(1, parseInt(e.target.value) || 1);
+                              setSvAdults(newAd);
+                              const rate = serviceRates?.find(r => r.id === svRateId);
+                              if (rate) {
+                                setSalePrice(((rate.ventaAdulto || 0) * newAd + (rate.ventaNino || 0) * svChildren).toFixed(2));
+                                setNetPrice(((rate.netoAdulto || 0) * newAd + (rate.netoNino || 0) * svChildren).toFixed(2));
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Cantidad Niños</label>
+                          <input
+                            type="number"
+                            min="0"
+                            className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                            value={svChildren}
+                            onChange={(e) => {
+                              const newCh = Math.max(0, parseInt(e.target.value) || 0);
+                              setSvChildren(newCh);
+                              const rate = serviceRates?.find(r => r.id === svRateId);
+                              if (rate) {
+                                setSalePrice(((rate.ventaAdulto || 0) * svAdults + (rate.ventaNino || 0) * newCh).toFixed(2));
+                                setNetPrice(((rate.netoAdulto || 0) * svAdults + (rate.netoNino || 0) * newCh).toFixed(2));
+                              }
+                            }}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Cantidad Vehículos / Grupos</label>
+                        <input
+                          type="number"
+                          min="1"
+                          className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                          value={svVehicles}
+                          onChange={(e) => setSvVehicles(Math.max(1, parseInt(e.target.value) || 1))}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -3492,7 +4222,68 @@ export default function ReservasView({
                   </div>
                 </div>
               </div>
-            ) : (activeServiceType === ServiceType.TRASLADO || activeServiceType === ServiceType.SEGURO) ? (
+            ) : (activeServiceType === ServiceType.SERVICIO_VARIO) ? (
+              <div className="border-t border-zinc-150 pt-4 space-y-4 font-sans">
+                {(() => {
+                  let pvp = 0;
+                  let costoNeto = 0;
+                  const rate = serviceRates?.find(r => r.id === svRateId);
+                  if (rate) {
+                    if (rate.pricingModel === "Por Persona") {
+                      pvp = (rate.ventaAdulto || 0) * svAdults + (rate.ventaNino || 0) * svChildren;
+                      costoNeto = (rate.netoAdulto || 0) * svAdults + (rate.netoNino || 0) * svChildren;
+                    } else {
+                      pvp = (rate.ventaTotal || 0) * svVehicles;
+                      costoNeto = (rate.netoTotal || 0) * svVehicles;
+                    }
+                  }
+                  const ganancia = pvp - costoNeto;
+
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Costo Neto Mayorista (a Pagar)</label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                          <input
+                            type="text"
+                            readOnly
+                            className="w-full pl-6 pr-3 py-2.5 border border-emerald-100 bg-emerald-50/20 rounded text-xs font-black text-emerald-800 text-right cursor-not-allowed"
+                            value={costoNeto.toLocaleString("es-ES")}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Cobro B2B (A Pagar por Agencia)</label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                          <input
+                            type="text"
+                            readOnly
+                            className="w-full pl-6 pr-3 py-2.5 border border-zinc-200 bg-zinc-50 rounded text-xs font-black text-zinc-900 text-right cursor-not-allowed"
+                            value={pvp.toLocaleString("es-ES")}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Nuestra Ganancia Mayorista</label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-[10px]">$</span>
+                          <input
+                            type="text"
+                            readOnly
+                            className="w-full pl-6 pr-3 py-2.5 border border-emerald-250 bg-emerald-50 rounded text-xs font-black text-emerald-755 text-right cursor-not-allowed"
+                            value={ganancia.toLocaleString("es-ES")}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (activeServiceType === ServiceType.TRASLADO || activeServiceType === ServiceType.SEGURO || activeServiceType === ServiceType.MANUAL || activeServiceType === ServiceType.SERVICIO_VARIO) ? (
               <div className="border-t border-zinc-150 pt-4 space-y-4 font-sans">
                 {/* Inputs for PVP and Commissions */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -3578,7 +4369,7 @@ export default function ReservasView({
                           />
                         </div>
                         <span className="text-[9px] text-zinc-450 font-medium leading-tight block">
-                          Reteniendo {comisionB2B + comisionPropia}% de descuento sobre el PVP {activeServiceType === ServiceType.SEGURO ? "Total" : ""}.
+                          Reteniendo {comisionB2B + comisionPropia}% de descuento sobre el PVP Base.
                         </span>
                       </div>
 
@@ -3744,11 +4535,11 @@ export default function ReservasView({
                 <div>
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded bg-zinc-950 text-white flex items-center justify-center font-black text-base font-sans">
-                      F
+                      {companyConfig.logoLetter}
                     </div>
                     <div>
-                      <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans">FORATOUR ERP</h2>
-                      <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">Wholesale Logistics</span>
+                      <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans uppercase">{companyConfig.name}</h2>
+                      <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">{companyConfig.subtitle}</span>
                     </div>
                   </div>
                   <p className="text-[10px] text-zinc-500 mt-2 font-medium font-sans">
@@ -3994,8 +4785,8 @@ export default function ReservasView({
 
               {/* Legal Disclaimer */}
               <div className="mt-10 border-t border-zinc-200 pt-6 text-center text-[10px] text-zinc-400 font-medium space-y-1 font-sans">
-                <p>Este documento es un comprobante de reserva comercial para uso exclusivo entre Foratour y la agencia emisora.</p>
-                <p>Foratour S.A. | RIF: J-30495810-9 | Caracas, Venezuela | Email: soporte@foratour-erp.com</p>
+                <p>Este documento es un comprobante de reserva comercial para uso exclusivo entre {companyConfig.name} y la agencia emisora.</p>
+                <p>{companyConfig.name} | RIF: {companyConfig.rif} | {companyConfig.address} | Email: {companyConfig.email}</p>
               </div>
 
             </div>
@@ -4121,11 +4912,11 @@ export default function ReservasView({
                 <div>
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded bg-zinc-950 text-white flex items-center justify-center font-black text-base font-sans">
-                      F
+                      {companyConfig.logoLetter}
                     </div>
                     <div>
-                      <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans">FORATOUR ERP</h2>
-                      <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">Wholesale Logistics</span>
+                      <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans uppercase">{companyConfig.name}</h2>
+                      <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">{companyConfig.subtitle}</span>
                     </div>
                   </div>
                   <p className="text-[10px] text-zinc-500 mt-2 font-medium font-sans">
@@ -4146,11 +4937,11 @@ export default function ReservasView({
                 <div className="space-y-1">
                   <h4 className="text-xs font-extrabold uppercase text-emerald-800 font-sans">Estado: SERVICIOS CONCILIADOS Y CONFIRMADOS</h4>
                   <p className="text-[10.5px] text-zinc-650 leading-relaxed font-semibold font-sans">
-                    Este documento acredita que los servicios listados a continuación están totalmente pagados al proveedor y garantizados por Foratour ERP. Presente este voucher al proveedor del servicio al iniciar su viaje.
+                    Este documento acredita que los servicios listados a continuación están totalmente pagados al proveedor y garantizados por {companyConfig.name}. Presente este voucher al proveedor del servicio al iniciar su viaje.
                   </p>
                 </div>
                 <div className="flex-shrink-0 w-24 h-24 border-4 border-emerald-600/40 rounded-full flex flex-col items-center justify-center text-center rotate-12 font-sans select-none">
-                  <span className="text-[9px] font-black uppercase text-emerald-600/60 leading-none">FORATOUR</span>
+                  <span className="text-[9px] font-black uppercase text-emerald-600/60 leading-none">{companyConfig.name.split(' ')[0]}</span>
                   <span className="text-sm font-black text-emerald-600 uppercase tracking-widest mt-1">CONFIRMADO</span>
                   <span className="text-[8px] font-mono text-emerald-500 mt-0.5 leading-none">OK</span>
                 </div>
@@ -4196,7 +4987,7 @@ export default function ReservasView({
                     <h5 className="text-[9.5px] font-black text-zinc-455 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Itinerario de Vuelo Aéreo</h5>
                     <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30">
                       {vuelosFacturados.map((vuelo) => (
-                        <div key={vuelo.id} className="p-4 bg-white space-y-3">
+                        <div key={vuelo.id} className="p-4 bg-white space-y-3 break-inside-avoid print:break-inside-avoid">
                           <div className="flex justify-between items-center">
                             <span className="px-2 py-0.5 bg-blue-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
                               BOLETO AÉREO GDS
@@ -4205,7 +4996,7 @@ export default function ReservasView({
                           </div>
                           
                           <div className="space-y-2 mt-2">
-                            {vuelo.segmentos.map((seg, i) => (
+                            {(vuelo.segmentos?.map ? vuelo.segmentos : []).map((seg, i) => (
                               <div key={i} className="flex items-center gap-3 text-xs">
                                 <span className="font-mono font-bold text-zinc-400 text-[10px]">{String(i + 1).padStart(2, "0")}</span>
                                 <span className="font-bold text-zinc-800 font-mono">{seg.aerolinea}{seg.numeroVuelo}</span>
@@ -4237,7 +5028,7 @@ export default function ReservasView({
                 <h5 className="text-[9.5px] font-black text-zinc-455 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Servicios Confirmados</h5>
                 <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30">
                   {activeRes.servicios?.filter(s => s.statusFacturacion === "Facturado").map((s) => (
-                    <div key={s.id} className="p-4 bg-white space-y-2">
+                    <div key={s.id} className="p-4 bg-white space-y-2 break-inside-avoid print:break-inside-avoid">
                       <div className="flex justify-between items-center">
                         <span className="px-2 py-0.5 bg-zinc-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
                           {s.tipo}
@@ -4283,8 +5074,8 @@ export default function ReservasView({
 
               {/* Legal disclaimer */}
               <div className="mt-10 border-t border-zinc-200 pt-6 text-center text-[10px] text-zinc-400 font-medium space-y-1 font-sans">
-                <p>Este voucher sirve como constancia oficial de servicios. Foratour opera como consolidador mayorista y no se hace responsable por retrasos, cancelaciones fortuitas o modificaciones imputables directamente a los proveedores de servicio final.</p>
-                <p>Foratour S.A. | RIF: J-30495810-9 | Caracas, Venezuela | Email: operaciones@foratour-erp.com</p>
+                <p>Este voucher sirve como constancia oficial de servicios. {companyConfig.name} opera como consolidador mayorista y no se hace responsable por retrasos, cancelaciones fortuitas o modificaciones imputables directamente a los proveedores de servicio final.</p>
+                <p>{companyConfig.name} | RIF: {companyConfig.rif} | {companyConfig.address} | Email: {companyConfig.email}</p>
               </div>
             </div>
 
@@ -4501,6 +5292,22 @@ export default function ReservasView({
                             className="w-full px-2.5 py-1.5 border border-zinc-250 rounded text-xs font-semibold bg-white focus:outline-none focus:border-zinc-500 uppercase font-mono"
                           />
                         </div>
+                        <div className="mt-3">
+                          <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Adjuntar Archivo de Pago (Simulado)</label>
+                          <div className="border border-dashed border-zinc-300 bg-zinc-50 rounded p-2.5 flex items-center justify-center cursor-pointer hover:bg-zinc-100 relative">
+                            <input
+                              type="file"
+                              className="absolute inset-0 opacity-0 cursor-pointer"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) setBillingFile(file.name);
+                              }}
+                            />
+                            <span className="text-[10px] font-bold text-zinc-600">
+                              {billingFile ? `✓ ${billingFile}` : "Clic para adjuntar archivo"}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -4642,7 +5449,7 @@ export default function ReservasView({
                 <button
                   type="button"
                   onClick={() => {
-                    alert(`Simulando descarga de soporte: ${selectedObligationForReceipt.attachedFile || "soporte_pago.pdf"}`);
+                    showAlert({ title: "Descarga de soporte", message: `Simulando descarga de soporte: ${selectedObligationForReceipt.attachedFile || "soporte_pago.pdf"}`, type: "info" });
                   }}
                   className="px-4 py-2 border border-zinc-250 hover:bg-zinc-100 text-zinc-700 bg-white rounded text-xs font-bold uppercase cursor-pointer flex items-center gap-1.5 shadow-3xs"
                 >
@@ -4651,7 +5458,7 @@ export default function ReservasView({
                 <button
                   type="button"
                   onClick={() => {
-                    alert(`El comprobante de pago ha sido enviado exitosamente al correo del proveedor legal: ${selectedObligationForReceipt.providerName}.`);
+                    showAlert({ title: "Comprobante enviado", message: `El comprobante de pago ha sido enviado exitosamente al correo del proveedor legal: ${selectedObligationForReceipt.providerName}.`, type: "success" });
                     setShowProvReceiptModal(false);
                     setSelectedObligationForReceipt(null);
                   }}
@@ -4666,6 +5473,138 @@ export default function ReservasView({
         </div>
       )}
 
+      {/* --- MODAL PREVISUALIZACION DE IMPACTO FINANCIERO (UX) --- */}
+      {financialImpactPreview && pendingSaveReservation && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in font-sans">
+          <div className="bg-white rounded-lg w-full max-w-lg shadow-2xl overflow-hidden animate-scale-up border border-zinc-200">
+            {/* Header */}
+            <div className="bg-zinc-950 text-white px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-500" />
+                <div>
+                  <h4 className="font-extrabold text-sm uppercase tracking-wider">Modificación con Impacto Financiero</h4>
+                  <p className="text-[10px] text-zinc-400 font-medium">Reconciliación y Conciliación de Saldos en Tiempo Real</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setFinancialImpactPreview(null);
+                  setPendingSaveReservation(null);
+                }}
+                className="p-1 hover:bg-zinc-900 rounded text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto text-left">
+              <p className="text-[11px] text-zinc-650 leading-relaxed font-semibold">
+                Hemos recalculado los costos de esta modificación. A continuación se desglosa el impacto contable para el cliente y proveedores:
+              </p>
+
+              {/* Auditoria de cambios */}
+              <div className="bg-zinc-50 border border-zinc-150 rounded-md p-4 space-y-2">
+                <span className="text-[9px] uppercase font-bold text-zinc-450 block">Detalles del Ajuste</span>
+                <ul className="space-y-1.5 text-xs text-zinc-700 font-medium">
+                  {financialImpactPreview.log.map((logItem: string, i: number) => (
+                    <li key={i} className="flex gap-2 items-start leading-normal">
+                      <span className="text-amber-500 mt-0.5">•</span>
+                      <span>{logItem}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Variaciones y Saldos */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-emerald-50/50 border border-emerald-150 p-3 rounded text-left">
+                  <span className="text-[8.5px] uppercase font-bold text-emerald-800 tracking-wider block">Crédito / A Favor</span>
+                  <p className="font-bold text-emerald-700 text-sm mt-1 font-mono">
+                    {(() => {
+                      const client = clients.find(c => c.nombre.toLowerCase() === pendingSaveReservation.agenciaName?.toLowerCase());
+                      const isCreditAgent = client?.limiteCredito && client.limiteCredito > 0;
+                      
+                      const creditTotal = financialImpactPreview.newWalletTransactions
+                        .filter((tx: any) => tx.type === "Abono" || tx.type === "Reembolso")
+                        .reduce((sum: number, tx: any) => sum + tx.amount, 0);
+
+                      if (isCreditAgent) {
+                        return "Se reduce deuda directamente";
+                      }
+                      return creditTotal > 0 ? `+$${creditTotal.toFixed(2)} USD` : "$0.00 USD";
+                    })()}
+                  </p>
+                  <span className="text-[9px] text-emerald-600 font-medium block leading-normal mt-0.5">
+                    {(() => {
+                      const client = clients.find(c => c.nombre.toLowerCase() === pendingSaveReservation.agenciaName?.toLowerCase());
+                      const isCreditAgent = client?.limiteCredito && client.limiteCredito > 0;
+                      return isCreditAgent 
+                        ? "Las agencias a crédito ven reflejada la devolución en su saldo deudor acumulado."
+                        : "El saldo restante del servicio cancelado se abonará a la Billetera Virtual B2B.";
+                    })()}
+                  </span>
+                </div>
+
+                <div className="bg-red-50/50 border border-red-150 p-3 rounded text-left">
+                  <span className="text-[8.5px] uppercase font-bold text-red-800 tracking-wider block">Penalidades</span>
+                  <p className="font-bold text-red-700 text-sm mt-1 font-mono">
+                    {(() => {
+                      const penaltyTotal = financialImpactPreview.newWalletTransactions
+                        .filter((tx: any) => tx.type === "Penalidad" || tx.type === "Cargo")
+                        .reduce((sum: number, tx: any) => sum + tx.amount, 0);
+                      return penaltyTotal > 0 ? `$${penaltyTotal.toFixed(2)} USD` : "$0.00 USD";
+                    })()}
+                  </p>
+                  <span className="text-[9px] text-red-500 font-medium block leading-normal mt-0.5">
+                    Las penalidades y multas de cancelación se retendrán como costo administrativo no reembolsable.
+                  </span>
+                </div>
+              </div>
+
+              {/* Proveedores bloqueados */}
+              {financialImpactPreview.updatedPayableObligations.some((o: any) => o.isFrozen) && (
+                <div className="bg-amber-50 border border-amber-250 rounded p-3 text-left">
+                  <span className="text-[9px] uppercase font-bold text-amber-800 block">⚠️ Pagos a Proveedores Bloqueados</span>
+                  <p className="text-[10px] text-amber-700 mt-1 leading-relaxed font-semibold">
+                    Se han congelado preventivamente las obligaciones de pago de los servicios cancelados a los proveedores:
+                  </p>
+                  <ul className="list-disc list-inside text-[10px] text-amber-800 font-bold mt-1 space-y-0.5">
+                    {financialImpactPreview.updatedPayableObligations
+                      .filter((o: any) => o.isFrozen)
+                      .map((o: any, idx: number) => (
+                        <li key={idx}>{o.providerName} (Ref: {o.locatorId}) - ${o.netCost.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-zinc-50 border-t border-zinc-200 px-5 py-4 flex justify-between gap-3 font-semibold">
+              <button
+                type="button"
+                onClick={() => {
+                  setFinancialImpactPreview(null);
+                  setPendingSaveReservation(null);
+                }}
+                className="px-4 py-2 border border-zinc-250 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase cursor-pointer"
+              >
+                Volver y Editar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmFinancialImpactSave}
+                className="px-5 py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Confirmar y Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ══════════════════════════════════════════════════════════════════════
           DRAWER: BUSCADOR DE BOLETOS AÉREOS
           Deslizante desde la derecha, activado desde el formulario de expediente.
@@ -4673,20 +5612,22 @@ export default function ReservasView({
       {showBoletoDrawer && (() => {
         // Filtrar boletos libres según la búsqueda del agente
         const query = boletoSearch.trim().toUpperCase();
-        const boletosLibres = boletos.filter(b => !b.vinculadoAExpediente);
+        const boletosLibres = boletos.filter(b => !b.vinculadoAExpediente && b.expedienteAereo?.status !== "Anulado");
         const resultados = query.length === 0
           ? boletosLibres
-          : boletosLibres.filter(b =>
-              b.pnr.includes(query) ||
-              b.pasajeros.some(p =>
-                p.nombre.includes(query) ||
-                p.nombre.split("/").some(part => part.includes(query))
+          : boletosLibres.filter(b => {
+              const pasajeros = b.pasajeros?.map ? b.pasajeros : [];
+              const segmentos = b.segmentos?.map ? b.segmentos : [];
+              return (b.pnr || "").includes(query) ||
+              pasajeros.some(p =>
+                (p?.nombre || "").includes(query) ||
+                (p?.nombre || "").split("/").some(part => part.includes(query))
               ) ||
-              b.segmentos.some(s =>
-                s.origen.includes(query) || s.destino.includes(query) ||
-                s.aerolinea.includes(query) || s.numeroVuelo.includes(query)
+              segmentos.some(s =>
+                (s?.origen || "").includes(query) || (s?.destino || "").includes(query) ||
+                (s?.aerolinea || "").includes(query) || (s?.numeroVuelo || "").includes(query)
               )
-            );
+            });
 
         return (
           <>
@@ -4760,9 +5701,11 @@ export default function ReservasView({
                 ) : (
                   <div className="divide-y divide-zinc-100">
                     {resultados.map(b => {
-                      const ruta = buildRoute(b.segmentos);
-                      const primerSeg = b.segmentos[0];
-                      const ultimoSeg = b.segmentos[b.segmentos.length - 1];
+                      const segmentos = b.segmentos?.map ? b.segmentos : [];
+                      const pasajeros = b.pasajeros?.map ? b.pasajeros : [];
+                      const ruta = buildRoute(segmentos);
+                      const primerSeg = segmentos[0];
+                      const ultimoSeg = segmentos[segmentos.length - 1];
                       const margen = b.precioVenta > 0 && b.costoNeto > 0
                         ? ((b.precioVenta - b.costoNeto) / b.precioVenta * 100).toFixed(1)
                         : null;
@@ -4777,14 +5720,16 @@ export default function ReservasView({
                                 {b.pnr}
                               </span>
                               <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 bg-zinc-100 text-zinc-500 border border-zinc-200 rounded">
-                                {b.segmentos.length} tramo{b.segmentos.length !== 1 ? "s" : ""}
+                                {segmentos.length} tramo{segmentos.length !== 1 ? "s" : ""}
                               </span>
                             </div>
                             <button
                               id={`btn-vincular-${b.id}`}
                               onClick={() => {
-                                setCartBoletoId(b.id);
-                                setCartFlightNo(b.pnr);
+                                if (!cartLinkedFlights.some(f => f.id === b.id)) {
+                                  setCartLinkedFlights(prev => [...prev, { id: b.id, facturarConjunto: false }]);
+                                }
+                                setCartFlightNo(prev => prev ? `${prev}, ${b.pnr}` : b.pnr);
                                 setShowBoletoDrawer(false);
                               }}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 text-white text-[10px] font-bold rounded hover:bg-zinc-700 transition-colors cursor-pointer flex-shrink-0"
@@ -4803,9 +5748,9 @@ export default function ReservasView({
                             <div className="flex-1 flex items-center gap-1">
                               <div className="flex-1 h-[1px] bg-zinc-200" />
                               <Plane className="w-3.5 h-3.5 text-zinc-400 rotate-0" />
-                              {b.segmentos.length > 1 && (
+                              {segmentos.length > 1 && (
                                 <span className="text-[8px] font-bold text-zinc-400 bg-zinc-100 px-1 rounded">
-                                  {b.segmentos.length - 1} esc
+                                  {segmentos.length - 1} esc
                                 </span>
                               )}
                               <div className="flex-1 h-[1px] bg-zinc-200" />
@@ -4818,7 +5763,7 @@ export default function ReservasView({
 
                           {/* Segmentos detallados */}
                           <div className="space-y-1 mb-3">
-                            {b.segmentos.map((seg, i) => (
+                            {segmentos.map((seg, i) => (
                               <div key={i} className="flex items-center gap-2 text-[10px] bg-zinc-50 px-2.5 py-1.5 rounded border border-zinc-100">
                                 <span className="font-mono font-bold text-zinc-700 w-12 flex-shrink-0">
                                   {seg.aerolinea}{seg.numeroVuelo}
@@ -4839,7 +5784,7 @@ export default function ReservasView({
 
                           {/* Pasajeros */}
                           <div className="flex flex-wrap gap-1 mb-3">
-                            {b.pasajeros.map((p, i) => (
+                            {(b.pasajeros?.map ? b.pasajeros : []).map((p, i) => (
                               <span key={i} className="text-[9px] font-semibold text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
                                 {p.nombre} <span className="text-zinc-400">{p.tipo}</span>
                               </span>

@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Reservation, FinancialInvoice, B2BClient, PaymentVoucher } from "../types";
+import { Reservation, FinancialInvoice, B2BClient, PaymentVoucher, CompanyConfig } from "../types";
 import { 
   Users, 
   Search, 
   Filter, 
   Plus, 
+  Printer, 
   ArrowLeft, 
   ShieldAlert, 
   AlertCircle, 
@@ -26,7 +27,8 @@ import {
   TrendingUp,
   ArrowUpRight,
   ShieldCheck,
-  Eye
+  Eye,
+  Wallet
 } from "lucide-react";
 
 interface CobranzasViewProps {
@@ -36,6 +38,10 @@ interface CobranzasViewProps {
   onUpdateInvoice: (updated: FinancialInvoice) => void;
   reservations: Reservation[];
   onAddInvoice?: (newInv: FinancialInvoice) => void;
+  vouchers: PaymentVoucher[];
+  onAddVoucher: (newVoucher: PaymentVoucher) => void;
+  onUpdateVoucher: (updated: PaymentVoucher) => void;
+  companyConfig: CompanyConfig;
 }
 
 export default function CobranzasView({ 
@@ -44,7 +50,11 @@ export default function CobranzasView({
   invoices, 
   onUpdateInvoice, 
   reservations,
-  onAddInvoice 
+  onAddInvoice,
+  vouchers,
+  onAddVoucher,
+  onUpdateVoucher,
+  companyConfig
 }: CobranzasViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [invoiceSearchQuery, setInvoiceSearchQuery] = useState("");
@@ -53,15 +63,14 @@ export default function CobranzasView({
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<FinancialInvoice | null>(null);
   
   // Tab states for the client details card
-  const [activeTab, setActiveTab] = useState<"facturas" | "comprobantes">("facturas");
+  const [activeTab, setActiveTab] = useState<"facturas" | "comprobantes" | "billetera">("facturas");
   
   // Notification state
   const [statusMessage, setStatusMessage] = useState("");
 
   const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState<PaymentVoucher | null>(null);
-
-  // Simulated Payment Voucher State initialized with high fidelity mock data
-  const [vouchers, setVouchers] = useState<PaymentVoucher[]>([]);
+  const [selectedReceiptVoucher, setSelectedReceiptVoucher] = useState<{voucher: PaymentVoucher, clientName: string} | null>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   // Payment Form States
   const [paymentForm, setPaymentForm] = useState({
@@ -112,24 +121,23 @@ export default function CobranzasView({
   const handleVerifyVoucher = (voucher: PaymentVoucher, approve: boolean) => {
     // 1. Update Voucher status
     const newStatus = approve ? "Verificado" as const : "Rechazado" as const;
-    setVouchers(prev => prev.map(v => v.id === voucher.id ? { ...v, status: newStatus } : v));
+    onUpdateVoucher({ ...voucher, status: newStatus });
 
     if (approve) {
-      // 2. If it's linked to an invoice, mark it as paid or reduce its remaining balance (partial payment)
+      // 2. If it's linked to an invoice, check if total verified payments completes it
       if (voucher.invoiceId) {
         const targetInvoice = invoices.find(inv => inv.id === voucher.invoiceId);
         if (targetInvoice && targetInvoice.status !== "Pagado") {
-          if (voucher.amount < targetInvoice.amount) {
-            const nextAmount = Number((targetInvoice.amount - voucher.amount).toFixed(2));
-            const nextVat = Number((nextAmount * 0.16).toFixed(2));
+          const alreadyPaid = vouchers
+            .filter(v => v.invoiceId === voucher.invoiceId && v.status === "Verificado" && v.id !== voucher.id)
+            .reduce((sum, v) => sum + v.amount, 0);
+          const totalPaid = alreadyPaid + voucher.amount;
+
+          if (totalPaid >= targetInvoice.amount) {
             onUpdateInvoice({
               ...targetInvoice,
-              amount: nextAmount,
-              vatAmount: nextVat
+              status: "Pagado" as const
             });
-          } else {
-            const updatedInvoice = { ...targetInvoice, status: "Pagado" as const };
-            onUpdateInvoice(updatedInvoice);
           }
         }
       }
@@ -165,11 +173,16 @@ export default function CobranzasView({
   // Open payment registration form for specific invoice
   const openRegisterPaymentModal = (invoice: FinancialInvoice) => {
     setSelectedInvoiceForPayment(invoice);
+    const paid = vouchers
+      .filter(v => v.invoiceId === invoice.id && v.status === "Verificado")
+      .reduce((sum, v) => sum + v.amount, 0);
+    const remaining = Math.max(0, invoice.amount - paid);
+
     setPaymentForm({
       invoiceId: invoice.id,
       method: "Transferencia Bancaria",
       reference: "",
-      amount: invoice.amount.toString(),
+      amount: remaining.toString(),
       date: new Date().toISOString().split("T")[0],
       bankName: "",
       notes: "",
@@ -189,25 +202,19 @@ export default function CobranzasView({
       return;
     }
 
-    // 1. Mark target invoice as "Pagado" or reduce its remaining balance (partial payment)
-    let isPartialPayment = false;
-    let remainingAmount = 0;
+    // 1. Mark target invoice as "Pagado" if the sum of verified vouchers (including this payment) is >= its total amount
     if (paymentForm.invoiceId) {
       const targetInvoice = invoices.find(inv => inv.id === paymentForm.invoiceId);
       if (targetInvoice) {
-        if (amountPaid < targetInvoice.amount) {
-          isPartialPayment = true;
-          remainingAmount = Number((targetInvoice.amount - amountPaid).toFixed(2));
-          const nextVat = Number((remainingAmount * 0.16).toFixed(2));
+        const alreadyPaid = vouchers
+          .filter(v => v.invoiceId === paymentForm.invoiceId && v.status === "Verificado")
+          .reduce((sum, v) => sum + v.amount, 0);
+        const totalPaid = alreadyPaid + amountPaid;
+
+        if (totalPaid >= targetInvoice.amount) {
           onUpdateInvoice({
             ...targetInvoice,
-            amount: remainingAmount,
-            vatAmount: nextVat
-          });
-        } else {
-          onUpdateInvoice({
-            ...targetInvoice,
-            status: "Pagado"
+            status: "Pagado" as const
           });
         }
       }
@@ -215,13 +222,23 @@ export default function CobranzasView({
 
     // 2. Adjust client balances
     let nextSaldoFavor = activeClient.saldoFavor;
-    let nextSaldoDeber = Math.max(0, activeClient.saldoDeber - amountPaid);
+    let nextSaldoDeber = activeClient.saldoDeber;
 
-    // Surplus goes to saldoFavor
-    if (amountPaid > activeClient.saldoDeber) {
-      const excess = amountPaid - activeClient.saldoDeber;
-      nextSaldoFavor += excess;
-      nextSaldoDeber = 0;
+    if (paymentForm.method === "Billetera Virtual B2B") {
+      if (amountPaid > activeClient.saldoFavor) {
+        alert("El saldo a favor disponible es insuficiente para realizar este pago.");
+        return;
+      }
+      nextSaldoFavor = Number((activeClient.saldoFavor - amountPaid).toFixed(2));
+      nextSaldoDeber = Math.max(0, activeClient.saldoDeber - amountPaid);
+    } else {
+      nextSaldoDeber = Math.max(0, activeClient.saldoDeber - amountPaid);
+      // Surplus goes to saldoFavor
+      if (amountPaid > activeClient.saldoDeber) {
+        const excess = amountPaid - activeClient.saldoDeber;
+        nextSaldoFavor += excess;
+        nextSaldoDeber = 0;
+      }
     }
 
     onUpdateClient({
@@ -248,7 +265,7 @@ export default function CobranzasView({
       attachedFile: paymentForm.attachedFile || "comprobante_registrado.jpg"
     };
 
-    setVouchers(prev => [newVoucher, ...prev]);
+    onAddVoucher(newVoucher);
 
     // 4. Create financial collection record invoice (ABO- / FAC- Recibo)
     if (onAddInvoice) {
@@ -273,6 +290,39 @@ export default function CobranzasView({
     }
     setTimeout(() => setStatusMessage(""), 5000);
   };
+
+  const handlePrintReceipt = (vou: PaymentVoucher, clientName: string) => {
+    setSelectedReceiptVoucher({ voucher: vou, clientName });
+  };
+
+  const handleDownloadPdf = async () => {
+    const printContent = document.getElementById("receipt-pdf-content");
+    const root = document.getElementById("root");
+    if (!printContent || !root) return;
+    
+    const clone = printContent.cloneNode(true) as HTMLElement;
+    clone.id = "print-clone";
+    clone.style.position = "absolute";
+    clone.style.top = "0";
+    clone.style.left = "0";
+    clone.style.width = "100%";
+    clone.style.backgroundColor = "white";
+    clone.style.zIndex = "999999";
+    clone.style.padding = "20px";
+    
+    root.style.display = "none";
+    document.body.appendChild(clone);
+    
+    setTimeout(() => {
+      window.print();
+      document.body.removeChild(clone);
+      root.style.display = "";
+    }, 150);
+  };
+
+  const targetInvoiceForModal = selectedReceiptVoucher?.voucher.invoiceId ? invoices.find(inv => inv.id === selectedReceiptVoucher?.voucher.invoiceId) : null;
+  const modalLocator = selectedReceiptVoucher?.voucher.locatorId || (targetInvoiceForModal ? (targetInvoiceForModal.clientName.match(/Localizador\s+([\w\d-]+)/)?.[1] || targetInvoiceForModal.clientName.match(/(RES-\d+)/)?.[1]) : null);
+  const modalReservation = reservations.find(r => r.id === modalLocator);
 
   return (
     <div className="space-y-6 font-sans">
@@ -489,9 +539,9 @@ export default function CobranzasView({
                   >
                     <FileText className="w-4 h-4" /> Facturas Pendientes
                   </button>
-                  <button
+                   <button
                     onClick={() => setActiveTab("comprobantes")}
-                    className={`px-5 py-3.5 transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`px-5 py-3.5 border-r border-zinc-200 transition-all cursor-pointer flex items-center gap-1.5 ${
                       activeTab === "comprobantes" 
                         ? "bg-white text-zinc-955 border-b-2 border-b-zinc-955 font-black" 
                         : "text-zinc-450 hover:text-zinc-805"
@@ -503,6 +553,16 @@ export default function CobranzasView({
                         {pendingVouchersCount}
                       </span>
                     )}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("billetera")}
+                    className={`px-5 py-3.5 transition-all cursor-pointer flex items-center gap-1.5 ${
+                      activeTab === "billetera" 
+                        ? "bg-white text-zinc-955 border-b-2 border-b-zinc-955 font-black" 
+                        : "text-zinc-450 hover:text-zinc-805"
+                    }`}
+                  >
+                    <Wallet className="w-4 h-4" /> Billetera B2B
                   </button>
                 </div>
 
@@ -581,7 +641,22 @@ export default function CobranzasView({
                                         <p>{formatDate(inv.date)}</p>
                                         <p className="text-red-500 font-bold mt-0.5">Vence: {formatDate(inv.dueDate)}</p>
                                       </td>
-                                      <td className="p-3 text-right font-mono font-black text-zinc-900">${inv.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                      <td className="p-3 text-right font-mono font-black">
+                                        {(() => {
+                                          const paid = vouchers
+                                            .filter(v => v.invoiceId === inv.id && v.status === "Verificado")
+                                            .reduce((sum, v) => sum + v.amount, 0);
+                                          const remaining = Math.max(0, inv.amount - paid);
+                                          return (
+                                            <div>
+                                              <span className="text-zinc-950 font-bold block">${remaining.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                                              {paid > 0 && (
+                                                <span className="text-[9px] text-zinc-400 font-medium block">Orig: ${inv.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} (Abono: ${paid.toFixed(2)})</span>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
+                                      </td>
                                       <td className="p-3 text-center">
                                         <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-bold ${
                                           inv.status === "Vencido" 
@@ -609,6 +684,96 @@ export default function CobranzasView({
                         </div>
                       );
                     })()
+                  ) : activeTab === "billetera" ? (
+                    <div className="space-y-6">
+                      <div className="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-950 text-white rounded-2xl p-6 shadow-xl border border-zinc-700/50 flex flex-col justify-between h-48 max-w-md mx-auto">
+                        {/* Chip & Logo */}
+                        <div className="flex justify-between items-start">
+                          <div className="space-y-1 text-left">
+                            <span className="text-[8.5px] uppercase font-bold text-zinc-400 tracking-widest block">Billetera B2B Virtual</span>
+                            <h4 className="font-extrabold text-sm uppercase text-zinc-100">{activeClient.nombre}</h4>
+                          </div>
+                          {/* Simulated Chip */}
+                          <div className="w-9 h-7 bg-amber-400/90 rounded-md border border-amber-300/40 relative overflow-hidden shadow-sm">
+                            <div className="absolute inset-0 grid grid-cols-3 gap-0.5 p-1 opacity-40">
+                              <div className="border border-zinc-950/20" />
+                              <div className="border border-zinc-950/20" />
+                              <div className="border border-zinc-950/20" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Card Number & Balance */}
+                        <div className="space-y-4 text-left">
+                          <div className="flex justify-between items-end">
+                            <div>
+                              <span className="text-[8px] uppercase font-bold text-zinc-550 tracking-wider block">Número de Cuenta</span>
+                              <span className="font-mono text-xs text-zinc-300 font-bold tracking-widest">WLT-{activeClient.id.slice(-6).toUpperCase()}-B2B</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[8px] uppercase font-bold text-zinc-550 tracking-wider block">Saldo Disponible</span>
+                              <span className="font-mono text-xl font-black text-emerald-400 tracking-tight">
+                                +${activeClient.saldoFavor.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border border-zinc-200 rounded-lg overflow-hidden">
+                        <table className="w-full text-xs text-left text-zinc-700">
+                          <thead className="bg-zinc-50 uppercase text-[9.5px] tracking-wider text-zinc-500 font-bold border-b border-zinc-200">
+                            <tr>
+                              <th className="px-4 py-3">ID / Fecha</th>
+                              <th className="px-4 py-3">Localizador</th>
+                              <th className="px-4 py-3">Concepto</th>
+                              <th className="px-4 py-3 text-right">Monto</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-200">
+                            {(() => {
+                              const walletTransactions = reservations
+                                .filter(r => r.agenciaName && r.agenciaName.toLowerCase() === activeClient.nombre.toLowerCase() && r.variaciones)
+                                .flatMap(r => (r.variaciones || []).map(v => ({
+                                  ...v,
+                                  locatorId: r.id
+                                })))
+                                .filter(v => v.type === "Credito" || v.type === "Penalidad");
+
+                              if (walletTransactions.length === 0) {
+                                return (
+                                  <tr>
+                                    <td colSpan={4} className="px-4 py-8 text-center text-zinc-400 font-semibold italic">
+                                      No se registran movimientos en la billetera virtual de esta agencia.
+                                    </td>
+                                  </tr>
+                                );
+                              }
+
+                              return walletTransactions.map((tx, idx) => (
+                                <tr key={tx.id || idx} className="hover:bg-zinc-50/50">
+                                  <td className="px-4 py-3 font-semibold">
+                                    <span className="font-mono text-[10.5px] block text-zinc-900">{tx.id}</span>
+                                    <span className="text-[9px] text-zinc-400 block font-normal">{tx.date}</span>
+                                  </td>
+                                  <td className="px-4 py-3 font-mono font-bold text-blue-900">
+                                    {tx.locatorId}
+                                  </td>
+                                  <td className="px-4 py-3 text-zinc-800 leading-normal font-medium">
+                                    {tx.reason}
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-mono font-extrabold">
+                                    <span className={tx.amountSale <= 0 ? "text-emerald-700" : "text-red-700"}>
+                                      {tx.amountSale <= 0 ? "+" : "-"}${Math.abs(tx.amountSale).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                                    </span>
+                                  </td>
+                                </tr>
+                              ));
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   ) : (
                     // Payment Vouchers list and auditing panel
                     (() => {
@@ -661,6 +826,15 @@ export default function CobranzasView({
                                       </td>
                                       <td className="p-3 text-right">
                                         <div className="flex flex-col items-end gap-1.5">
+                                          {vou.status === "Verificado" && (
+                                            <button
+                                              onClick={() => handlePrintReceipt(vou, activeClient.nombre)}
+                                              className="text-[10.5px] text-zinc-600 hover:text-zinc-900 font-bold font-mono tracking-wider flex items-center justify-end gap-1 cursor-pointer underline decoration-dotted"
+                                              title="Imprimir / Descargar Comprobante PDF"
+                                            >
+                                              <Printer className="w-3.5 h-3.5 text-zinc-500" /> Imprimir Soporte
+                                            </button>
+                                          )}
                                           <button
                                             onClick={() => setSelectedVoucherForPreview(vou)}
                                             className="text-[10px] text-zinc-500 hover:text-zinc-900 font-bold font-mono tracking-wider flex items-center justify-end gap-1 cursor-pointer underline decoration-dotted"
@@ -764,13 +938,24 @@ export default function CobranzasView({
                   <select
                     className="w-full p-2 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
                     value={paymentForm.method}
-                    onChange={(e) => setPaymentForm(prev => ({ ...prev, method: e.target.value }))}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPaymentForm(prev => ({
+                        ...prev,
+                        method: val,
+                        reference: val === "Billetera Virtual B2B" ? `WLT-${activeClient.id}-${Date.now().toString().slice(-6)}` : prev.reference,
+                        bankName: val === "Billetera Virtual B2B" ? "Billetera Virtual" : prev.bankName
+                      }));
+                    }}
                   >
                     <option value="Transferencia Bancaria">Transferencia Bancaria</option>
                     <option value="Zelle">Zelle</option>
                     <option value="Pago Móvil">Pago Móvil</option>
                     <option value="Tarjeta de Crédito">Tarjeta de Crédito</option>
                     <option value="Efectivo USD">Efectivo USD</option>
+                    <option value="Billetera Virtual B2B" disabled={activeClient.saldoFavor <= 0}>
+                      Billetera Virtual B2B (Disp: ${activeClient.saldoFavor.toFixed(2)})
+                    </option>
                   </select>
                 </div>
 
@@ -988,6 +1173,214 @@ export default function CobranzasView({
                   Cerrar Vista
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* RECEIPT MODAL */}
+      {selectedReceiptVoucher && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 font-sans">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-4 border-b border-zinc-200 flex justify-between items-center bg-zinc-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-zinc-900 leading-tight">Comprobante de Pago</h2>
+                  <p className="text-xs text-zinc-500">
+                    {selectedReceiptVoucher.voucher.id}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedReceiptVoucher(null)}
+                className="text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="overflow-y-auto p-6 bg-zinc-100/50 flex-1">
+              <div id="receipt-pdf-content" className="print-receipt bg-white p-5 rounded-lg shadow-sm border border-zinc-200">
+                
+                {/* Header of Receipt */}
+                <div className="border-b-2 border-zinc-900 pb-4 mb-4">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded bg-zinc-955 text-white flex items-center justify-center font-black text-lg flex-shrink-0">
+                        {companyConfig.logoLetter}
+                      </div>
+                      <div>
+                        <h1 className="text-2xl font-black tracking-tight text-zinc-955 uppercase leading-none">{companyConfig.name}</h1>
+                        <p className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider mt-1">{companyConfig.subtitle}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="inline-block px-3 py-1 bg-blue-100 font-mono font-black text-xl text-blue-900 rounded tracking-wider border border-blue-200">
+                        {modalLocator ? modalLocator : "PAGO GENERAL"}
+                      </div>
+                      <p className="text-xs font-bold text-zinc-400 mt-2 uppercase tracking-wider">
+                        Ref. Caja: {selectedReceiptVoucher.voucher.id}
+                      </p>
+                      <p className="text-sm font-medium text-zinc-500 mt-1">
+                        Fecha: {new Date(selectedReceiptVoucher.voucher.date + 'T00:00:00').toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Info Grid */}
+                {(() => {
+                  if (!modalReservation && !targetInvoiceForModal) return null;
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                      {modalReservation && (
+                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex justify-between items-center">
+                          <div>
+                            <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Valor Total del Expediente</p>
+                            <p className="text-lg font-black text-blue-900">${modalReservation.totalPrice.toLocaleString('es-ES', { minimumFractionDigits: 2 })} USD</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Estado de la Reserva</p>
+                            <p className="text-xs font-bold text-blue-900 uppercase">{modalReservation.status}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {targetInvoiceForModal && (
+                        <div className="bg-purple-50 border border-purple-100 rounded-lg p-3 flex justify-between items-center">
+                          <div>
+                            <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-1">Valor Total de Factura</p>
+                            <p className="text-lg font-black text-purple-900">${targetInvoiceForModal.amount.toLocaleString('es-ES', { minimumFractionDigits: 2 })} USD</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-1">Código Factura</p>
+                            <p className="text-xs font-mono font-bold text-purple-900 uppercase">{targetInvoiceForModal.id}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+                
+                <div className="grid grid-cols-2 gap-6 mb-4 text-sm">
+                  <div>
+                    <h3 className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] mb-2">Recibimos de:</h3>
+                    <p className="font-bold text-zinc-900 text-base">{selectedReceiptVoucher.clientName.split(' - ')[0] || selectedReceiptVoucher.voucher.clientName}</p>
+                    <p className="text-zinc-600 mt-1">Ref. Pago: {selectedReceiptVoucher.voucher.reference}</p>
+                    {selectedReceiptVoucher.voucher.bankName && (
+                      <p className="text-zinc-600">Banco: {selectedReceiptVoucher.voucher.bankName}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <h3 className="font-bold text-zinc-400 uppercase tracking-wider text-[10px] mb-2">Referencia de Expediente:</h3>
+                    <p className="font-black text-blue-600 text-xl tracking-wider">
+                      {selectedReceiptVoucher.voucher.locatorId || (targetInvoiceForModal ? (targetInvoiceForModal.clientName.match(/Localizador\s+([\w\d-]+)/)?.[1] || targetInvoiceForModal.clientName.match(/(RES-\d+)/)?.[1]) : "Pago General")}
+                    </p>
+                    <p className="text-zinc-500 font-medium mt-1">Método: {selectedReceiptVoucher.voucher.method}</p>
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <div className="bg-zinc-50 rounded-lg p-4 mb-5 flex justify-between items-center border border-zinc-100">
+                  <div className="text-zinc-500 font-bold uppercase tracking-wider text-xs">Monto Total Recibido</div>
+                  <div className="text-3xl font-black text-emerald-600">
+                    ${selectedReceiptVoucher.voucher.amount.toLocaleString('es-ES', { minimumFractionDigits: 2 })} USD
+                  </div>
+                </div>
+
+                {/* Notes and Summary */}
+                {selectedReceiptVoucher.voucher.notes && (
+                  <div className="mb-4">
+                    <h3 className="font-bold text-zinc-800 border-b border-zinc-200 pb-1 mb-2">Resumen de Transacción</h3>
+                    {(() => {
+                       const match = selectedReceiptVoucher.voucher.notes.match(/\[RESUMEN\] (?:Deuda Original|Saldo Anterior): \$?([\d.]+) \| Pago: \$?([\d.]+) \| (?:Deuda Restante|Nuevo Saldo): \$?([\d.]+) \| Saldo a Favor Generado: \$?([\d.]+)/);
+                       if (match) {
+                         return (
+                           <div className="bg-zinc-50 rounded p-3 text-sm font-mono space-y-1.5 border border-zinc-200">
+                             <div className="flex justify-between"><span className="text-zinc-500">Saldo Anterior:</span> <span className="font-bold text-zinc-900">${Number(match[1]).toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span></div>
+                             <div className="flex justify-between"><span className="text-zinc-500">Monto Pagado:</span> <span className="font-bold text-zinc-900">${Number(match[2]).toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span></div>
+                             <div className="flex justify-between"><span className="text-zinc-500">Nuevo Saldo:</span> <span className="font-bold text-zinc-900">${Number(match[3]).toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span></div>
+                             <div className="flex justify-between pt-2 border-t border-zinc-200 mt-2"><span className="text-emerald-600 font-bold">Saldo a Favor Generado:</span> <span className="font-black text-emerald-600">${Number(match[4]).toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span></div>
+                           </div>
+                         );
+                       }
+                       return <p className="text-sm text-zinc-600 italic">{selectedReceiptVoucher.voucher.notes}</p>;
+                    })()}
+                  </div>
+                )}
+
+                {/* Payment History */}
+                {selectedReceiptVoucher.voucher.invoiceId && (
+                  <div className="mb-4">
+                    <h3 className="font-bold text-zinc-800 border-b border-zinc-200 pb-1 mb-2">Historial de Pagos de la Reserva</h3>
+                    <div className="overflow-hidden rounded border border-zinc-200">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-zinc-50 text-zinc-500">
+                          <tr>
+                            <th className="p-1 font-bold uppercase tracking-wider">Fecha</th>
+                            <th className="p-1 font-bold uppercase tracking-wider">Comprobante</th>
+                            <th className="p-1 font-bold uppercase tracking-wider">Método</th>
+                            <th className="p-1 font-bold uppercase tracking-wider text-right">Monto</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100 font-mono">
+                          {vouchers
+                            .filter(v => v.invoiceId === selectedReceiptVoucher.voucher.invoiceId)
+                            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                            .map((v, i) => (
+                            <tr key={v.id} className={v.id === selectedReceiptVoucher.voucher.id ? "bg-emerald-50/50" : ""}>
+                              <td className="p-1 text-zinc-600">{new Date(v.date + 'T00:00:00').toLocaleDateString('es-ES')}</td>
+                              <td className="p-1 font-bold text-zinc-900">
+                                {v.id}
+                                {v.id === selectedReceiptVoucher.voucher.id && <span className="ml-2 text-[9px] bg-emerald-100 text-emerald-700 px-1 rounded-sm uppercase tracking-wider font-bold">Actual</span>}
+                              </td>
+                              <td className="p-1 text-zinc-600">{v.method}</td>
+                              <td className="p-1 text-right font-bold text-emerald-600">${v.amount.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Footer Stamp */}
+                <div className="mt-4 pt-4 border-t border-zinc-200 text-center text-[10px] text-zinc-400 font-medium">
+                  Este documento es un comprobante de pago generado electrónicamente y no requiere firma autógrafa.
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="p-4 border-t border-zinc-200 flex justify-end gap-3 bg-white">
+              <button
+                onClick={() => setSelectedReceiptVoucher(null)}
+                className="px-4 py-2 border border-zinc-200 text-zinc-600 rounded font-bold text-xs uppercase tracking-wider hover:bg-zinc-50 transition-colors"
+                disabled={isGeneratingPdf}
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={handleDownloadPdf}
+                disabled={isGeneratingPdf}
+                className="px-6 py-2 bg-zinc-900 text-white rounded font-bold text-xs uppercase tracking-wider hover:bg-zinc-800 transition-colors flex items-center gap-2"
+              >
+                {isGeneratingPdf ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Generando PDF...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4" />
+                    Imprimir / PDF
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

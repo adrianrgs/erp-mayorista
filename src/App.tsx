@@ -1,7 +1,29 @@
+import { FlightTicket } from "./types/aereos";
 import React, { useState } from "react";
-import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, FinancialInvoice, B2BClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement } from "./types";
-import { Property, RoomType, RatePlan, StopSale } from "./types/producto";
-import type { FlightTicket } from "./types/aereos";
+import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, OperationalTransfer, mapToOperationalTransfer, mapToTransferService, FinancialInvoice, B2BClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement, PaymentVoucher, CompanyConfig } from "./types";
+import { Property, RoomType, RatePlan, StopSale, ExtraService, ServiceRate } from "./types/producto";
+
+import { 
+  listReservations, insertReservation, updateReservation, deleteReservation,
+  listClients, insertClient, 
+  listInvoices, insertInvoice,
+  listDetailedProperties, insertDetailedProperty, updateDetailedProperty, deleteDetailedProperty,
+  listRoomTypes, insertRoomType, updateRoomType, deleteRoomType,
+  listRatePlans, insertRatePlan, updateRatePlan, deleteRatePlan,
+  listStopSales, insertStopSale, updateStopSale, deleteStopSale,
+  listFlightTickets, insertFlightTicket, updateFlightTicket, deleteFlightTicket,
+  listTransferServices, insertTransferService, updateTransferService, deleteTransferService,
+  listFleetVehicles, insertFleetVehicle, updateFleetVehicle, deleteFleetVehicle,
+  listFleetDrivers, insertFleetDriver, updateFleetDriver, deleteFleetDriver,
+  listPaymentVouchers, insertPaymentVoucher, updatePaymentVoucher,
+  listExtraServices, insertExtraService, updateExtraService, deleteExtraService,
+  listServiceRates, insertServiceRate, updateServiceRate, deleteServiceRate,
+  updateInvoice, updateClient,
+  listPayableObligations, insertPayableObligation, updatePayableObligation, deletePayableObligation,
+  listProviderStatements, insertProviderStatement, deleteProviderStatement
+} from "@foratour-erp/dataconnect";
+import { dataConnect } from "./lib/firebase";
+
 import { 
   initialProperties, 
   initialReservas, 
@@ -27,6 +49,13 @@ import ClientesView from "./views/ClientesView";
 import FacturacionView from "./views/FacturacionView";
 import CobranzasView from "./views/CobranzasView";
 import CuentasPorPagarView from "./views/CuentasPorPagarView";
+import ConfiguracionView from "./views/ConfiguracionView";
+import { reconcileDossierUpdate } from "./lib/financialReconciler";
+
+import ServiciosView from "./views/ServiciosView";
+import BuscadorGlobalView from "./views/BuscadorGlobalView";
+import { ChevronDown, Search, Box, Activity, Receipt, CreditCard, ArrowDownRight } from "lucide-react";
+
 
 import { 
   Building2, 
@@ -65,6 +94,29 @@ export default function App() {
   const [clients, setClients] = useState<B2BClient[]>(initialClients);
   const [exchangeRates, setExchangeRates] = useState({ usdToEur: 0.92, usdToVes: 45.50 });
 
+  const [companyConfig, setCompanyConfig] = useState<CompanyConfig>(() => {
+    const saved = localStorage.getItem("company_config");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return {
+      name: "Foratour Wholesale",
+      subtitle: "OPERADOR MAYORISTA DE TURISMO",
+      rif: "J-30495810-9",
+      address: "Av. Francisco de Miranda, Edif. Parque Cristal, Piso 8",
+      phone: "+58 (212) 285-4521",
+      email: "administracion@foratour-erp.com",
+      logoLetter: "F"
+    };
+  });
+
+  const handleUpdateCompanyConfig = (updated: CompanyConfig) => {
+    setCompanyConfig(updated);
+    localStorage.setItem("company_config", JSON.stringify(updated));
+  };
+
   const [detailedProperties, setDetailedProperties] = useState<Property[]>(initialDetailedProperties);
   const [roomTypes, setRoomTypes] = useState<RoomType[]>(initialRoomTypes);
   const [ratePlans, setRatePlans] = useState<RatePlan[]>(initialRatePlans);
@@ -76,30 +128,192 @@ export default function App() {
 
   // Accounts Payable state
   const [payableObligations, setPayableObligations] = useState<PayableObligation[]>(initialPayableObligations);
+  const [vouchers, setVouchers] = useState<PaymentVoucher[]>([]);
+  const [extraServices, setExtraServices] = useState<ExtraService[]>([]);
+  const [serviceRates, setServiceRates] = useState<ServiceRate[]>([]);
+
   const [providerStatements, setProviderStatements] = useState<ProviderStatement[]>(initialProviderStatements);
 
-  const handleUpdateObligation = (updated: PayableObligation) => {
+  const handleUpdateObligation = async (updated: any) => {
+    updated.updatedAt = new Date().toISOString();
     setPayableObligations(prev => prev.map(o => o.id === updated.id ? updated : o));
+    try {
+      await updatePayableObligation(dataConnect, {
+        id: updated.id,
+        dueDate: updated.dueDate,
+        providerName: updated.providerName,
+        serviceDetail: updated.serviceDetail,
+        locatorId: updated.locatorId,
+        netCost: updated.netCost,
+        paidAmount: updated.paidAmount,
+        status: updated.status,
+        paymentMethod: updated.paymentMethod,
+        reference: updated.reference,
+        notes: updated.notes,
+        date: updated.date,
+        currency: updated.currency,
+        attachedFile: updated.attachedFile,
+        updatedAt: updated.updatedAt
+      });
+    } catch (e) {
+      console.error("Failed to update obligation", e);
+    }
   };
 
-  const handleAddPayableObligation = (newObligation: PayableObligation) => {
+  const handleAddPayableObligation = async (newObligation: any) => {
+    newObligation.updatedAt = new Date().toISOString();
     setPayableObligations(prev => [newObligation, ...prev]);
+    try {
+      await insertPayableObligation(dataConnect, {
+        id: newObligation.id,
+        dueDate: newObligation.dueDate,
+        providerName: newObligation.providerName,
+        serviceDetail: newObligation.serviceDetail,
+        locatorId: newObligation.locatorId,
+        netCost: newObligation.netCost,
+        paidAmount: newObligation.paidAmount,
+        status: newObligation.status,
+        paymentMethod: newObligation.paymentMethod,
+        reference: newObligation.reference,
+        notes: newObligation.notes,
+        date: newObligation.date,
+        currency: newObligation.currency,
+        attachedFile: newObligation.attachedFile,
+        updatedAt: newObligation.updatedAt
+      });
+    } catch (e) {
+      console.error("Failed to insert obligation", e);
+    }
   };
 
-  const handleAddStatement = (newDoc: ProviderStatement) => {
+  const handleAddStatement = async (newDoc: any) => {
+    newDoc.updatedAt = new Date().toISOString();
     setProviderStatements(prev => [newDoc, ...prev]);
+    try {
+      await insertProviderStatement(dataConnect, {
+        id: newDoc.id,
+        providerName: newDoc.providerName,
+        date: newDoc.date,
+        type: newDoc.type,
+        amount: newDoc.amount,
+        reference: newDoc.reference,
+        status: newDoc.status,
+        updatedAt: newDoc.updatedAt
+      });
+    } catch (e) {
+      console.error("Failed to insert statement", e);
+    }
   };
 
-  // Selector for showing Literal Next.js Phase 0 empty placeholders vs Interactive fully-realized previews
-  const [isFase0SkeletonView, setIsFase0SkeletonView] = useState<boolean>(false);
+
+
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({ comercial: true, operaciones: true, finanzas: true });
+  const toggleMenu = (key: string) => setExpandedMenus(p => ({ ...p, [key]: !p[key] }));
+
+
+  React.useEffect(() => {
+    async function loadData() {
+      try {
+        const res = await listReservations(dataConnect);
+        if (res.data.reservations.length > 0) setReservations(res.data.reservations);
+        const cli = await listClients(dataConnect);
+        if (cli.data.b2BClients.length > 0) setClients(cli.data.b2BClients);
+        const inv = await listInvoices(dataConnect);
+        if (inv.data.financialInvoices.length > 0) setInvoices(inv.data.financialInvoices);
+        const props = await listDetailedProperties(dataConnect);
+        if (props.data.detailedProperties.length > 0) setDetailedProperties(props.data.detailedProperties);
+        const rooms = await listRoomTypes(dataConnect);
+        if (rooms.data.roomTypes.length > 0) {
+          setRoomTypes(rooms.data.roomTypes.map((r: any) => ({
+            ...r,
+            property_id: r.propertyId
+          })));
+        }
+        const rates = await listRatePlans(dataConnect);
+        if (rates.data.ratePlans.length > 0) {
+          setRatePlans(rates.data.ratePlans.map((rp: any) => ({
+            ...rp,
+            property_id: rp.propertyId,
+            roomType_id: rp.roomTypeId
+          })));
+        }
+        const stops = await listStopSales(dataConnect);
+        if (stops.data.stopSales.length > 0) {
+          setStopSales(stops.data.stopSales.map((s: any) => ({
+            ...s,
+            property_id: s.propertyId
+          })));
+        }
+        const tickets = await listFlightTickets(dataConnect);
+        if (tickets.data.flightTickets.length > 0) setBoletos(tickets.data.flightTickets);
+        const trans = await listTransferServices(dataConnect);
+        if (trans.data.transferServices.length > 0) setTransfers(trans.data.transferServices);
+        const veh = await listFleetVehicles(dataConnect);
+        if (veh.data.fleetVehicles.length > 0) setFleetVehicles(veh.data.fleetVehicles);
+        const dri = await listFleetDrivers(dataConnect);
+        if (dri.data.fleetDrivers.length > 0) setFleetDrivers(dri.data.fleetDrivers);
+        const vou = await listPaymentVouchers(dataConnect);
+        if (vou.data.paymentVouchers.length > 0) setVouchers(vou.data.paymentVouchers);
+        const ext = await listExtraServices(dataConnect);
+        if (ext.data.extraServices.length > 0) setExtraServices(ext.data.extraServices);
+        const srv = await listServiceRates(dataConnect);
+        if (srv.data.serviceRates.length > 0) setServiceRates(srv.data.serviceRates);
+        const obs = await listPayableObligations(dataConnect);
+        if (obs.data.payableObligations.length > 0) setPayableObligations(obs.data.payableObligations);
+        const stm = await listProviderStatements(dataConnect);
+        if (stm.data.providerStatements.length > 0) setProviderStatements(stm.data.providerStatements);
+      } catch (err) {
+        console.error("Failed to load Firebase data", err);
+      }
+    }
+    loadData();
+  }, []);
+
 
   // Trigger cross-view state propagation
-  const handleUpdateProperty = (updated: HotelProperty) => {
+  const handleUpdateProperty = async (updated: any) => {
+    updated.updatedAt = new Date().toISOString();
     setProperties(prev => prev.map(p => p.id === updated.id ? updated : p));
   };
 
-  const handleAddReservation = (newRes: Reservation) => {
+  const handleDeleteReservation = async (id: string) => { setReservations(prev => prev.filter(r => r.id !== id)); try { await deleteReservation(dataConnect, { id }); } catch (e) {} };
+  const handleAddReservation = async (newRes: any) => {
+    newRes.updatedAt = new Date().toISOString();
     setReservations(prev => [newRes, ...prev]);
+
+    try {
+      await insertReservation(dataConnect, {
+        id: newRes.id,
+        holder: newRes.holder,
+        hotelName: newRes.hotelName,
+        checkIn: newRes.checkIn,
+        checkOut: newRes.checkOut,
+        pax: newRes.pax,
+        status: newRes.status,
+        totalPrice: newRes.totalPrice,
+        netPrice: newRes.netPrice,
+        agenciaName: newRes.agenciaName,
+        tipo: newRes.tipo,
+        servicios: newRes.servicios ? JSON.parse(JSON.stringify(newRes.servicios)) : null,
+        telefono: newRes.telefono,
+        email: newRes.email,
+        flightNo: newRes.flightNo,
+        specialRequests: newRes.specialRequests,
+        mercado: newRes.mercado,
+        createdAt: newRes.createdAt,
+        comprobanteRef: newRes.comprobanteRef,
+        comprobanteMonto: newRes.comprobanteMonto,
+        comprobanteMetodo: newRes.comprobanteMetodo,
+        facturacionTipo: newRes.facturacionTipo,
+        facturacionRechazoMotivo: newRes.facturacionRechazoMotivo,
+        facturacionRechazoArchivos: newRes.facturacionRechazoArchivos,
+        variaciones: newRes.variaciones ? JSON.parse(JSON.stringify(newRes.variaciones)) : null,
+        updatedAt: newRes.updatedAt
+      });
+    } catch (e) {
+      console.error("[DB] Failed to insert reservation:", e);
+      alert(`Error al guardar expediente: ${(e as any)?.message || e}`);
+    }
 
     // Only run side-effects for Real Bookings (tipo is NOT "Cotización")
     if (newRes.tipo !== "Cotización") {
@@ -133,119 +347,580 @@ export default function App() {
     }
   };
 
-  const handleUpdateReservation = (updatedRes: Reservation) => {
-    setReservations(prev => prev.map(r => r.id === updatedRes.id ? updatedRes : r));
+  const handleUpdateReservation = async (updatedRes: any) => {
+    updatedRes.updatedAt = new Date().toISOString();
+    
+    // Find the old reservation before update
+    const oldRes = reservations.find(r => r.id === updatedRes.id);
+    let finalRes = updatedRes;
 
-    // Propagar cambios a Facturas asociadas (solo facturas de cobro normales con prefijo FAC-, no notas de crédito NC- ni abonos ABO-)
-    setInvoices(prev => prev.map(inv => {
-      if (inv.clientName.includes(`Localizador ${updatedRes.id}`) && inv.id.startsWith("FAC-")) {
-        return {
-          ...inv,
-          amount: updatedRes.totalPrice,
-          vatAmount: Math.round(updatedRes.totalPrice * 0.16),
-          dueDate: updatedRes.checkIn
-        };
+    // Detect if this is a billing-only update (statusFacturacion change, no structural changes)
+    // In that case, skip the reconciler to avoid duplicate financial side-effects
+    const isBillingOnlyUpdate = updatedRes.__billingOnly === true;
+    delete updatedRes.__billingOnly;
+
+    if (oldRes && !isBillingOnlyUpdate) {
+      // Run the financial lifecycle reconciler
+      const result = reconcileDossierUpdate(oldRes, updatedRes, clients, payableObligations);
+      finalRes = result.updatedRes;
+
+      // 1. Update B2B Client if changed
+      if (result.updatedClient) {
+        const client = result.updatedClient;
+        setClients(prev => prev.map(c => c.id === client.id ? client : c));
+        try {
+          await updateClient(dataConnect, {
+            id: client.id,
+            nombre: client.nombre,
+            rif: client.rif,
+            tipo: client.tipo,
+            status: client.status,
+            contactoNombre: client.contactoNombre,
+            email: client.email,
+            telefono: client.telefono,
+            saldoFavor: client.saldoFavor,
+            saldoDeber: client.saldoDeber,
+            moroso: client.moroso,
+            limiteCredito: client.limiteCredito,
+            diasCredito: client.diasCredito,
+            observaciones: client.observaciones,
+            updatedAt: new Date().toISOString()
+          });
+        } catch (err) {
+          console.error("Failed to sync client balances to DB", err);
+        }
       }
-      return inv;
-    }));
+
+      // 2. Update/Insert Payable Obligations if changed
+      if (result.updatedPayableObligations.length > 0) {
+        setPayableObligations(result.updatedPayableObligations);
+        
+        // Find which obligations are new or updated
+        for (const obl of result.updatedPayableObligations) {
+          const oldObl = payableObligations.find(o => o.id === obl.id);
+          if (!oldObl) {
+            // It's a new obligation!
+            try {
+              await insertPayableObligation(dataConnect, {
+                id: obl.id,
+                dueDate: obl.dueDate,
+                providerName: obl.providerName,
+                serviceDetail: obl.serviceDetail,
+                locatorId: obl.locatorId,
+                netCost: obl.netCost,
+                paidAmount: obl.paidAmount,
+                status: obl.status,
+                paymentMethod: obl.paymentMethod || undefined,
+                reference: obl.reference || undefined,
+                notes: obl.notes || undefined,
+                date: obl.date || undefined,
+                currency: obl.currency || undefined,
+                attachedFile: obl.attachedFile || undefined,
+                updatedAt: new Date().toISOString()
+              });
+            } catch (err) {
+              console.error("Failed to insert new payable obligation to DB", err);
+            }
+          } else if (
+            oldObl.status !== obl.status ||
+            oldObl.netCost !== obl.netCost ||
+            oldObl.notes !== obl.notes
+          ) {
+            // It was modified/frozen!
+            try {
+              await updatePayableObligation(dataConnect, {
+                id: obl.id,
+                dueDate: obl.dueDate,
+                providerName: obl.providerName,
+                serviceDetail: obl.serviceDetail,
+                locatorId: obl.locatorId,
+                netCost: obl.netCost,
+                paidAmount: obl.paidAmount,
+                status: obl.status,
+                paymentMethod: obl.paymentMethod || undefined,
+                reference: obl.reference || undefined,
+                notes: obl.notes || undefined,
+                date: obl.date || undefined,
+                currency: obl.currency || undefined,
+                attachedFile: obl.attachedFile || undefined,
+                updatedAt: new Date().toISOString()
+              });
+            } catch (err) {
+              console.error("Failed to update payable obligation in DB", err);
+            }
+          }
+        }
+      }
+
+      // Print reconciler logs for audit trail
+      if (result.log.length > 0) {
+        console.log("--- HISTORIAL DE CONCILIACIÓN FINANCIERA ---");
+        result.log.forEach(l => console.log(l));
+      }
+    }
+
+    setReservations(prev => prev.map(r => r.id === finalRes.id ? finalRes : r));
+
+    try {
+      await updateReservation(dataConnect, {
+        id: finalRes.id,
+        holder: finalRes.holder,
+        hotelName: finalRes.hotelName,
+        checkIn: finalRes.checkIn,
+        checkOut: finalRes.checkOut,
+        pax: finalRes.pax,
+        status: finalRes.status,
+        totalPrice: finalRes.totalPrice,
+        netPrice: finalRes.netPrice,
+        agenciaName: finalRes.agenciaName,
+        tipo: finalRes.tipo,
+        servicios: finalRes.servicios ? JSON.parse(JSON.stringify(finalRes.servicios)) : null,
+        telefono: finalRes.telefono,
+        email: finalRes.email,
+        flightNo: finalRes.flightNo,
+        specialRequests: finalRes.specialRequests,
+        mercado: finalRes.mercado,
+        createdAt: finalRes.createdAt,
+        comprobanteRef: finalRes.comprobanteRef,
+        comprobanteMonto: finalRes.comprobanteMonto,
+        comprobanteMetodo: finalRes.comprobanteMetodo,
+        facturacionTipo: finalRes.facturacionTipo,
+        facturacionRechazoMotivo: finalRes.facturacionRechazoMotivo,
+        facturacionRechazoArchivos: finalRes.facturacionRechazoArchivos,
+        variaciones: finalRes.variaciones ? JSON.parse(JSON.stringify(finalRes.variaciones)) : null,
+        updatedAt: finalRes.updatedAt
+      });
+      console.log(`[DB] Reservation ${finalRes.id} saved. facturacionTipo=${finalRes.facturacionTipo}, servicios statusList=[${(finalRes.servicios||[]).map((s:any)=>s.statusFacturacion).join(',')}]`);
+    } catch (e) {
+      console.error("[DB] Failed to update reservation:", e);
+      alert(`Error al guardar expediente: ${(e as any)?.message || e}`);
+    }
 
     // Propagar cambios a Traslados asociados
     setTransfers(prev => prev.map(t => {
-      const oldRes = reservations.find(r => r.id === updatedRes.id);
-      if (oldRes && (t.leadPassenger === oldRes.holder || t.dropoffLocation === oldRes.hotelName)) {
+      const oldResVal = reservations.find(r => r.id === finalRes.id);
+      if (oldResVal && (t.leadPassenger === oldResVal.holder || t.dropoffLocation === oldResVal.hotelName)) {
         return {
           ...t,
-          leadPassenger: updatedRes.holder,
-          paxCount: updatedRes.pax,
-          date: updatedRes.checkIn,
-          dropoffLocation: updatedRes.hotelName,
-          vehicleType: updatedRes.pax > 4 ? "Minivan de Línea" : "Berlina Ejecutiva"
+          leadPassenger: finalRes.holder,
+          paxCount: finalRes.pax,
+          date: finalRes.checkIn,
+          dropoffLocation: finalRes.hotelName,
+          vehicleType: finalRes.pax > 4 ? "Minivan de Línea" : "Berlina Ejecutiva"
         };
       }
       return t;
     }));
   };
 
-  const handleUpdateTransfer = (updated: TransferService) => {
-    setTransfers(prev => prev.map(t => t.id === updated.id ? updated : t));
-  };
+  
+  const operacionesTraslados = transfers.map(t => mapToOperationalTransfer(t));
 
-  const handleUpdateVehicle = (updated: FleetVehicle) => {
-    setFleetVehicles(prev => prev.map(v => v.id === updated.id ? updated : v));
-  };
-
-  const handleAddVehicle = (newV: FleetVehicle) => {
-    setFleetVehicles(prev => [newV, ...prev]);
-  };
-
-  const handleUpdateDriver = (updated: FleetDriver) => {
-    setFleetDrivers(prev => prev.map(d => d.id === updated.id ? updated : d));
-  };
-
-  const handleAddDriver = (newD: FleetDriver) => {
-    setFleetDrivers(prev => [newD, ...prev]);
-  };
-
-  const handleUpdateInvoice = (updated: FinancialInvoice) => {
-    setInvoices(prev => prev.map(i => i.id === updated.id ? updated : i));
-  };
-
-  const handleAddInvoice = (newInv: FinancialInvoice) => {
-    setInvoices(prev => [newInv, ...prev]);
-  };
-
-  const handleUpdateClient = (updated: B2BClient) => {
-    setClients(prev => prev.map(c => c.id === updated.id ? updated : c));
-  };
-
-  const handleAddClient = (newClient: B2BClient) => {
-    setClients(prev => [newClient, ...prev]);
-  };
-
-  // Helper title strings for literal Next.js files preview matching
-  const getSectionTitle = () => {
-    switch (currentSection) {
-      case ProjectView.PROPIEDADES:
-        return "Módulo de Propiedades y Tarifas - Dpto. Producto";
-      case ProjectView.RESERVAS:
-        return "Módulo de Reservas - Dpto. Reservas";
-      case ProjectView.VUELOS:
-        return "Módulo de Vuelos - Dpto. Aéreos";
-      case ProjectView.OPERACIONES:
-        return "Módulo de Operaciones Terrestres - Dpto. Operaciones";
-      case ProjectView.ADMINISTRACION:
-        return "Módulo de Administración y Finanzas - Dpto. Administración";
-      case ProjectView.CLIENTES:
-        return "Módulo B2B de Clientes y Agencias - Dpto. Ventas";
-      case ProjectView.FACTURACION:
-        return "Módulo de Facturación - Dpto. Facturación";
-      case ProjectView.COBRANZAS:
-        return "Módulo de Cuentas por Cobrar - Dpto. Tesorería";
-      case ProjectView.CUENTAS_PAGAR:
-        return "Módulo de Cuentas por Pagar - Dpto. Tesorería y Pagos";
+  const handleUpdateTransfer = async (updated: OperationalTransfer) => {
+    const ts = mapToTransferService(updated);
+    const existing = transfers.find(t => t.id === updated.id);
+    if (existing) {
+      setTransfers(prev => prev.map(t => t.id === updated.id ? ts : t));
+      try { await updateTransferService(dataConnect, { ...ts }); } catch (e) {}
+    } else {
+      setTransfers(prev => [...prev, ts]);
+      try { await insertTransferService(dataConnect, { ...ts }); } catch (e) {}
     }
   };
 
-  const getSectionDescription = () => {
-    switch (currentSection) {
-      case ProjectView.PROPIEDADES:
-        return "Este es el lienzo en blanco para la gestión de hoteles, inventario de habitaciones, tarifas dinámicas y contratos de alojamiento de Foratour ERP. Aquí se configurará la arquitectura de datos y la sincronización con el Channel Manager.";
-      case ProjectView.RESERVAS:
-        return "Este es el lienzo en blanco para la gestión de expedientes, estados de pago y asignación de peticiones especiales. Aquí se procesarán las solicitudes y cotizaciones personalizadas de los clientes.";
-      case ProjectView.VUELOS:
-        return "Este es el lienzo en blanco para la gestión de conectores GDS (Sabre, Amadeus), bloqueos, cupos de asientos y tarifas aéreas tanto regulares como de charters.";
-      case ProjectView.OPERACIONES:
-        return "Este es el lienzo en blanco para la gestión y despacho de traslados, asignación de guías turísticos, itinerarios de viaje diarios, vehículos y servicios locales receptivos.";
-      case ProjectView.ADMINISTRACION:
-        return "Este es el lienzo en blanco para la facturación, cuentas por cobrar y pagar, balances, cuentas de proveedores locales (DMCs) y conciliaciones bancarias automatizadas.";
-      case ProjectView.CLIENTES:
-        return "Este es el lienzo para la gestión de agencias de viajes minoristas, freelancers, cuentas a crédito, límites de financiamiento, estados de mora y balances comerciales.";
-      case ProjectView.FACTURACION:
-        return "Este es el lienzo de trabajo del departamento de facturación y cobranzas. Aquí se consolidan las facturas de expedientes y servicios adicionales emitidos a agencias B2B.";
-      case ProjectView.COBRANZAS:
-        return "Este es el espacio de control de cuentas por cobrar, gestión de deudas activas de agencias, conciliación bancaria y validación de comprobantes de pago de Foratour ERP.";
-      case ProjectView.CUENTAS_PAGAR:
-        return "Este es el lienzo de trabajo para el control de deudas netas de servicios, conciliaciones con proveedores locales, hoteles y aerolíneas, y la emisión de transferencias bancarias de egresos.";
+  const handleUpdateVehicle = async (updated: any) => {
+    updated.updatedAt = new Date().toISOString();
+    setFleetVehicles(prev => prev.map(v => v.id === updated.id ? updated : v));
+    try {
+      await updateFleetVehicle(dataConnect, {
+        id: updated.id,
+        placa: updated.placa,
+        tipo: updated.tipo,
+        marca: updated.marca,
+        modelo: updated.modelo,
+        capacidad: updated.capacidad,
+        proveedor: updated.proveedor,
+        status: updated.status,
+        conductorAsignadoId: updated.conductorAsignadoId,
+        observaciones: updated.observaciones,
+        updatedAt: updated.updatedAt
+      });
+    } catch (e) {
+      console.error("Failed to update vehicle", e);
+    }
+  };
+
+  const handleAddVehicle = async (newV: any) => {
+    newV.updatedAt = new Date().toISOString();
+    setFleetVehicles(prev => [newV, ...prev]);
+    try {
+      await insertFleetVehicle(dataConnect, {
+        id: newV.id,
+        placa: newV.placa,
+        tipo: newV.tipo,
+        marca: newV.marca,
+        modelo: newV.modelo,
+        capacidad: newV.capacidad,
+        proveedor: newV.proveedor,
+        status: newV.status,
+        conductorAsignadoId: newV.conductorAsignadoId,
+        observaciones: newV.observaciones,
+        updatedAt: newV.updatedAt
+      });
+    } catch (e) {
+      console.error("Failed to insert vehicle", e);
+    }
+  };
+
+  const handleUpdateDriver = async (updated: any) => {
+    updated.updatedAt = new Date().toISOString();
+    setFleetDrivers(prev => prev.map(d => d.id === updated.id ? updated : d));
+    try {
+      await updateFleetDriver(dataConnect, {
+        id: updated.id,
+        nombre: updated.nombre,
+        telefono: updated.telefono,
+        licencia: updated.licencia,
+        vehiculoAsignadoId: updated.vehiculoAsignadoId,
+        status: updated.status,
+        observaciones: updated.observaciones,
+        updatedAt: updated.updatedAt
+      });
+    } catch (e) {
+      console.error("Failed to update driver", e);
+    }
+  };
+
+  const handleAddDriver = async (newD: any) => {
+    newD.updatedAt = new Date().toISOString();
+    setFleetDrivers(prev => [newD, ...prev]);
+    try {
+      await insertFleetDriver(dataConnect, {
+        id: newD.id,
+        nombre: newD.nombre,
+        telefono: newD.telefono,
+        licencia: newD.licencia,
+        vehiculoAsignadoId: newD.vehiculoAsignadoId,
+        status: newD.status,
+        observaciones: newD.observaciones,
+        updatedAt: newD.updatedAt
+      });
+    } catch (e) {
+      console.error("Failed to insert driver", e);
+    }
+  };
+
+  const handleUpdateInvoice = async (updated: any) => {
+    updated.updatedAt = new Date().toISOString();
+    setInvoices(prev => prev.map(i => i.id === updated.id ? updated : i));
+    try {
+      await updateInvoice(dataConnect, {
+        id: updated.id,
+        amount: updated.amount,
+        vatAmount: updated.vatAmount,
+        status: updated.status,
+        updatedAt: updated.updatedAt
+      });
+    } catch (e) {
+      console.error("Failed to update invoice", e);
+    }
+  };
+
+  const handleAddInvoice = async (newInv: any) => {
+    newInv.updatedAt = new Date().toISOString();
+    setInvoices(prev => [newInv, ...prev]);
+    try {
+      await insertInvoice(dataConnect, {
+        id: newInv.id,
+        clientName: newInv.clientName,
+        date: newInv.date,
+        dueDate: newInv.dueDate,
+        amount: newInv.amount,
+        vatAmount: newInv.vatAmount,
+        type: newInv.type,
+        status: newInv.status,
+        updatedAt: newInv.updatedAt
+      });
+    } catch (e) {
+      console.error("Failed to insert invoice", e);
+    }
+  };
+
+  const handleUpdateClient = async (updated: any) => {
+    updated.updatedAt = new Date().toISOString();
+    setClients(prev => prev.map(c => c.id === updated.id ? updated : c));
+    try {
+      await updateClient(dataConnect, {
+        id: updated.id,
+        saldoFavor: updated.saldoFavor,
+        saldoDeber: updated.saldoDeber,
+        status: updated.status,
+        moroso: updated.moroso,
+        updatedAt: updated.updatedAt
+      });
+    } catch (e) {
+      console.error("Failed to update client", e);
+    }
+  };
+
+  const handleAddClient = async (newClient: any) => {
+    newClient.updatedAt = new Date().toISOString();
+    setClients(prev => [newClient, ...prev]);
+    try {
+      await insertClient(dataConnect, {
+        id: newClient.id,
+        nombre: newClient.nombre,
+        rif: newClient.rif,
+        tipo: newClient.tipo,
+        status: newClient.status,
+        contactoNombre: newClient.contactoNombre,
+        email: newClient.email,
+        telefono: newClient.telefono,
+        saldoFavor: newClient.saldoFavor,
+        saldoDeber: newClient.saldoDeber,
+        moroso: newClient.moroso,
+        limiteCredito: newClient.limiteCredito,
+        diasCredito: newClient.diasCredito,
+        observaciones: newClient.observaciones,
+        updatedAt: newClient.updatedAt
+      });
+    } catch (e) {
+      console.error("Failed to insert client", e);
+    }
+  };
+
+
+
+  // --- FLIGHT TICKETS (Boletos) ---
+  const handleAddBoleto = async (newBol: FlightTicket) => {
+    try {
+      setBoletos(prev => [...prev, newBol]);
+      await insertFlightTicket(dataConnect, { ...newBol, pasajeros: JSON.stringify(newBol.pasajeros) });
+    } catch (e) {}
+  };
+  const handleUpdateBoleto = async (updated: FlightTicket) => {
+    try {
+      setBoletos(prev => prev.map(b => b.id === updated.id ? updated : b));
+      await updateFlightTicket(dataConnect, { ...updated, pasajeros: JSON.stringify(updated.pasajeros) });
+    } catch (e) {}
+  };
+  const handleDeleteBoleto = async (id: string) => {
+    try {
+      setBoletos(prev => prev.filter(b => b.id !== id));
+      await deleteFlightTicket(dataConnect, { id });
+    } catch (e) {}
+  };
+
+  // --- PAYMENT VOUCHERS ---
+  const handleAddVoucher = async (newVoucher: PaymentVoucher) => {
+    try {
+      setVouchers(prev => [...prev, newVoucher]);
+      await insertPaymentVoucher(dataConnect, { ...newVoucher });
+    } catch (e) {}
+  };
+  const handleUpdateVoucher = async (updated: PaymentVoucher) => {
+    try {
+      setVouchers(prev => prev.map(v => v.id === updated.id ? updated : v));
+      await updatePaymentVoucher(dataConnect, { ...updated });
+    } catch (e) {}
+  };
+
+  // --- EXTRA SERVICES & RATES ---
+  const handleAddExtraService = async (newSrv: ExtraService) => {
+    try {
+      setExtraServices(prev => [...prev, newSrv]);
+      await insertExtraService(dataConnect, { ...newSrv });
+    } catch (e) {}
+  };
+  const handleUpdateExtraService = async (updated: ExtraService) => {
+    try {
+      setExtraServices(prev => prev.map(s => s.id === updated.id ? updated : s));
+      await updateExtraService(dataConnect, { ...updated });
+    } catch (e) {}
+  };
+  const handleDeleteExtraService = async (id: string) => {
+    try {
+      setExtraServices(prev => prev.filter(s => s.id !== id));
+      await deleteExtraService(dataConnect, { id });
+    } catch (e) {}
+  };
+  const handleAddServiceRate = async (newRate: ServiceRate) => {
+    try {
+      setServiceRates(prev => [...prev, newRate]);
+      await insertServiceRate(dataConnect, { ...newRate });
+    } catch (e) {}
+  };
+  const handleUpdateServiceRate = async (updated: ServiceRate) => {
+    try {
+      setServiceRates(prev => prev.map(r => r.id === updated.id ? updated : r));
+      await updateServiceRate(dataConnect, { ...updated });
+    } catch (e) {}
+  };
+  const handleDeleteServiceRate = async (id: string) => {
+    try {
+      setServiceRates(prev => prev.filter(r => r.id !== id));
+      await deleteServiceRate(dataConnect, { id });
+    } catch (e) {}
+  };
+  const handleDeleteRatePlanGroup = async (planName: string, propertyId: string) => {
+    try {
+      const plansToDelete = ratePlans.filter(rp => rp.property_id === propertyId && rp.nombrePromocion === planName);
+      setRatePlans(prev => prev.filter(rp => !(rp.property_id === propertyId && rp.nombrePromocion === planName)));
+      for (const p of plansToDelete) {
+        await deleteRatePlan(dataConnect, { id: p.id });
+      }
+    } catch (e) {
+      console.error("Error in handleDeleteRatePlanGroup:", e);
+    }
+  };
+
+  // --- PROPIEDADES HANDLERS ---
+  const handleAddDetailedProperty = async (newProp: Property) => {
+    try {
+      setDetailedProperties(prev => [...prev, newProp]);
+      await insertDetailedProperty(dataConnect, { ...newProp });
+    } catch (e) {
+      console.error("Error in handleAddDetailedProperty:", e);
+    }
+  };
+  const handleUpdateDetailedProperty = async (updatedProp: Property) => {
+    try {
+      setDetailedProperties(prev => prev.map(p => p.id === updatedProp.id ? updatedProp : p));
+      await updateDetailedProperty(dataConnect, { ...updatedProp });
+    } catch (e) {
+      console.error("Error in handleUpdateDetailedProperty:", e);
+    }
+  };
+  const handleDeleteDetailedProperty = async (id: string) => {
+    try {
+      setDetailedProperties(prev => prev.filter(p => p.id !== id));
+      await deleteDetailedProperty(dataConnect, { id });
+    } catch (e) {
+      console.error("Error in handleDeleteDetailedProperty:", e);
+    }
+  };
+  const handleAddRoomType = async (newRoom: RoomType) => {
+    try {
+      setRoomTypes(prev => [...prev, newRoom]);
+      await insertRoomType(dataConnect, {
+        id: newRoom.id,
+        propertyId: newRoom.property_id,
+        nombre: newRoom.nombre,
+        regimenAlimentacion: newRoom.regimenAlimentacion,
+        capacidadMax: newRoom.capacidadMax,
+        ocupacionBase: newRoom.ocupacionBase
+      });
+    } catch (e) {
+      console.error("Error in handleAddRoomType:", e);
+    }
+  };
+  const handleUpdateRoomType = async (updatedRoom: RoomType) => {
+    try {
+      setRoomTypes(prev => prev.map(r => r.id === updatedRoom.id ? updatedRoom : r));
+      await updateRoomType(dataConnect, {
+        id: updatedRoom.id,
+        propertyId: updatedRoom.property_id,
+        nombre: updatedRoom.nombre,
+        regimenAlimentacion: updatedRoom.regimenAlimentacion,
+        capacidadMax: updatedRoom.capacidadMax,
+        ocupacionBase: updatedRoom.ocupacionBase
+      });
+    } catch (e) {
+      console.error("Error in handleUpdateRoomType:", e);
+    }
+  };
+  const handleDeleteRoomType = async (id: string) => {
+    try {
+      setRoomTypes(prev => prev.filter(r => r.id !== id));
+      await deleteRoomType(dataConnect, { id });
+    } catch (e) {
+      console.error("Error in handleDeleteRoomType:", e);
+    }
+  };
+  const handleAddRatePlan = async (newRate: RatePlan) => {
+    try {
+      setRatePlans(prev => [...prev, newRate]);
+      await insertRatePlan(dataConnect, {
+        id: newRate.id,
+        propertyId: newRate.property_id,
+        roomTypeId: newRate.roomType_id,
+        nombrePromocion: newRate.nombrePromocion,
+        fechaInicio: newRate.fechaInicio,
+        fechaFin: newRate.fechaFin,
+        tipoCobro: newRate.tipoCobro,
+        tarifaBase: newRate.tarifaBase,
+        tarifaExtraAdulto: newRate.tarifaExtraAdulto,
+        tarifaExtraNino: newRate.tarifaExtraNino,
+        politicasCancelacion: newRate.politicasCancelacion,
+        mercado: newRate.mercado
+      });
+    } catch (e) {
+      console.error("Error in handleAddRatePlan:", e);
+    }
+  };
+  const handleUpdateRatePlan = async (updatedRate: RatePlan) => {
+    try {
+      setRatePlans(prev => prev.map(r => r.id === updatedRate.id ? updatedRate : r));
+      await updateRatePlan(dataConnect, {
+        id: updatedRate.id,
+        propertyId: updatedRate.property_id,
+        roomTypeId: updatedRate.roomType_id,
+        nombrePromocion: updatedRate.nombrePromocion,
+        fechaInicio: updatedRate.fechaInicio,
+        fechaFin: updatedRate.fechaFin,
+        tipoCobro: updatedRate.tipoCobro,
+        tarifaBase: updatedRate.tarifaBase,
+        tarifaExtraAdulto: updatedRate.tarifaExtraAdulto,
+        tarifaExtraNino: updatedRate.tarifaExtraNino,
+        politicasCancelacion: updatedRate.politicasCancelacion,
+        mercado: updatedRate.mercado
+      });
+    } catch (e) {
+      console.error("Error in handleUpdateRatePlan:", e);
+    }
+  };
+  const handleDeleteRatePlan = async (id: string) => {
+    try {
+      setRatePlans(prev => prev.filter(r => r.id !== id));
+      await deleteRatePlan(dataConnect, { id });
+    } catch (e) {
+      console.error("Error in handleDeleteRatePlan:", e);
+    }
+  };
+  const handleAddStopSale = async (newStop: StopSale) => {
+    try {
+      setStopSales(prev => [...prev, newStop]);
+      await insertStopSale(dataConnect, {
+        id: newStop.id,
+        propertyId: newStop.property_id,
+        fechaInicio: newStop.fechaInicio,
+        fechaFin: newStop.fechaFin,
+        motivo: newStop.motivo
+      });
+    } catch (e) {
+      console.error("Error in handleAddStopSale:", e);
+    }
+  };
+  const handleUpdateStopSale = async (updatedStop: StopSale) => {
+    try {
+      setStopSales(prev => prev.map(s => s.id === updatedStop.id ? updatedStop : s));
+      await updateStopSale(dataConnect, {
+        id: updatedStop.id,
+        propertyId: updatedStop.property_id,
+        fechaInicio: updatedStop.fechaInicio,
+        fechaFin: updatedStop.fechaFin,
+        motivo: updatedStop.motivo
+      });
+    } catch (e) {
+      console.error("Error in handleUpdateStopSale:", e);
+    }
+  };
+  const handleDeleteStopSale = async (id: string) => {
+    try {
+      setStopSales(prev => prev.filter(s => s.id !== id));
+      await deleteStopSale(dataConnect, { id });
+    } catch (e) {
+      console.error("Error in handleDeleteStopSale:", e);
     }
   };
 
@@ -256,185 +931,127 @@ export default function App() {
       <aside className="w-72 bg-zinc-950 flex flex-col h-screen fixed left-0 top-0 text-white p-5 border-r border-zinc-900 z-20 font-sans">
         
         {/* Brand Header */}
-        <div className="flex items-center gap-3 mb-9 px-2">
-          <div className="w-10 h-10 rounded-md bg-white text-zinc-950 flex items-center justify-center font-extrabold text-xl shadow-xs">
-            F
+        <button 
+          onClick={() => setCurrentSection(ProjectView.CONFIGURACION)}
+          className="flex items-center gap-3 mb-9 px-2 py-1.5 hover:bg-zinc-900/40 rounded-lg cursor-pointer transition-all w-full text-left focus:outline-none"
+          title="Configuración de Empresa"
+        >
+          <div className="w-10 h-10 rounded-md bg-white text-zinc-950 flex items-center justify-center font-black text-xl shadow-xs flex-shrink-0">
+            {companyConfig.logoLetter}
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-1.5 font-sans">
-              <h1 className="font-bold text-base tracking-tight leading-none text-white">Foratour ERP</h1>
-              <span className="text-[9px] bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono px-1.5 py-0.5 rounded-sm">V0</span>
+              <h1 className="font-bold text-sm tracking-tight leading-none text-white truncate max-w-[120px]" title={companyConfig.name}>{companyConfig.name}</h1>
+              <span className="text-[9px] bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono px-1 py-0.5 rounded-sm flex-shrink-0">V0</span>
             </div>
-            <p className="text-[10px] text-zinc-500 font-medium mt-1 uppercase tracking-wider">Wholesale Logistics</p>
+            <p className="text-[9px] text-zinc-550 font-medium mt-1 uppercase tracking-wider truncate" title={companyConfig.subtitle}>{companyConfig.subtitle}</p>
           </div>
-        </div>
+        </button>
 
         {/* Navigation Modules (5 Departments) */}
-        <div className="px-1 mb-3">
-          <p className="text-[10px] uppercase text-zinc-500 font-semibold tracking-wider mb-2.5 px-3">Departamentos ERP</p>
-        </div>
-        <nav className="flex-1 space-y-1.5">
-          <button
-            id="nav-propiedades"
-            onClick={() => setCurrentSection(ProjectView.PROPIEDADES)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all cursor-pointer ${
-              currentSection === ProjectView.PROPIEDADES
-                ? "bg-zinc-900 text-white font-semibold"
-                : "text-zinc-400 hover:text-white hover:bg-zinc-900/40"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Building2 className="w-4 h-4 flex-shrink-0" />
-              <span className="text-xs font-semibold">1. Propiedades y Tarifas</span>
-            </div>
-            {currentSection !== ProjectView.PROPIEDADES && (
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
-            )}
-          </button>
+        <nav className="flex-1 space-y-3 overflow-y-auto pb-6">
+          {/* COMERCIAL & BOOKING */}
+          <div className="px-1">
+            <button onClick={() => toggleMenu('comercial')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
+              <span>Comercial & Booking</span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.comercial ? '' : '-rotate-90'}`} />
+            </button>
+            {expandedMenus.comercial && (
+              <div className="space-y-1 mt-1 pl-1">
+                <button id="nav-propiedades" onClick={() => setCurrentSection(ProjectView.PROPIEDADES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.PROPIEDADES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <Building2 className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">1. Propiedades y Tarifas</span>
+                </button>
+                <button id="nav-servicios" onClick={() => setCurrentSection(ProjectView.SERVICIOS_VARIOS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.SERVICIOS_VARIOS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <Box className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">Servicios Varios (Producto)</span>
+                </button>
+                <button id="nav-reservas" onClick={() => setCurrentSection(ProjectView.RESERVAS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer $
+                  {currentSection === ProjectView.SERVICIOS_VARIOS && (
+                    <ServiciosView 
+                      extraServices={extraServices}
+                      onAddExtraService={handleAddExtraService}
+                      onUpdateExtraService={handleUpdateExtraService}
+                      
+                      serviceRates={serviceRates}
+                      onAddServiceRate={handleAddServiceRate}
+                      onDeleteServiceRate={handleDeleteServiceRate}
+                      
+                    />
+                  )}
+                  {currentSection === ProjectView.BUSCADOR && (
+                    <BuscadorGlobalView 
+                      reservations={reservations} 
+                      invoices={invoices} 
+                      boletos={boletos}
+                      payableObligations={payableObligations}
+                      onNavigate={setCurrentSection}
+                    />
+                  )}
 
-          <button
-            id="nav-reservas"
-            onClick={() => setCurrentSection(ProjectView.RESERVAS)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all cursor-pointer ${
-              currentSection === ProjectView.RESERVAS
-                ? "bg-zinc-900 text-white font-semibold"
-                : "text-zinc-400 hover:text-white hover:bg-zinc-900/40"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Calendar className="w-4 h-4 flex-shrink-0" />
-              <span className="text-xs font-semibold">2. Reservas (Booking)</span>
-            </div>
-            {currentSection !== ProjectView.RESERVAS && (
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
+                  {currentSection === ProjectView.RESERVAS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <Calendar className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">2. Reservas (Booking)</span>
+                </button>
+                <button id="nav-clientes" onClick={() => setCurrentSection(ProjectView.CLIENTES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.CLIENTES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <Users className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">6. Clientes B2B</span>
+                </button>
+                <button id="nav-buscador" onClick={() => setCurrentSection(ProjectView.BUSCADOR)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.BUSCADOR ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <Search className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">Buscador Global</span>
+                </button>
+              </div>
             )}
-          </button>
+          </div>
 
-          <button
-            id="nav-vuelos"
-            onClick={() => setCurrentSection(ProjectView.VUELOS)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all cursor-pointer ${
-              currentSection === ProjectView.VUELOS
-                ? "bg-zinc-900 text-white font-semibold"
-                : "text-zinc-400 hover:text-white hover:bg-zinc-900/40"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Plane className="w-4 h-4 flex-shrink-0" />
-              <span className="text-xs font-semibold">3. Vuelos (Air Control)</span>
-            </div>
-            {currentSection !== ProjectView.VUELOS && (
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
+          {/* OPERACIONES */}
+          <div className="px-1">
+            <button onClick={() => toggleMenu('operaciones')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
+              <span>Operaciones & Tráfico</span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.operaciones ? '' : '-rotate-90'}`} />
+            </button>
+            {expandedMenus.operaciones && (
+              <div className="space-y-1 mt-1 pl-1">
+                <button id="nav-vuelos" onClick={() => setCurrentSection(ProjectView.VUELOS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.VUELOS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <Plane className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">3. Vuelos (Air Control)</span>
+                </button>
+                <button id="nav-operaciones" onClick={() => setCurrentSection(ProjectView.OPERACIONES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.OPERACIONES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <Activity className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">4. Ops. Receptivo</span>
+                </button>
+              </div>
             )}
-          </button>
+          </div>
 
-          <button
-            id="nav-operaciones"
-            onClick={() => setCurrentSection(ProjectView.OPERACIONES)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all cursor-pointer ${
-              currentSection === ProjectView.OPERACIONES
-                ? "bg-zinc-900 text-white font-semibold"
-                : "text-zinc-400 hover:text-white hover:bg-zinc-900/40"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Route className="w-4 h-4 flex-shrink-0" />
-              <span className="text-xs font-semibold">4. Ops. Receptivo</span>
-            </div>
-            {currentSection !== ProjectView.OPERACIONES && (
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
+          {/* FINANZAS */}
+          <div className="px-1">
+            <button onClick={() => toggleMenu('finanzas')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
+              <span>Admin & Finanzas</span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.finanzas ? '' : '-rotate-90'}`} />
+            </button>
+            {expandedMenus.finanzas && (
+              <div className="space-y-1 mt-1 pl-1">
+                <button id="nav-admin" onClick={() => setCurrentSection(ProjectView.ADMINISTRACION)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.ADMINISTRACION ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <Wallet className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">5. Administración/BI</span>
+                </button>
+                <button id="nav-facturacion" onClick={() => setCurrentSection(ProjectView.FACTURACION)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.FACTURACION ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <Receipt className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">7. Dpto. Facturación</span>
+                </button>
+                <button id="nav-cobranzas" onClick={() => setCurrentSection(ProjectView.COBRANZAS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.COBRANZAS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <CreditCard className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">8. Cuentas por Cobrar</span>
+                </button>
+                <button id="nav-pagos" onClick={() => setCurrentSection(ProjectView.CUENTAS_PAGAR)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.CUENTAS_PAGAR ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <ArrowDownRight className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">9. Cuentas por Pagar</span>
+                </button>
+              </div>
             )}
-          </button>
-
-          <button
-            id="nav-administracion"
-            onClick={() => setCurrentSection(ProjectView.ADMINISTRACION)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all cursor-pointer ${
-              currentSection === ProjectView.ADMINISTRACION
-                ? "bg-zinc-900 text-white font-semibold"
-                : "text-zinc-400 hover:text-white hover:bg-zinc-900/40"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Wallet className="w-4 h-4 flex-shrink-0" />
-              <span className="text-xs font-semibold">5. Administración/BI</span>
-            </div>
-            {currentSection !== ProjectView.ADMINISTRACION && (
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
-            )}
-          </button>
-
-          <button
-            id="nav-clientes"
-            onClick={() => setCurrentSection(ProjectView.CLIENTES)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all cursor-pointer ${
-              currentSection === ProjectView.CLIENTES
-                ? "bg-zinc-900 text-white font-semibold"
-                : "text-zinc-400 hover:text-white hover:bg-zinc-900/40"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Users className="w-4 h-4 flex-shrink-0" />
-              <span className="text-xs font-semibold">6. Clientes B2B</span>
-            </div>
-            {currentSection !== ProjectView.CLIENTES && (
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
-            )}
-          </button>
-
-          <button
-            id="nav-facturacion"
-            onClick={() => setCurrentSection(ProjectView.FACTURACION)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all cursor-pointer ${
-              currentSection === ProjectView.FACTURACION
-                ? "bg-zinc-900 text-white font-semibold"
-                : "text-zinc-400 hover:text-white hover:bg-zinc-900/40"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <FileText className="w-4 h-4 flex-shrink-0" />
-              <span className="text-xs font-semibold">7. Dpto. Facturación</span>
-            </div>
-            {currentSection !== ProjectView.FACTURACION && (
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
-            )}
-          </button>
-
-          <button
-            id="nav-cobranzas"
-            onClick={() => setCurrentSection(ProjectView.COBRANZAS)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all cursor-pointer ${
-              currentSection === ProjectView.COBRANZAS
-                ? "bg-zinc-900 text-white font-semibold"
-                : "text-zinc-400 hover:text-white hover:bg-zinc-900/40"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <ReceiptText className="w-4 h-4 flex-shrink-0" />
-              <span className="text-xs font-semibold">8. Cuentas por Cobrar</span>
-            </div>
-            {currentSection !== ProjectView.COBRANZAS && (
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
-            )}
-          </button>
-
-          <button
-            id="nav-cuentaspagar"
-            onClick={() => setCurrentSection(ProjectView.CUENTAS_PAGAR)}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all cursor-pointer ${
-              currentSection === ProjectView.CUENTAS_PAGAR
-                ? "bg-zinc-900 text-white font-semibold"
-                : "text-zinc-400 hover:text-white hover:bg-zinc-900/40"
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <TrendingDown className="w-4 h-4 flex-shrink-0" />
-              <span className="text-xs font-semibold">9. Cuentas por Pagar</span>
-            </div>
-            {currentSection !== ProjectView.CUENTAS_PAGAR && (
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
-            )}
-          </button>
+          </div>
         </nav>
 
         {/* Footer info showing standard constraints */}
@@ -458,57 +1075,28 @@ export default function App() {
         {/* TOP GENERAL BAR */}
         <header className="h-16 bg-white border-b border-zinc-200/80 flex items-center justify-between px-8 sticky top-0 z-10">
           
-          {/* Left indicator */}
-          <div className="flex items-center gap-4 font-sans">
-            <div className="flex items-center gap-2 text-zinc-800 bg-zinc-50 px-3.5 py-1.5 rounded border border-zinc-200 font-semibold text-xs">
-              <Globe className="w-3.5 h-3.5 text-zinc-500" />
-              <span>Canal Directo Multi-Divisa</span>
-            </div>
-            <p className="text-xs text-zinc-400 font-sans">
-              Foratour Wholesale Ltd.
-            </p>
+          {/* Left indicator showing daily exchange rates */}
+          <div className="flex items-center gap-5 text-xs text-zinc-500 font-sans font-bold">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded text-zinc-700 font-bold">
+              💵 Tipo de Cambio del Día
+            </span>
+            <span className="font-mono text-zinc-800">
+              1 USD = €{exchangeRates.usdToEur.toLocaleString("es-ES", { minimumFractionDigits: 2 })} EUR
+            </span>
+            <span className="text-zinc-300">|</span>
+            <span className="font-mono text-zinc-800">
+              1 USD = Bs. {exchangeRates.usdToVes.toLocaleString("es-ES", { minimumFractionDigits: 2 })} VES
+            </span>
           </div>
 
-          {/* Toggle Switches for Demonstration */}
+          {/* Profile */}
           <div className="flex items-center gap-3 font-sans">
-            <span className="text-xs text-zinc-400 font-bold hidden sm:inline-block">Modo de Demostración:</span>
-            <div className="bg-zinc-50 p-1 rounded-md flex items-center border border-zinc-200">
-              <button
-                id="toggle-fase0-true"
-                onClick={() => setIsFase0SkeletonView(true)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-bold transition-all cursor-pointer ${
-                  isFase0SkeletonView 
-                    ? "bg-zinc-950 text-white" 
-                    : "text-zinc-500 hover:text-zinc-905"
-                }`}
-              >
-                <Terminal className="w-3.5 h-3.5" />
-                Lienzo Neutro (Fase 0)
-              </button>
-              <button
-                id="toggle-fase0-false"
-                onClick={() => setIsFase0SkeletonView(false)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-bold transition-all cursor-pointer ${
-                  !isFase0SkeletonView 
-                    ? "bg-zinc-950 text-white" 
-                    : "text-zinc-500 hover:text-zinc-905"
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Maqueta Interactiva
-              </button>
+            <div className="w-8.5 h-8.5 rounded bg-zinc-100 border border-zinc-200 text-zinc-700 font-bold flex items-center justify-center text-xs">
+              JD
             </div>
-
-            {/* Profile */}
-            <div className="h-9 w-[1px] bg-zinc-200 mx-1.5"></div>
-            <div className="flex items-center gap-3">
-              <div className="w-8.5 h-8.5 rounded bg-zinc-100 border border-zinc-200 text-zinc-700 font-bold flex items-center justify-center text-xs">
-                JD
-              </div>
-              <div className="hidden xl:block">
-                <p className="text-xs font-bold text-zinc-800 leading-tight">Juan Delgado</p>
-                <p className="text-[10px] text-zinc-400 leading-none">Administrador Senior</p>
-              </div>
+            <div className="hidden xl:block text-left">
+              <p className="text-xs font-bold text-zinc-800 leading-tight">Juan Delgado</p>
+              <p className="text-[10px] text-zinc-400 leading-none">Administrador Senior</p>
             </div>
           </div>
         </header>
@@ -516,84 +1104,55 @@ export default function App() {
         {/* WORKSPACE AREA */}
         <main className="flex-1 p-8 space-y-6">
 
-          {/* Glowing Top Banner informing the status */}
-          <div className="p-4 bg-white border border-zinc-200 rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3 font-sans">
-              <div className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-650 rounded">
-                <Sparkles className="w-4.5 h-4.5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-zinc-900">
-                  {isFase0SkeletonView 
-                    ? "Visualizando: Lienzo Neutro del Cascarón (Fase 0 Next.js)" 
-                    : "Visualizando: Maqueta Interactiva de Alta Fidelidad"}
-                </h3>
-                <p className="text-xs text-zinc-450 mt-0.5">
-                  {isFase0SkeletonView 
-                    ? "Esta pantalla imita exactamente el contenido del archivo page.tsx en disco." 
-                    : "Usa el menú izquierdo para simular cómo opera la lógica y datos del ERP mayorista."}
-                </p>
-              </div>
-            </div>
-            
-            <button
-              id="action-banner-toggle"
-              onClick={() => setIsFase0SkeletonView(!isFase0SkeletonView)}
-              className="px-4.5 py-2 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-700 rounded text-xs font-bold flex items-center gap-2 transition-all cursor-pointer font-sans"
-            >
-              <Eye className="w-4 h-4 text-zinc-500" />
-              {isFase0SkeletonView ? "Activar Maqueta Interactiva" : "Ver Código del Lienzo Plano"}
-            </button>
-          </div>
-
           {/* DYNAMIC COMPONENT LOADER */}
           <div className="transition-all duration-300">
-            {isFase0SkeletonView ? (
-              /* LITERAL BLANK CANVAS AS REQUESTED */
-              <div className="bg-white border border-zinc-200 rounded-lg p-10 space-y-5 text-center max-w-4xl mx-auto my-10 animate-fade-in font-sans">
-                <div className="w-12 h-12 rounded bg-zinc-50 border border-zinc-205 text-zinc-400 flex items-center justify-center mx-auto">
-                  <Terminal className="w-5 h-5 animate-pulse" />
-                </div>
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-bold text-zinc-900 tracking-tight">
-                    {getSectionTitle()}
-                  </h2>
-                  <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest bg-zinc-50 py-1 px-3.5 rounded inline-block border border-zinc-200/60">
-                    PROYECTO COMPILADO: /app/{currentSection}/page.tsx
-                  </p>
-                </div>
-                <p className="text-xs text-zinc-500 leading-relaxed max-w-2xl mx-auto">
-                  {getSectionDescription()}
-                </p>
-                <div className="pt-6 border-t border-zinc-200/80 flex items-center justify-center gap-6 text-xs text-zinc-400 font-semibold font-sans">
-                  <span className="flex items-center gap-1">
-                    <Check className="w-4 h-4 text-zinc-800" /> Enrutamiento verificado
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Check className="w-4 h-4 text-zinc-800" /> Cero recargas de página
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Check className="w-4 h-4 text-zinc-800" /> Next.js App Router compatible
-                  </span>
-                </div>
-              </div>
-            ) : (
-              /* INTERACTIVE LIVE MODEL SHOWN BY DEFAULT */
-              <div className="animate-fade-in">
+            <div className="animate-fade-in">
                  {currentSection === ProjectView.PROPIEDADES && (
                    <PropiedadesView 
                      properties={properties} 
                      onUpdateProperty={handleUpdateProperty} 
                      detailedProperties={detailedProperties}
-                     setDetailedProperties={setDetailedProperties}
+                     onAddDetailedProperty={handleAddDetailedProperty}
+onUpdateDetailedProperty={handleUpdateDetailedProperty}
+onDeleteDetailedProperty={handleDeleteDetailedProperty}
                      roomTypes={roomTypes}
-                     setRoomTypes={setRoomTypes}
+                     onAddRoomType={handleAddRoomType}
+onUpdateRoomType={handleUpdateRoomType}
+onDeleteRoomType={handleDeleteRoomType}
                      ratePlans={ratePlans}
-                     setRatePlans={setRatePlans}
+                     onAddRatePlan={handleAddRatePlan}
+onUpdateRatePlan={handleUpdateRatePlan}
+onDeleteRatePlan={handleDeleteRatePlan}
+onDeleteRatePlanGroup={handleDeleteRatePlanGroup}
                      stopSales={stopSales}
-                     setStopSales={setStopSales}
+                     onAddStopSale={handleAddStopSale}
+onUpdateStopSale={handleUpdateStopSale}
+onDeleteStopSale={handleDeleteStopSale}
                    />
                  )}
+                  
+                  {currentSection === ProjectView.SERVICIOS_VARIOS && (
+                    <ServiciosView 
+                      extraServices={extraServices}
+                      onAddExtraService={handleAddExtraService}
+                      onUpdateExtraService={handleUpdateExtraService}
+                      
+                      serviceRates={serviceRates}
+                      onAddServiceRate={handleAddServiceRate}
+                      onDeleteServiceRate={handleDeleteServiceRate}
+                      
+                    />
+                  )}
+                  {currentSection === ProjectView.BUSCADOR && (
+                    <BuscadorGlobalView 
+                      reservations={reservations} 
+                      invoices={invoices} 
+                      boletos={boletos}
+                      payableObligations={payableObligations}
+                      onNavigate={setCurrentSection}
+                    />
+                  )}
+
                   {currentSection === ProjectView.RESERVAS && (
                     <ReservasView 
                       reservations={reservations} 
@@ -607,8 +1166,13 @@ export default function App() {
                       ratePlans={ratePlans}
                       invoices={invoices}
                       payableObligations={payableObligations}
+                      vouchers={vouchers}
                       boletos={boletos}
                       onBoletosChange={setBoletos}
+                      onUpdateBoleto={handleUpdateBoleto}
+                      extraServices={extraServices}
+                      serviceRates={serviceRates}
+                      companyConfig={companyConfig}
                     />
                   )}
                   {currentSection === ProjectView.FACTURACION && (
@@ -626,20 +1190,25 @@ export default function App() {
                        onAddProviderStatement={handleAddStatement}
                        boletos={boletos}
                        onBoletosChange={setBoletos}
+                       onUpdateBoleto={handleUpdateBoleto}
+                       companyConfig={companyConfig}
                      />
                    )}
                 {currentSection === ProjectView.VUELOS && (
                   <VuelosView
                     flights={flights}
                     boletos={boletos}
-                    onBoletosChange={setBoletos}
+                    onAddBoleto={handleAddBoleto}
+                    onUpdateBoleto={handleUpdateBoleto}
+                    onDeleteBoleto={handleDeleteBoleto}
                     clients={clients}
+                    companyConfig={companyConfig}
                   />
                 )}
 
                 {currentSection === ProjectView.OPERACIONES && (
                   <OperacionesView
-                    transfers={transfers}
+                    transfers={operacionesTraslados}
                     onUpdateTransfer={handleUpdateTransfer}
                     fleetVehicles={fleetVehicles}
                     onUpdateVehicle={handleUpdateVehicle}
@@ -683,6 +1252,10 @@ export default function App() {
                     onUpdateInvoice={handleUpdateInvoice}
                     reservations={reservations}
                     onAddInvoice={handleAddInvoice}
+                    vouchers={vouchers}
+                    onAddVoucher={handleAddVoucher}
+                    onUpdateVoucher={handleUpdateVoucher}
+                    companyConfig={companyConfig}
                   />
                 )}
                 {currentSection === ProjectView.CUENTAS_PAGAR && (
@@ -693,8 +1266,13 @@ export default function App() {
                     onAddStatement={handleAddStatement}
                   />
                 )}
+                {currentSection === ProjectView.CONFIGURACION && (
+                  <ConfiguracionView 
+                    config={companyConfig}
+                    onUpdateConfig={handleUpdateCompanyConfig}
+                  />
+                )}
               </div>
-            )}
           </div>
 
         </main>

@@ -1,0 +1,14 @@
+query GetAll @auth(level: PUBLIC) {
+  b2BClients {
+    id
+    nombre
+  }
+  financialInvoices {
+    id
+    amount
+  }
+  paymentVouchers {
+    id
+    amount
+  }
+}

@@ -207,7 +207,7 @@ export default function AdministracionView({
   ];
 
   return (
-    <div className="space-y-8 h-[calc(100vh-12rem)] overflow-y-auto pr-3 font-sans pb-8">
+    <div className="space-y-8 font-sans pb-8">
       
       {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-150 pb-5">

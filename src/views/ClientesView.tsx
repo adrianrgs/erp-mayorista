@@ -32,6 +32,7 @@ interface ClientesViewProps {
   roomTypes: RoomType[];
   ratePlans: RatePlan[];
   detailedProperties: Property[];
+  onNavigateToCobranzas?: (clientId: string) => void;
 }
 
 const formatDate = (dateStr?: string): string => {
@@ -102,7 +103,8 @@ export default function ClientesView({
   boletos = [],
   roomTypes,
   ratePlans,
-  detailedProperties
+  detailedProperties,
+  onNavigateToCobranzas
 }: ClientesViewProps) {
   // Navigation inside the module (Level 1: List, Level 2: Ficha Técnica, Level 3: Detalle Expediente)
   const [viewLevel, setViewLevel] = useState<1 | 2 | 3>(1);
@@ -136,6 +138,19 @@ export default function ClientesView({
   // Edit Form state (for Level 2)
   const [editForm, setEditForm] = useState<B2BClient | null>(null);
 
+  // Selected client detail sub-tabs
+  const [detailTab, setDetailTab] = useState<"ficha" | "movimientos" | "expedientes">("ficha");
+
+  // Filters for client movements (Pestaña 2)
+  const [movSearch, setMovSearch] = useState("");
+  const [movType, setMovType] = useState<"ALL" | "FACTURA" | "PAGO" | "REINTEGRO" | "EXCEDENTE">("ALL");
+  const [movStatus, setMovStatus] = useState<"ALL" | "PAGADO" | "FACTURADO" | "VENCIDO">("ALL");
+
+  // Filters for client reservations (Pestaña 3)
+  const [resSearch, setResSearch] = useState("");
+  const [resStatus, setResStatus] = useState("ALL");
+  const [resDebtStatus, setResDebtStatus] = useState<"ALL" | "SALDADO" | "DEUDA">("ALL");
+
   // Active client selection
   const activeClient = clients.find(c => c.id === activeClientId);
 
@@ -159,6 +174,101 @@ export default function ClientesView({
     });
 
   const allBookings = [...reservations, ...aereoReservations];
+
+  // Get all bookings and invoices for the active client
+  const clientInvoices = activeClient ? invoices.filter(inv => {
+    const cleanName = (name: string) => name.toLowerCase()
+      .replace(/s\.a\./g, "")
+      .replace(/s\.l\./g, "")
+      .replace(/c\.a\./g, "")
+      .replace(/sl/g, "")
+      .replace(/sa/g, "")
+      .replace(/ca/g, "")
+      .replace(/[^a-z0-9]/g, "")
+      .trim();
+
+    const normalizedClient = cleanName(activeClient.nombre);
+    const normalizedInv = cleanName(inv.clientName);
+    
+    // 1. Name matches
+    if (normalizedInv.includes(normalizedClient) || normalizedClient.includes(normalizedInv)) {
+      return true;
+    }
+
+    // 2. Word matches
+    const clientWords = activeClient.nombre.toLowerCase()
+      .replace(/s\.a\./g, "")
+      .replace(/s\.l\./g, "")
+      .replace(/c\.a\./g, "")
+      .split(/\s+/)
+      .filter(w => w.length > 3 && !["viajes", "tours", "sl", "sa", "ca"].includes(w));
+    
+    if (clientWords.length > 0 && clientWords.every(word => inv.clientName.toLowerCase().includes(word))) {
+      return true;
+    }
+    
+    // 3. Localizador / Expediente match
+    const match = inv.clientName.match(/Localizador\s+((?:RES|AER)-\d+)/i);
+    if (match) {
+      const locator = match[1];
+      const res = allBookings.find(r => r.id === locator);
+      if (res && res.agenciaName && cleanName(res.agenciaName) === normalizedClient) {
+        return true;
+      }
+    }
+
+    // 4. Anulación localizador match
+    const matchAnulacion = inv.clientName.match(/Anulación:.*((?:RES|AER)-\d+)/i);
+    if (matchAnulacion) {
+      const locator = matchAnulacion[1];
+      const res = allBookings.find(r => r.id === locator);
+      if (res && res.agenciaName && cleanName(res.agenciaName) === normalizedClient) {
+        return true;
+      }
+    }
+
+    return false;
+  }) : [];
+
+  const clientReservations = activeClient ? allBookings.filter(r => 
+    r.agenciaName && r.agenciaName.toLowerCase() === activeClient.nombre.toLowerCase()
+  ) : [];
+
+  // Filtered invoices for Tab 2
+  const filteredInvoices = clientInvoices.filter(inv => {
+    const isCreditNote = inv.id.startsWith("NC-") || inv.amount < 0;
+    const isExcess = inv.id.startsWith("ABO-");
+    const isPayment = inv.status === "Pagado" && inv.amount > 0 && !isExcess;
+    const typeStr = isCreditNote ? "REINTEGRO" : isExcess ? "EXCEDENTE" : isPayment ? "PAGO" : "FACTURA";
+
+    const matchesSearch = 
+      inv.id.toLowerCase().includes(movSearch.toLowerCase()) ||
+      inv.clientName.toLowerCase().includes(movSearch.toLowerCase()) ||
+      inv.date.toLowerCase().includes(movSearch.toLowerCase());
+
+    const matchesType = movType === "ALL" || typeStr === movType;
+    const matchesStatus = movStatus === "ALL" || inv.status.toUpperCase() === movStatus;
+
+    return matchesSearch && matchesType && matchesStatus;
+  });
+
+  // Filtered reservations for Tab 3
+  const filteredBookings = clientReservations.filter(res => {
+    const resInvoices = invoices.filter(inv => inv.clientName.includes(res.id));
+    const unpaidInvoices = resInvoices.filter(inv => inv.status === "Facturado" || inv.status === "Vencido");
+    const hasDebt = unpaidInvoices.length > 0;
+    const debtStatusStr = hasDebt ? "DEUDA" : "SALDADO";
+
+    const matchesSearch =
+      res.id.toLowerCase().includes(resSearch.toLowerCase()) ||
+      res.holder.toLowerCase().includes(resSearch.toLowerCase()) ||
+      res.hotelName.toLowerCase().includes(resSearch.toLowerCase());
+
+    const matchesStatus = resStatus === "ALL" || res.status === resStatus;
+    const matchesDebt = resDebtStatus === "ALL" || debtStatusStr === resDebtStatus;
+
+    return matchesSearch && matchesStatus && matchesDebt;
+  });
 
   // KPI Calculations
   const totalActivos = clients.filter(c => c.status === ClientStatus.ACTIVO).length;
@@ -238,6 +348,13 @@ export default function ClientesView({
   const handleOpenDetail = (client: B2BClient) => {
     setActiveClientId(client.id);
     setEditForm({ ...client });
+    setDetailTab("ficha");
+    setMovSearch("");
+    setMovType("ALL");
+    setMovStatus("ALL");
+    setResSearch("");
+    setResStatus("ALL");
+    setResDebtStatus("ALL");
     setViewLevel(2);
   };
 
@@ -449,7 +566,13 @@ export default function ClientesView({
                       </td>
                     </tr>
                   ) : (
-                    filteredClients.map((c) => (
+                    filteredClients.map((c) => {
+                      const activeResIds = allBookings.filter(r => r.agenciaName && r.agenciaName.toLowerCase() === c.nombre.toLowerCase()).map(r => r.id);
+                      const clientInvoices = invoices.filter(inv => inv.clientName.toLowerCase().includes(c.nombre.toLowerCase()) || activeResIds.some(rid => inv.clientName.includes(rid)));
+                      const unpaidClientInvoices = clientInvoices.filter(inv => (inv.status === "Facturado" || inv.status === "Vencido") && inv.type === "Cobro");
+                      const calculatedDeuda = unpaidClientInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+
+                      return (
                       <tr 
                         key={c.id} 
                         onClick={() => handleOpenDetail(c)}
@@ -478,7 +601,7 @@ export default function ClientesView({
                           </span>
                         </td>
                         <td className="p-4 text-right font-bold text-zinc-900">${c.saldoFavor.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                        <td className="p-4 text-right font-bold text-zinc-900">${c.saldoDeber.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                        <td className="p-4 text-right font-bold text-zinc-900">${calculatedDeuda.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                         <td className="p-4 text-center">
                           {c.moroso ? (
                             <span className="px-2 py-0.5 rounded bg-red-50 border border-red-200 text-red-650 text-[9px] font-bold uppercase inline-flex items-center gap-1">
@@ -491,7 +614,8 @@ export default function ClientesView({
                           )}
                         </td>
                       </tr>
-                    ))
+                    );
+                    })
                   )}
                 </tbody>
               </table>
@@ -503,7 +627,7 @@ export default function ClientesView({
       {viewLevel === 2 && activeClient && editForm && (
         <div className="space-y-6">
             {/* Header Breadcrumbs */}
-            <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-4 sticky top-16 bg-zinc-50/95 backdrop-blur-xs pt-2 z-10 -mx-8 px-8">
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setViewLevel(1)}
@@ -552,14 +676,23 @@ export default function ClientesView({
               </div>
 
               {/* Tile 2: Deuda Pendiente */}
-              <div className="bg-white p-4 border border-zinc-200 rounded-lg shadow-xs space-y-1">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Deuda por Cobrar</span>
-                <div className="flex items-center gap-1 text-zinc-900">
-                  <DollarSign className="w-4 h-4" />
-                  <span className="text-xl font-black">${activeClient.saldoDeber.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
-                </div>
-                <span className="text-[9.5px] text-zinc-400 block font-medium">Vouchers y reservas facturadas</span>
-              </div>
+              {(() => {
+                const activeResIds = allBookings.filter(r => r.agenciaName && r.agenciaName.toLowerCase() === activeClient.nombre.toLowerCase()).map(r => r.id);
+                const clientInvoices = invoices.filter(inv => inv.clientName.toLowerCase().includes(activeClient.nombre.toLowerCase()) || activeResIds.some(rid => inv.clientName.includes(rid)));
+                const unpaidClientInvoices = clientInvoices.filter(inv => (inv.status === "Facturado" || inv.status === "Vencido") && inv.type === "Cobro");
+                const calculatedDeuda = unpaidClientInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+                
+                return (
+                  <div className="bg-white p-4 border border-zinc-200 rounded-lg shadow-xs space-y-1">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Deuda por Cobrar</span>
+                    <div className="flex items-center gap-1 text-zinc-900">
+                      <DollarSign className="w-4 h-4" />
+                      <span className="text-xl font-black">${calculatedDeuda.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <span className="text-[9.5px] text-zinc-400 block font-medium">Vouchers y reservas facturadas</span>
+                  </div>
+                );
+              })()}
 
               {/* Tile 3: Límite de Crédito */}
               <div className="bg-white p-4 border border-zinc-200 rounded-lg shadow-xs space-y-1">
@@ -610,417 +743,469 @@ export default function ClientesView({
               </div>
             )}
 
-            {/* Historial de Movimientos Financieros */}
-            {(() => {
-              const getClientInvoices = (clientName: string) => {
-                const cleanName = (name: string) => name.toLowerCase()
-                  .replace(/s\.a\./g, "")
-                  .replace(/s\.l\./g, "")
-                  .replace(/c\.a\./g, "")
-                  .replace(/sl/g, "")
-                  .replace(/sa/g, "")
-                  .replace(/ca/g, "")
-                  .replace(/[^a-z0-9]/g, "")
-                  .trim();
-
-                const normalizedClient = cleanName(clientName);
-
-                return invoices.filter(inv => {
-                  const normalizedInv = cleanName(inv.clientName);
-                  
-                  // 1. Name matches
-                  if (normalizedInv.includes(normalizedClient) || normalizedClient.includes(normalizedInv)) {
-                    return true;
-                  }
-
-                  // 2. Word matches
-                  const clientWords = clientName.toLowerCase()
-                    .replace(/s\.a\./g, "")
-                    .replace(/s\.l\./g, "")
-                    .replace(/c\.a\./g, "")
-                    .split(/\s+/)
-                    .filter(w => w.length > 3 && !["viajes", "tours", "sl", "sa", "ca"].includes(w));
-                  
-                  if (clientWords.length > 0 && clientWords.every(word => inv.clientName.toLowerCase().includes(word))) {
-                    return true;
-                  }
-                  
-                  // 3. Localizador / Expediente match
-                  const match = inv.clientName.match(/Localizador\s+((?:RES|AER)-\d+)/i);
-                  if (match) {
-                    const locator = match[1];
-                    const res = allBookings.find(r => r.id === locator);
-                    if (res && res.agenciaName && cleanName(res.agenciaName) === normalizedClient) {
-                      return true;
-                    }
-                  }
-
-                  // 4. Anulación localizador match
-                  const matchAnulacion = inv.clientName.match(/Anulación:.*((?:RES|AER)-\d+)/i);
-                  if (matchAnulacion) {
-                    const locator = matchAnulacion[1];
-                    const res = allBookings.find(r => r.id === locator);
-                    if (res && res.agenciaName && cleanName(res.agenciaName) === normalizedClient) {
-                      return true;
-                    }
-                  }
-
-                  return false;
-                });
-              };
-
-              const clientInvoices = getClientInvoices(activeClient.nombre);
-
-              return (
-                <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs space-y-4">
-                  <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-3">
-                    <FileText className="w-4.5 h-4.5 text-zinc-700" /> Historial de Movimientos Financieros (Facturaciones, Pagos y Reintegros)
-                  </h4>
-                  
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs divide-y divide-zinc-200">
-                      <thead>
-                        <tr className="text-zinc-500 font-bold bg-zinc-50 uppercase tracking-wider text-[9px] border-b border-zinc-200">
-                          <th className="p-3">Referencia / Código</th>
-                          <th className="p-3">Detalle del Movimiento</th>
-                          <th className="p-3">Fecha Emisión</th>
-                          <th className="p-3 text-right">Importe</th>
-                          <th className="p-3 text-center">Estado</th>
-                          <th className="p-3 text-center">Tipo de Movimiento</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100 font-medium">
-                        {clientInvoices.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="p-6 text-center text-zinc-450 italic">
-                              No se registran movimientos financieros ni reintegros para este cliente.
-                            </td>
-                          </tr>
-                        ) : (
-                          clientInvoices.map((inv) => {
-                            const isCreditNote = inv.id.startsWith("NC-") || inv.amount < 0;
-                            const isExcess = inv.id.startsWith("ABO-");
-                            const isPayment = inv.status === "Pagado" && inv.amount > 0 && !isExcess;
-                            
-                            return (
-                              <tr key={inv.id} className="hover:bg-zinc-50/50 transition-colors">
-                                <td className="p-3 font-mono font-bold text-zinc-600">{inv.id}</td>
-                                <td className="p-3 text-zinc-900 font-bold">{inv.clientName}</td>
-                                <td className="p-3 text-zinc-500 font-mono">{inv.date}</td>
-                                <td className={`p-3 text-right font-black font-mono text-xs ${isCreditNote ? "text-red-650" : isExcess ? "text-emerald-700 font-extrabold" : "text-zinc-900"}`}>
-                                  {isCreditNote ? "" : "+"}${inv.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
-                                </td>
-                                <td className="p-3 text-center">
-                                  <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${
-                                    inv.status === "Pagado" ? "bg-emerald-50 text-emerald-700 border-emerald-250 font-bold" : 
-                                    inv.status === "Facturado" ? "bg-amber-50 text-amber-700 border-amber-250" : 
-                                    inv.status === "Vencido" ? "bg-red-50 text-red-700 border-red-200 font-bold animate-pulse" : "bg-zinc-50 text-zinc-650 border-zinc-200"
-                                  }`}>
-                                    {inv.status}
-                                  </span>
-                                </td>
-                                <td className="p-3 text-center">
-                                  <span className={`px-2.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider border ${
-                                    isCreditNote 
-                                      ? "bg-red-50 border-red-200 text-red-750" 
-                                      : isExcess
-                                        ? "bg-emerald-50 border-emerald-250 text-emerald-750"
-                                        : isPayment 
-                                          ? "bg-emerald-50 border-emerald-205 text-emerald-700" 
-                                          : "bg-blue-50 border-blue-200 text-blue-750"
-                                  }`}>
-                                    {isCreditNote ? "Reintegro / NC" : isExcess ? "Excedente / Abono" : isPayment ? "Pago Recibido" : "Factura Emitida"}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Historial de Expedientes Validados */}
-            {(() => {
-              const clientReservations = allBookings.filter(r => 
-                r.agenciaName && r.agenciaName.toLowerCase() === activeClient.nombre.toLowerCase()
-              );
-
-              return (
-                <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs space-y-4">
-                  <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-3">
-                    <Calendar className="w-4.5 h-4.5 text-zinc-700" /> Historial de Expedientes (Reservas de la Agencia)
-                  </h4>
-                  
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs divide-y divide-zinc-200">
-                      <thead>
-                        <tr className="text-zinc-500 font-bold bg-zinc-50 uppercase tracking-wider text-[9px] border-b border-zinc-200">
-                          <th className="p-3">Localizador</th>
-                          <th className="p-3">Titular / Grupo</th>
-                          <th className="p-3">Hotel / Servicio Principal</th>
-                          <th className="p-3 text-center">Fecha Check-in</th>
-                          <th className="p-3 text-right">Monto Venta</th>
-                          <th className="p-3 text-center">Estado Reserva</th>
-                          <th className="p-3 text-center">Estado de Deuda</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100 font-medium">
-                        {clientReservations.length === 0 ? (
-                          <tr>
-                            <td colSpan={7} className="p-6 text-center text-zinc-450 italic">
-                              No se registran expedientes de reservas para esta agencia.
-                            </td>
-                          </tr>
-                        ) : (
-                          clientReservations.map((res) => {
-                            // Match invoices that mention the locator ID
-                            const resInvoices = invoices.filter(inv => inv.clientName.includes(res.id));
-                            const unpaidInvoices = resInvoices.filter(inv => inv.status === "Facturado" || inv.status === "Vencido");
-                            const hasDebt = unpaidInvoices.length > 0;
-                            const debtAmount = unpaidInvoices.reduce((sum, inv) => sum + inv.amount, 0);
-
-                            return (
-                              <tr 
-                                key={res.id} 
-                                onClick={() => {
-                                  setSelectedResId(res.id);
-                                  setViewLevel(3);
-                                }}
-                                className="hover:bg-zinc-50/60 transition-colors cursor-pointer group"
-                              >
-                                <td className="p-3 font-mono font-bold text-zinc-650 group-hover:underline">{res.id}</td>
-                                <td className="p-3 text-zinc-900 font-bold">{res.holder}</td>
-                                <td className="p-3 text-zinc-650 font-semibold">{res.hotelName}</td>
-                                <td className="p-3 text-center text-zinc-500 font-mono">{res.checkIn}</td>
-                                <td className="p-3 text-right font-black font-mono text-zinc-900">${res.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</td>
-                                <td className="p-3 text-center">
-                                  <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${
-                                    res.status === "Confirmada" ? "bg-emerald-50 text-emerald-700 border-emerald-250 font-bold" :
-                                    res.status === "Cancelada" ? "bg-red-50 text-red-700 border-red-200" :
-                                    "bg-amber-50 text-amber-700 border-amber-250"
-                                  }`}>
-                                    {res.status}
-                                  </span>
-                                </td>
-                                <td className="p-3 text-center">
-                                  {hasDebt ? (
-                                    <span className="px-2 py-0.5 rounded bg-red-50 border border-red-200 text-red-650 text-[9px] font-black uppercase inline-flex items-center gap-1 animate-pulse" title="Existe saldo pendiente de pago para este expediente">
-                                      <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
-                                      Deuda: ${debtAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
-                                    </span>
-                                  ) : (
-                                    <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-black uppercase inline-flex items-center gap-1">
-                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                      Saldado
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Editar Ficha de Cliente Form */}
-            <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs">
-              <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-3 mb-5">
-                <Edit2 className="w-4 h-4 text-zinc-700" /> Editar Ficha Técnica y Datos Comerciales
-              </h4>
-
-              <form onSubmit={handleEditSubmit} className="space-y-5">
-                {/* 1. Nombre + RIF + Estatus + Tipo */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Razón Social de la Agencia</label>
-                    <input
-                      type="text"
-                      required
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
-                      value={editForm.nombre}
-                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, nombre: e.target.value }) : null)}
-                    />
-                  </div>
-                  
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">RIF / ID Fiscal</label>
-                    <input
-                      type="text"
-                      required
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-mono font-semibold text-zinc-800 focus:outline-none"
-                      value={editForm.rif}
-                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, rif: e.target.value }) : null)}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Estatus de la Cuenta</label>
-                    <select
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
-                      value={editForm.status}
-                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, status: e.target.value as ClientStatus }) : null)}
-                    >
-                      <option value={ClientStatus.ACTIVO}>ACTIVO</option>
-                      <option value={ClientStatus.INACTIVO}>INACTIVO</option>
-                      <option value={ClientStatus.LISTA_NEGRA}>LISTA NEGRA</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* 2. Contacto + Email + Teléfono + Tipo */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Contacto de Cobro / Reserva</label>
-                    <input
-                      type="text"
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
-                      value={editForm.contactoNombre}
-                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, contactoNombre: e.target.value }) : null)}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Email de Facturación</label>
-                    <input
-                      type="email"
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
-                      value={editForm.email}
-                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, email: e.target.value }) : null)}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Teléfono Comercial</label>
-                    <input
-                      type="text"
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
-                      value={editForm.telefono}
-                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, telefono: e.target.value }) : null)}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Modelo Comercial B2B</label>
-                    <select
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
-                      value={editForm.tipo}
-                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, tipo: e.target.value as ClientType }) : null)}
-                    >
-                      <option value={ClientType.CREDITO}>A CRÉDITO</option>
-                      <option value={ClientType.SATELITE}>SATÉLITE</option>
-                      <option value={ClientType.FREELANCER}>FREELANCER</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* 3. Balances + Límite + Gracia */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Saldo a Favor ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none text-right"
-                      value={editForm.saldoFavor}
-                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, saldoFavor: parseFloat(e.target.value) || 0 }) : null)}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Saldo Deudor / Cobros ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none text-right"
-                      value={editForm.saldoDeber}
-                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, saldoDeber: parseFloat(e.target.value) || 0 }) : null)}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Límite de Crédito ($)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none text-right"
-                      value={editForm.limiteCredito}
-                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, limiteCredito: parseFloat(e.target.value) || 0 }) : null)}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Días de Gracia (Crédito)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none text-right"
-                      value={editForm.diasCredito}
-                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, diasCredito: parseInt(e.target.value) || 0 }) : null)}
-                    />
-                  </div>
-                </div>
-
-                {/* 4. Moroso Checkbox */}
-                <div className="flex items-center gap-2 p-3 bg-zinc-50 border border-zinc-200 rounded-md">
-                  <input
-                    id="edit-moroso-checkbox"
-                    type="checkbox"
-                    className="w-4.5 h-4.5 accent-zinc-900 cursor-pointer"
-                    checked={editForm.moroso}
-                    onChange={(e) => setEditForm(prev => prev ? ({ ...prev, moroso: e.target.checked }) : null)}
-                  />
-                  <label htmlFor="edit-moroso-checkbox" className="text-xs font-bold text-zinc-800 uppercase tracking-wide cursor-pointer">
-                    Declarar esta cuenta en estado de Morosidad (Congela automáticamente créditos mayoristas)
-                  </label>
-                </div>
-
-                {/* 5. Observaciones */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Notas y Observaciones Internas</label>
-                  <textarea
-                    rows={3}
-                    className="w-full p-3 border border-zinc-200 bg-white rounded text-xs text-zinc-700 font-semibold focus:outline-none"
-                    value={editForm.observaciones || ""}
-                    onChange={(e) => setEditForm(prev => prev ? ({ ...prev, observaciones: e.target.value }) : null)}
-                  />
-                </div>
-
-                {/* Actions Buttons */}
-                <div className="flex justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setViewLevel(1)}
-                    className="px-4 py-2 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
-                  >
-                    Guardar Cambios
-                  </button>
-                </div>
-              </form>
+            {/* Sub-tabs Selection Bar */}
+            <div className="flex border-b border-zinc-200 gap-1 bg-zinc-50/50 p-1 rounded-lg border">
+              <button
+                type="button"
+                onClick={() => setDetailTab("ficha")}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  detailTab === "ficha"
+                    ? "bg-white text-zinc-950 shadow-sm border border-zinc-200/80 font-black"
+                    : "text-zinc-500 hover:text-zinc-800 hover:bg-white/40"
+                }`}
+              >
+                <User className="w-3.5 h-3.5" />
+                Ficha Comercial
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailTab("movimientos")}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  detailTab === "movimientos"
+                    ? "bg-white text-zinc-950 shadow-sm border border-zinc-200/80 font-black"
+                    : "text-zinc-500 hover:text-zinc-800 hover:bg-white/40"
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Movimientos Financieros ({clientInvoices.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailTab("expedientes")}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  detailTab === "expedientes"
+                    ? "bg-white text-zinc-950 shadow-sm border border-zinc-200/80 font-black"
+                    : "text-zinc-500 hover:text-zinc-800 hover:bg-white/40"
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                Expedientes ({clientReservations.length})
+              </button>
             </div>
+
+            {/* TAB CONTENT: Ficha Comercial */}
+            {detailTab === "ficha" && (
+              <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs">
+                <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-3 mb-5">
+                  <Edit2 className="w-4 h-4 text-zinc-700" /> Editar Ficha Técnica y Datos Comerciales
+                </h4>
+
+                <form onSubmit={handleEditSubmit} className="space-y-5">
+                  {/* 1. Nombre + RIF + Estatus + Tipo */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Razón Social de la Agencia</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                        value={editForm.nombre}
+                        onChange={(e) => setEditForm(prev => prev ? ({ ...prev, nombre: e.target.value }) : null)}
+                      />
+                    </div>
+                    
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">RIF / ID Fiscal</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-mono font-semibold text-zinc-800 focus:outline-none"
+                        value={editForm.rif}
+                        onChange={(e) => setEditForm(prev => prev ? ({ ...prev, rif: e.target.value }) : null)}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Estatus de la Cuenta</label>
+                      <select
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                        value={editForm.status}
+                        onChange={(e) => setEditForm(prev => prev ? ({ ...prev, status: e.target.value as ClientStatus }) : null)}
+                      >
+                        <option value={ClientStatus.ACTIVO}>ACTIVO</option>
+                        <option value={ClientStatus.INACTIVO}>INACTIVO</option>
+                        <option value={ClientStatus.LISTA_NEGRA}>LISTA NEGRA</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 2. Contacto + Email + Teléfono + Tipo */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Contacto de Cobro / Reserva</label>
+                      <input
+                        type="text"
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                        value={editForm.contactoNombre}
+                        onChange={(e) => setEditForm(prev => prev ? ({ ...prev, contactoNombre: e.target.value }) : null)}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Email de Facturación</label>
+                      <input
+                        type="email"
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                        value={editForm.email}
+                        onChange={(e) => setEditForm(prev => prev ? ({ ...prev, email: e.target.value }) : null)}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Teléfono Comercial</label>
+                      <input
+                        type="text"
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                        value={editForm.telefono}
+                        onChange={(e) => setEditForm(prev => prev ? ({ ...prev, telefono: e.target.value }) : null)}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Modelo Comercial B2B</label>
+                      <select
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                        value={editForm.tipo}
+                        onChange={(e) => setEditForm(prev => prev ? ({ ...prev, tipo: e.target.value as ClientType }) : null)}
+                      >
+                        <option value={ClientType.CREDITO}>A CRÉDITO</option>
+                        <option value={ClientType.SATELITE}>SATÉLITE</option>
+                        <option value={ClientType.FREELANCER}>FREELANCER</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 3. Balances + Límite + Gracia */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Saldo a Favor ($)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none text-right"
+                        value={editForm.saldoFavor}
+                        onChange={(e) => setEditForm(prev => prev ? ({ ...prev, saldoFavor: parseFloat(e.target.value) || 0 }) : null)}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Saldo Deudor / Cobros ($)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none text-right"
+                        value={editForm.saldoDeber}
+                        onChange={(e) => setEditForm(prev => prev ? ({ ...prev, saldoDeber: parseFloat(e.target.value) || 0 }) : null)}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Límite de Crédito ($)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none text-right"
+                        value={editForm.limiteCredito}
+                        onChange={(e) => setEditForm(prev => prev ? ({ ...prev, limiteCredito: parseFloat(e.target.value) || 0 }) : null)}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Días de Gracia (Crédito)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none text-right"
+                        value={editForm.diasCredito}
+                        onChange={(e) => setEditForm(prev => prev ? ({ ...prev, diasCredito: parseInt(e.target.value) || 0 }) : null)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 4. Moroso Checkbox */}
+                  <div className="flex items-center gap-2 p-3 bg-zinc-50 border border-zinc-200 rounded-md">
+                    <input
+                      id="edit-moroso-checkbox"
+                      type="checkbox"
+                      className="w-4.5 h-4.5 accent-zinc-900 cursor-pointer"
+                      checked={editForm.moroso}
+                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, moroso: e.target.checked }) : null)}
+                    />
+                    <label htmlFor="edit-moroso-checkbox" className="text-xs font-bold text-zinc-800 uppercase tracking-wide cursor-pointer">
+                      Declarar esta cuenta en estado de Morosidad (Congela automáticamente créditos mayoristas)
+                    </label>
+                  </div>
+
+                  {/* 5. Observaciones */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Notas y Observaciones Internas</label>
+                    <textarea
+                      rows={3}
+                      className="w-full p-3 border border-zinc-200 bg-white rounded text-xs text-zinc-700 font-semibold focus:outline-none"
+                      value={editForm.observaciones || ""}
+                      onChange={(e) => setEditForm(prev => prev ? ({ ...prev, observaciones: e.target.value }) : null)}
+                    />
+                  </div>
+
+                  {/* Actions Buttons */}
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setViewLevel(1)}
+                      className="px-4 py-2 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-6 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                    >
+                      Guardar Cambios
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* TAB CONTENT: Movimientos Financieros */}
+            {detailTab === "movimientos" && (
+              <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs space-y-4">
+                <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-3">
+                  <FileText className="w-4.5 h-4.5 text-zinc-700" /> Historial de Movimientos Financieros (Facturaciones, Pagos y Reintegros)
+                </h4>
+
+                {/* Filters Bar */}
+                <div className="flex flex-col md:flex-row gap-3 bg-zinc-50 p-4 border border-zinc-200 rounded-lg">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por referencia o detalle de movimiento..."
+                      className="w-full pl-9 pr-3 py-2 border border-zinc-200 rounded bg-white text-xs font-semibold focus:outline-none focus:border-zinc-300"
+                      value={movSearch}
+                      onChange={(e) => setMovSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="w-full md:w-48">
+                    <select
+                      className="w-full p-2 border border-zinc-200 rounded bg-white text-xs font-bold text-zinc-700 focus:outline-none"
+                      value={movType}
+                      onChange={(e) => setMovType(e.target.value as any)}
+                    >
+                      <option value="ALL">TODOS LOS TIPOS</option>
+                      <option value="FACTURA">FACTURAS EMITIDAS</option>
+                      <option value="PAGO">PAGOS RECIBIDOS</option>
+                      <option value="REINTEGRO">REINTEGROS / NC</option>
+                      <option value="EXCEDENTE">EXCEDENTES / ABONOS</option>
+                    </select>
+                  </div>
+                  <div className="w-full md:w-48">
+                    <select
+                      className="w-full p-2 border border-zinc-200 rounded bg-white text-xs font-bold text-zinc-700 focus:outline-none"
+                      value={movStatus}
+                      onChange={(e) => setMovStatus(e.target.value as any)}
+                    >
+                      <option value="ALL">TODOS LOS ESTADOS</option>
+                      <option value="PAGADO">PAGADOS</option>
+                      <option value="FACTURADO">FACTURADOS (PENDIENTES)</option>
+                      <option value="VENCIDO">VENCIDOS</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs divide-y divide-zinc-200">
+                    <thead>
+                      <tr className="text-zinc-500 font-bold bg-zinc-50 uppercase tracking-wider text-[9px] border-b border-zinc-200">
+                        <th className="p-3">Referencia / Código</th>
+                        <th className="p-3">Detalle del Movimiento</th>
+                        <th className="p-3">Fecha Emisión</th>
+                        <th className="p-3 text-right">Importe</th>
+                        <th className="p-3 text-center">Estado</th>
+                        <th className="p-3 text-center">Tipo de Movimiento</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 font-medium">
+                      {filteredInvoices.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-6 text-center text-zinc-450 italic">
+                            No se registran movimientos financieros que coincidan con los filtros seleccionados.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredInvoices.map((inv) => {
+                          const isCreditNote = inv.id.startsWith("NC-") || inv.amount < 0;
+                          const isExcess = inv.id.startsWith("ABO-");
+                          const isPayment = inv.status === "Pagado" && inv.amount > 0 && !isExcess;
+                          
+                          return (
+                            <tr key={inv.id} className="hover:bg-zinc-50/50 transition-colors">
+                              <td className="p-3 font-mono font-bold text-zinc-650">{inv.id}</td>
+                              <td className="p-3 text-zinc-900 font-bold">{inv.clientName}</td>
+                              <td className="p-3 text-zinc-500 font-mono">{inv.date}</td>
+                              <td className={`p-3 text-right font-black font-mono text-xs ${isCreditNote ? "text-red-650" : isExcess ? "text-emerald-700 font-extrabold" : "text-zinc-900"}`}>
+                                {isCreditNote ? "" : "+"}${inv.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                              </td>
+                              <td className="p-3 text-center">
+                                <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${
+                                  inv.status === "Pagado" ? "bg-emerald-50 text-emerald-700 border-emerald-250 font-bold" : 
+                                  inv.status === "Facturado" ? "bg-amber-50 text-amber-700 border-amber-250" : 
+                                  inv.status === "Vencido" ? "bg-red-50 text-red-700 border-red-200 font-bold animate-pulse" : "bg-zinc-50 text-zinc-650 border-zinc-200"
+                                }`}>
+                                  {inv.status}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center">
+                                <span className={`px-2.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider border ${
+                                  isCreditNote 
+                                    ? "bg-red-50 border-red-200 text-red-750" 
+                                    : isExcess
+                                      ? "bg-emerald-50 border-emerald-250 text-emerald-750"
+                                      : isPayment 
+                                        ? "bg-emerald-50 border-emerald-205 text-emerald-700" 
+                                        : "bg-blue-50 border-blue-200 text-blue-750"
+                                }`}>
+                                  {isCreditNote ? "Reintegro / NC" : isExcess ? "Excedente / Abono" : isPayment ? "Pago Recibido" : "Factura Emitida"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: Expedientes de Reservas */}
+            {detailTab === "expedientes" && (
+              <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs space-y-4">
+                <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-3">
+                  <Calendar className="w-4.5 h-4.5 text-zinc-700" /> Historial de Expedientes (Reservas de la Agencia)
+                </h4>
+
+                {/* Filters Bar */}
+                <div className="flex flex-col md:flex-row gap-3 bg-zinc-50 p-4 border border-zinc-200 rounded-lg">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-zinc-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por localizador, titular o servicio principal..."
+                      className="w-full pl-9 pr-3 py-2 border border-zinc-200 rounded bg-white text-xs font-semibold focus:outline-none focus:border-zinc-300"
+                      value={resSearch}
+                      onChange={(e) => setResSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="w-full md:w-48">
+                    <select
+                      className="w-full p-2 border border-zinc-200 rounded bg-white text-xs font-bold text-zinc-700 focus:outline-none"
+                      value={resStatus}
+                      onChange={(e) => setResStatus(e.target.value)}
+                    >
+                      <option value="ALL">TODOS LOS ESTADOS</option>
+                      <option value="Confirmada">CONFIRMADA</option>
+                      <option value="Pendiente de Pago">PENDIENTE DE PAGO</option>
+                      <option value="Modificada">MODIFICADA</option>
+                      <option value="Cancelada">CANCELADA</option>
+                      <option value="Petición Especial">PETICIÓN ESPECIAL</option>
+                    </select>
+                  </div>
+                  <div className="w-full md:w-48">
+                    <select
+                      className="w-full p-2 border border-zinc-200 rounded bg-white text-xs font-bold text-zinc-700 focus:outline-none"
+                      value={resDebtStatus}
+                      onChange={(e) => setResDebtStatus(e.target.value as any)}
+                    >
+                      <option value="ALL">TODOS LOS SALDOS</option>
+                      <option value="SALDADO">SALDADO</option>
+                      <option value="DEUDA">CON SALDO PENDIENTE</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs divide-y divide-zinc-200">
+                    <thead>
+                      <tr className="text-zinc-500 font-bold bg-zinc-50 uppercase tracking-wider text-[9px] border-b border-zinc-200">
+                        <th className="p-3">Localizador</th>
+                        <th className="p-3">Titular / Grupo</th>
+                        <th className="p-3">Hotel / Servicio Principal</th>
+                        <th className="p-3 text-center">Fecha Check-in</th>
+                        <th className="p-3 text-right">Monto Venta</th>
+                        <th className="p-3 text-center">Estado Reserva</th>
+                        <th className="p-3 text-center">Estado de Deuda</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100 font-medium">
+                      {filteredBookings.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="p-6 text-center text-zinc-450 italic">
+                            No se registran expedientes de reservas que coincidan con los filtros.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredBookings.map((res) => {
+                          const resInvoices = invoices.filter(inv => inv.clientName.includes(res.id));
+                          const unpaidInvoices = resInvoices.filter(inv => inv.status === "Facturado" || inv.status === "Vencido");
+                          const hasDebt = unpaidInvoices.length > 0;
+                          const debtAmount = unpaidInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+
+                          return (
+                            <tr 
+                              key={res.id} 
+                              onClick={() => {
+                                setSelectedResId(res.id);
+                                setViewLevel(3);
+                              }}
+                              className="hover:bg-zinc-50/60 transition-colors cursor-pointer group"
+                            >
+                              <td className="p-3 font-mono font-bold text-zinc-650 group-hover:underline">{res.id}</td>
+                              <td className="p-3 text-zinc-900 font-bold">{res.holder}</td>
+                              <td className="p-3 text-zinc-650 font-semibold">{res.hotelName}</td>
+                              <td className="p-3 text-center text-zinc-500 font-mono">{res.checkIn}</td>
+                              <td className="p-3 text-right font-black font-mono text-zinc-900">${res.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</td>
+                              <td className="p-3 text-center">
+                                <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${
+                                  res.status === "Confirmada" ? "bg-emerald-50 text-emerald-700 border-emerald-250 font-bold" :
+                                  res.status === "Cancelada" ? "bg-red-50 text-red-700 border-red-200" :
+                                  "bg-amber-50 text-amber-700 border-amber-250"
+                                }`}>
+                                  {res.status}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center">
+                                {hasDebt ? (
+                                  <span className="px-2 py-0.5 rounded bg-red-50 border border-red-200 text-red-650 text-[9px] font-black uppercase inline-flex items-center gap-1 animate-pulse" title="Existe saldo pendiente de pago para este expediente">
+                                    <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                                    Deuda: ${debtAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-black uppercase inline-flex items-center gap-1">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                    Saldado
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
       )}
 
       {viewLevel === 3 && (
         <div className="space-y-6 animate-fade-in">
           {/* Header Breadcrumbs */}
-          <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+          <div className="flex items-center justify-between border-b border-zinc-200 pb-4 sticky top-16 bg-zinc-50/95 backdrop-blur-xs pt-2 z-10 -mx-8 px-8">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setViewLevel(2)}
@@ -1149,14 +1334,26 @@ export default function ClientesView({
 
                 {/* Callout de Advertencia si hay Deuda */}
                 {totalPendiente > 0 && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-750 text-xs flex gap-3">
-                    <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-500 mt-0.5" />
-                    <div className="space-y-1">
-                      <h5 className="font-extrabold text-[13px] uppercase">Expediente con Deuda Activa</h5>
-                      <p className="font-semibold leading-relaxed">
-                        Este expediente posee una deuda pendiente de <strong>${totalPendiente.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</strong>. Se han cobrado <strong>${totalPagado.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</strong> de un total facturado de <strong>${totalFacturado.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</strong>. Por favor, gestione el cobro o concilie con el saldo a favor de la agencia.
-                      </p>
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-750 text-xs flex items-center justify-between gap-4">
+                    <div className="flex gap-3">
+                      <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-500 mt-0.5" />
+                      <div className="space-y-1">
+                        <h5 className="font-extrabold text-[13px] uppercase">Expediente con Deuda Activa</h5>
+                        <p className="font-semibold leading-relaxed">
+                          Este expediente posee una deuda pendiente de <strong>${totalPendiente.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</strong>. Se han cobrado <strong>${totalPagado.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</strong> de un total facturado de <strong>${totalFacturado.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</strong>. Por favor, gestione el cobro o concilie con el saldo a favor de la agencia.
+                        </p>
+                      </div>
                     </div>
+                    {onNavigateToCobranzas && (
+                      <div className="flex-shrink-0">
+                        <button
+                          onClick={() => onNavigateToCobranzas(activeClient?.id || "")}
+                          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded transition-colors shadow-sm whitespace-nowrap"
+                        >
+                          Ir a Cobranzas
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1284,6 +1481,38 @@ export default function ClientesView({
                             </td>
                           </tr>
                         ) : null}
+                        
+                        {/* Vuelos Conjuntos Facturados */}
+                        {selectedRes && boletos.filter(b => b.expedienteId === selectedRes.id && b.facturarConjunto).map(vuelo => {
+                          const b2bCom = vuelo.comisionB2B || (vuelo.precioVenta - vuelo.costoNeto);
+                          const segmentos = vuelo.segmentos?.map ? vuelo.segmentos : [];
+                          const rutaStr = segmentos.length > 0 
+                            ? (segmentos.length === 1 ? `${segmentos[0].origen}-${segmentos[0].destino}` : `${segmentos[0].origen}-${segmentos[segmentos.length-1].destino}`)
+                            : "—";
+                            
+                          return (
+                            <tr key={vuelo.id} className="hover:bg-zinc-50/50 transition-colors border-t border-zinc-200">
+                              <td className="p-3 font-mono font-bold text-zinc-500">{vuelo.pnr}</td>
+                              <td className="p-3">
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200">
+                                  AÉREO
+                                </span>
+                              </td>
+                              <td className="p-3 text-zinc-900 font-semibold">Boleto Aéreo GDS - Ruta: {rutaStr}</td>
+                              <td className="p-3 text-right font-mono font-bold text-zinc-650">${vuelo.costoNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                              <td className="p-3 text-right font-mono font-black text-zinc-900">${vuelo.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                              <td className="p-3 text-right font-mono text-zinc-500">${b2bCom.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                              <td className="p-3 text-center">
+                                <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-bold ${
+                                  vuelo.expedienteAereo?.status === "Facturado" || vuelo.expedienteAereo?.status === "PagadoAerolinea" ? "bg-emerald-50 text-emerald-700 border-emerald-250" :
+                                  "bg-zinc-50 text-zinc-500 border-zinc-200"
+                                }`}>
+                                  {vuelo.expedienteAereo?.status || "Borrador"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

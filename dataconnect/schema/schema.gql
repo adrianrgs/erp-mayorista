@@ -1,3 +1,52 @@
+type DetailedProperty @table {
+  id: String! @col(dataType: "varchar(50)")
+  nombre: String!
+  pais: String!
+  estado: String!
+  ciudad: String!
+  categoria: Int!
+  status: String!
+  politicasGenerales: String!
+  imagen: String
+  supplierName: String
+  updatedAt: String
+}
+
+type RoomType @table {
+  id: String! @col(dataType: "varchar(50)")
+  propertyId: String!
+  nombre: String!
+  regimenAlimentacion: String!
+  capacidadMax: Int!
+  ocupacionBase: Int
+  updatedAt: String
+}
+
+type RatePlan @table {
+  id: String! @col(dataType: "varchar(50)")
+  propertyId: String!
+  roomTypeId: String!
+  nombrePromocion: String!
+  fechaInicio: String!
+  fechaFin: String!
+  tipoCobro: String!
+  tarifaBase: Float!
+  tarifaExtraAdulto: Float!
+  tarifaExtraNino: Float!
+  politicasCancelacion: String!
+  mercado: String!
+  updatedAt: String
+}
+
+type StopSale @table {
+  id: String! @col(dataType: "varchar(50)")
+  propertyId: String!
+  fechaInicio: String!
+  fechaFin: String!
+  motivo: String
+  updatedAt: String
+}
+
 type HotelProperty @table {
   id: String!
   name: String!
@@ -10,6 +59,7 @@ type HotelProperty @table {
   stars: Int!
   allotment: Int!
   supplierName: String!
+  updatedAt: String
 }
 
 type Reservation @table {
@@ -34,6 +84,11 @@ type Reservation @table {
   comprobanteMonto: Float
   comprobanteMetodo: String
   facturacionTipo: String
+  facturacionRechazoMotivo: String
+  facturacionRechazoArchivos: String
+  servicios: Any
+  variaciones: Any
+  updatedAt: String
 }
 
 type FlightLeg @table {
@@ -48,6 +103,7 @@ type FlightLeg @table {
   status: String!
   seatsRemaining: Int!
   seatsTotal: Int!
+  updatedAt: String
 }
 
 type TransferService @table {
@@ -67,6 +123,11 @@ type TransferService @table {
   notes: String
   status: String!
   vehicleType: String!
+  direction: String
+  legIndex: Int
+  tipoTraslado: String
+  telefono: String
+  updatedAt: String
 }
 
 type FinancialInvoice @table {
@@ -78,15 +139,150 @@ type FinancialInvoice @table {
   vatAmount: Float!
   type: String!
   status: String!
+  updatedAt: String
 }
 
 type B2BClient @table {
   id: String! @col(dataType: "varchar(50)")
   nombre: String!
+  rif: String!
+  tipo: String!
+  status: String!
+  contactoNombre: String!
   email: String!
   telefono: String!
-  type: String!
-  tier: String!
-  balance: Float!
+  saldoFavor: Float!
+  saldoDeber: Float!
+  moroso: Boolean!
+  limiteCredito: Float
+  diasCredito: Int
+  observaciones: String
+  # Legacy columns to prevent deploy destructive block
+  balance: Float
+  tier: String
+  type: String
+  updatedAt: String
+}
+
+type FlightTicket @table {
+  id: String! @col(dataType: "varchar(50)")
+  pnr: String!
+  pasajeros: Any!
+  segmentos: Any!
+  costoNeto: Float!
+  precioVenta: Float!
+  precioPvp: Float
+  comisionB2B: Float
+  comisionMayorista: Float
+  tipoComision: String
+  fee: Float
+  vinculadoAExpediente: Boolean!
+  facturarConjunto: Boolean
+  expedienteId: String
+  agenteNombre: String
+  createdAt: String
+  ticketNumero: String
+  aerolineaValidadora: String
+  notas: String
+  expedienteAereo: Any
+  updatedAt: String
+}
+
+type FleetVehicle @table {
+  id: String! @col(dataType: "varchar(50)")
+  placa: String!
+  tipo: String!
+  marca: String!
+  modelo: String!
+  capacidad: Int!
+  proveedor: String!
   status: String!
+  conductorAsignadoId: String
+  observaciones: String
+  updatedAt: String
+}
+
+type FleetDriver @table {
+  id: String! @col(dataType: "varchar(50)")
+  nombre: String!
+  telefono: String!
+  licencia: String!
+  vehiculoAsignadoId: String
+  status: String!
+  observaciones: String
+  updatedAt: String
+}
+
+type PaymentVoucher @table {
+  id: String! @col(dataType: "varchar(50)")
+  clientId: String!
+  clientName: String!
+  invoiceId: String
+  locatorId: String
+  method: String!
+  reference: String!
+  amount: Float!
+  date: String!
+  status: String!
+  bankName: String
+  notes: String
+  attachedFile: String
+  updatedAt: String
+}
+
+type PayableObligation @table {
+  id: String! @col(dataType: "varchar(50)")
+  dueDate: String!
+  providerName: String!
+  serviceDetail: String!
+  locatorId: String!
+  netCost: Float!
+  paidAmount: Float!
+  status: String!
+  paymentMethod: String
+  reference: String
+  notes: String
+  date: String
+  currency: String
+  attachedFile: String
+  updatedAt: String
+}
+
+type ProviderStatement @table {
+  id: String! @col(dataType: "varchar(50)")
+  providerName: String!
+  date: String!
+  type: String!
+  amount: Float!
+  reference: String!
+  status: String!
+  updatedAt: String
+}
+
+type ExtraService @table {
+  id: String! @col(dataType: "varchar(50)")
+  nombre: String!
+  providerName: String!
+  category: String!
+  ubicacion: String!
+  descripcion: String!
+  politicasCancelacion: String!
+  status: String!
+  updatedAt: String
+}
+
+type ServiceRate @table {
+  id: String! @col(dataType: "varchar(50)")
+  extraServiceId: String!
+  temporadaInicio: String!
+  temporadaFin: String!
+  pricingModel: String!
+  netoAdulto: Float
+  ventaAdulto: Float
+  netoNino: Float
+  ventaNino: Float
+  capacidadMaxima: Int
+  netoTotal: Float
+  ventaTotal: Float
+  updatedAt: String
 }

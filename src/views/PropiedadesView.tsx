@@ -33,8 +33,10 @@ import {
   ShieldAlert,
   CheckCircle2,
   Sparkles,
-  FileText
+  FileText,
+  X
 } from "lucide-react";
+import { useDialog } from "../components/ui/DialogProvider";
 
 // Initial list of Venezuelan and International properties mapped for Product Dpto.
 const initialDetailedProperties: Property[] = [
@@ -239,27 +241,46 @@ interface PropiedadesViewProps {
   properties: HotelProperty[]; // Compatibility with top-level ERP states
   onUpdateProperty: (updated: HotelProperty) => void;
   detailedProperties: Property[];
-  setDetailedProperties: React.Dispatch<React.SetStateAction<Property[]>>;
+  onAddDetailedProperty: (prop: Property) => void;
+  onUpdateDetailedProperty: (prop: Property) => void;
   roomTypes: RoomType[];
-  setRoomTypes: React.Dispatch<React.SetStateAction<RoomType[]>>;
+  onAddRoomType: (room: RoomType) => void;
+  onUpdateRoomType: (room: RoomType) => void;
   ratePlans: RatePlan[];
-  setRatePlans: React.Dispatch<React.SetStateAction<RatePlan[]>>;
+  onAddRatePlan: (rate: RatePlan) => void;
+  onUpdateRatePlan: (rate: RatePlan) => void;
   stopSales: StopSale[];
-  setStopSales: React.Dispatch<React.SetStateAction<StopSale[]>>;
+  onAddStopSale: (stop: StopSale) => void;
+  onUpdateStopSale: (stop: StopSale) => void;
+  onDeleteRatePlan: (id: string) => void;
+  onDeleteRatePlanGroup: (planName: string, propertyId: string) => void;
+  onDeleteStopSale: (id: string) => void;
+  onDeleteRoomType: (id: string) => void;
+  onDeleteDetailedProperty: (id: string) => void;
 }
 
 export default function PropiedadesView({ 
   properties, 
   onUpdateProperty,
   detailedProperties,
-  setDetailedProperties,
+  onAddDetailedProperty,
+  onUpdateDetailedProperty,
   roomTypes,
-  setRoomTypes,
+  onAddRoomType,
+  onUpdateRoomType,
   ratePlans,
-  setRatePlans,
+  onAddRatePlan,
+  onUpdateRatePlan,
   stopSales,
-  setStopSales
+  onAddStopSale,
+  onUpdateStopSale,
+  onDeleteRatePlan,
+  onDeleteRatePlanGroup,
+  onDeleteStopSale,
+  onDeleteRoomType,
+  onDeleteDetailedProperty
 }: PropiedadesViewProps) {
+  const { showConfirm, showAlert } = useDialog();
 
   // --- STATE MANAGERS ---
   const [viewLevel, setViewLevel] = useState<1 | 2 | 3>(1); // Level 1 (Listing), Level 2 (Property Detail & Stats), Level 3 (Rate/Room Matrix)
@@ -267,7 +288,6 @@ export default function PropiedadesView({
 
   // Localized state bound directly to parent states
   const localProperties = detailedProperties;
-  const setLocalProperties = setDetailedProperties;
 
   // Level 1: Search & Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -330,6 +350,8 @@ export default function PropiedadesView({
   });
 
   const [activeMercadoTab, setActiveMercadoTab] = useState<"NACIONAL" | "INTERNACIONAL">("NACIONAL");
+
+  const [editingPlanGroup, setEditingPlanGroup] = useState<string | null>(null);
 
   // Opción A: Multi-room selection with individual pricing per room
   const [selectedRooms, setSelectedRooms] = useState<{ [roomId: string]: { tarifaBase: string, tarifaExtraAdulto: string, tarifaExtraNino: string } }>({});
@@ -428,7 +450,7 @@ export default function PropiedadesView({
     };
     onUpdateProperty(erpCompatibleItem);
 
-    setLocalProperties(prev => [...prev, newProperty]);
+    onAddDetailedProperty(newProperty);
     setActivePropertyId(generatorId);
     setIsNewPropertyOpen(false);
     // Reset modal form and custom modes
@@ -446,7 +468,7 @@ export default function PropiedadesView({
       capacidadMax: 2,
       ocupacionBase: 2
     };
-    setRoomTypes(prev => [...prev, defaultRoom]);
+    onAddRoomType(defaultRoom);
 
     setNewPropForm({
       nombre: "",
@@ -464,7 +486,10 @@ export default function PropiedadesView({
   // Level 1: Toggle Property Status
   const handleTogglePropertyStatus = (propId: string, current: PropertyStatus) => {
     const nextStatus = current === PropertyStatus.ACTIVO ? PropertyStatus.INACTIVO : PropertyStatus.ACTIVO;
-    setLocalProperties(prev => prev.map(p => p.id === propId ? { ...p, status: nextStatus } : p));
+    const propertyToUpdate = localProperties.find(p => p.id === propId);
+    if (propertyToUpdate) {
+      onUpdateDetailedProperty({ ...propertyToUpdate, status: nextStatus });
+    }
     triggerNotification(`✓ Propiedad marcada como ${nextStatus === PropertyStatus.ACTIVO ? "Activa" : "Inactiva"} exitosamente.`);
   };
 
@@ -484,14 +509,14 @@ export default function PropiedadesView({
       motivo: newStopSaleForm.motivo || "Corte de ventas contractual"
     };
 
-    setStopSales(prev => [...prev, newStop]);
+    onAddStopSale(newStop);
     setNewStopSaleForm({ fechaInicio: "", fechaFin: "", motivo: "" });
     triggerNotification("✓ Stop Sale (Corte de Venta) aplicado a los calendarios del hotel.");
   };
 
   // Level 2: Delete Stop Sale
   const handleDeleteStopSale = (id: string) => {
-    setStopSales(prev => prev.filter(s => s.id !== id));
+    onDeleteStopSale(id);
     triggerNotification("✓ Stop Sale removido exitosamente.");
   };
 
@@ -504,7 +529,10 @@ export default function PropiedadesView({
   }, [activePropertyId, viewLevel]);
 
   const handleSavePolicies = () => {
-    setLocalProperties(prev => prev.map(p => p.id === activePropertyId ? { ...p, politicasGenerales: policyText } : p));
+    const propertyToUpdate = localProperties.find(p => p.id === activePropertyId);
+    if (propertyToUpdate) {
+      onUpdateDetailedProperty({ ...propertyToUpdate, politicasGenerales: policyText });
+    }
     triggerNotification("✓ Políticas y condiciones comerciales de alojamiento actualizadas.");
   };
 
@@ -538,7 +566,7 @@ export default function PropiedadesView({
       ocupacionBase: parseInt(newRoomForm.ocupacionBase) || 2
     };
 
-    setRoomTypes(prev => [...prev, newRoom]);
+    onAddRoomType(newRoom);
     setNewRoomForm({
       nombrePredefinido: "Habitación Standard Doble",
       nombreManual: "",
@@ -551,9 +579,7 @@ export default function PropiedadesView({
 
   // Level 3: Section A - Delete Room Type
   const handleDeleteRoomType = (id: string) => {
-    setRoomTypes(prev => prev.filter(r => r.id !== id));
-    // Also cascade delete corresponding rate plans
-    setRatePlans(prev => prev.filter(p => p.roomType_id !== id));
+    onDeleteRoomType(id);
     triggerNotification("✓ Tipo de habitación e inventarios de tarifa cascados eliminados.");
   };
 
@@ -571,38 +597,74 @@ export default function PropiedadesView({
     }
 
     const planName = newRateForm.nombrePromocion;
-    const newRates: RatePlan[] = roomEntries.map(([roomId, pricing]) => ({
-      id: `rate-${Math.floor(100 + Math.random() * 9000)}`,
-      property_id: activePropertyId,
-      roomType_id: roomId,
-      nombrePromocion: planName,
-      fechaInicio: newRateForm.fechaInicio,
-      fechaFin: newRateForm.fechaFin,
-      tipoCobro: newRateForm.tipoCobro,
-      tarifaBase: parseFloat(pricing.tarifaBase) || 0,
-      tarifaExtraAdulto: parseFloat(pricing.tarifaExtraAdulto) || 0,
-      tarifaExtraNino: parseFloat(pricing.tarifaExtraNino) || 0,
-      politicasCancelacion: newRateForm.politicasCancelacion,
-      mercado: newRateForm.mercado
-    }));
+    if (editingPlanGroup) {
+      onDeleteRatePlanGroup(editingPlanGroup, activePropertyId);
+      setEditingPlanGroup(null);
+    }
 
-    setRatePlans(prev => [...prev, ...newRates]);
+    const newRates: RatePlan[] = roomEntries.map(([roomId, val]) => {
+      const pricing = val as { tarifaBase: string, tarifaExtraAdulto: string, tarifaExtraNino: string };
+      return {
+        id: `rate-${Math.floor(100 + Math.random() * 9000)}`,
+        property_id: activePropertyId,
+        roomType_id: roomId,
+        nombrePromocion: planName,
+        fechaInicio: newRateForm.fechaInicio,
+        fechaFin: newRateForm.fechaFin,
+        tipoCobro: newRateForm.tipoCobro,
+        tarifaBase: parseFloat(pricing.tarifaBase) || 0,
+        tarifaExtraAdulto: parseFloat(pricing.tarifaExtraAdulto) || 0,
+        tarifaExtraNino: parseFloat(pricing.tarifaExtraNino) || 0,
+        politicasCancelacion: newRateForm.politicasCancelacion,
+        mercado: activeMercadoTab
+      };
+    });
+
+    newRates.forEach(rate => onAddRatePlan(rate));
     setSelectedRooms({});
+    setEditingPlanGroup(null);
     setNewRateForm(prev => ({ ...prev, nombrePromocion: "", fechaInicio: "", fechaFin: "" }));
     // Auto-expand the newly created group
     setExpandedGroups(prev => new Set([...prev, planName]));
     triggerNotification(`✓ Plan "${planName}" guardado con ${newRates.length} habitación(es).`);
   };
 
+  const handleEditPlanGroup = (planName: string, planRates: RatePlan[]) => {
+    setEditingPlanGroup(planName);
+    
+    const firstRate = planRates[0];
+    setNewRateForm({
+      nombrePromocion: firstRate?.nombrePromocion || "",
+      mercado: (firstRate?.mercado as "NACIONAL" | "INTERNACIONAL") || "NACIONAL",
+      fechaInicio: firstRate?.fechaInicio || "",
+      fechaFin: firstRate?.fechaFin || "",
+      tipoCobro: firstRate?.tipoCobro || TipoCobro.POR_HABITACION,
+      politicasCancelacion: firstRate?.politicasCancelacion || "Cancelación sin cargos hasta 5 días hábiles antes de la llegada."
+    });
+    setActiveMercadoTab((firstRate?.mercado as "NACIONAL" | "INTERNACIONAL") || "NACIONAL");
+
+    const roomsForEdit: any = {};
+    planRates.forEach(rate => {
+      roomsForEdit[rate.roomType_id] = {
+        tarifaBase: rate.tarifaBase?.toString() || "0",
+        tarifaExtraAdulto: rate.tarifaExtraAdulto?.toString() || "0",
+        tarifaExtraNino: rate.tarifaExtraNino?.toString() || "0"
+      };
+    });
+    setSelectedRooms(roomsForEdit);
+
+    document.getElementById("rateplan-form-header")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   // Level 3: Section B - Delete a single rate plan row
   const handleDeleteRatePlan = (id: string) => {
-    setRatePlans(prev => prev.filter(r => r.id !== id));
+    onDeleteRatePlan(id);
     triggerNotification("✓ Tarifa individual eliminada.");
   };
 
   // Level 3: Section B - Delete all rate plans belonging to a group/plan name
   const handleDeleteRatePlanGroup = (planName: string) => {
-    setRatePlans(prev => prev.filter(rp => !(rp.property_id === activePropertyId && rp.nombrePromocion === planName)));
+    onDeleteRatePlanGroup(planName, activePropertyId);
     setExpandedGroups(prev => { const s = new Set(prev); s.delete(planName); return s; });
     triggerNotification(`✓ Plan "${planName}" y todas sus tarifas eliminados.`);
   };
@@ -830,6 +892,26 @@ export default function PropiedadesView({
                               >
                                 Ficha de Detalle <ChevronRight className="w-3 h-3" />
                               </button>
+                              <button
+                                onClick={() => {
+                                  showConfirm({
+                                    title: "Eliminar propiedad",
+                                    message: `¿Estás seguro que deseas eliminar la propiedad ${p.nombre}? Esto podría afectar reservas y tarifas asociadas.`,
+                                    type: "danger",
+                                    confirmText: "Eliminar",
+                                    requireInputToConfirm: p.nombre,
+                                    onConfirm: () => {
+                                      onDeleteDetailedProperty(p.id);
+                                      setNotification(`La propiedad ${p.nombre} ha sido eliminada`);
+                                      setTimeout(() => setNotification(""), 3000);
+                                    }
+                                  });
+                                }}
+                                className="p-1.5 bg-white border border-zinc-200 text-red-500 hover:bg-red-50 rounded cursor-pointer transition-colors"
+                                title="Eliminar Propiedad"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -854,7 +936,7 @@ export default function PropiedadesView({
         <div className="space-y-6">
 
           {/* Breadcrumb Navigation & Top Action */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-100/50 p-4 border border-zinc-200 rounded-lg">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 pb-4 sticky top-16 bg-zinc-50/95 backdrop-blur-xs pt-2 z-10 -mx-8 px-8">
             <button
               id="back-to-list-link"
               onClick={() => setViewLevel(1)}
@@ -979,22 +1061,22 @@ export default function PropiedadesView({
                   <div className="p-4 border border-zinc-200 rounded bg-zinc-50/50">
                     <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Ocupación Promedio MTD</p>
                     <div className="flex items-baseline gap-2 mt-1">
-                      <h4 className="font-extrabold text-2xl text-zinc-900">82.4%</h4>
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-55 inline-block px-1.5 py-0.2 rounded">+3.2% vs mayo</span>
+                      <h4 className="font-extrabold text-2xl text-zinc-900">0.0%</h4>
+                      <span className="text-[10px] font-bold text-zinc-500 bg-zinc-100 inline-block px-1.5 py-0.2 rounded">Sin datos</span>
                     </div>
                   </div>
                   <div className="p-4 border border-zinc-200 rounded bg-zinc-50/50">
                     <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Tarifa de Venta Promedio (ADR)</p>
                     <div className="flex items-baseline gap-2 mt-1">
-                      <h4 className="font-extrabold text-2xl text-zinc-900">$142.50</h4>
+                      <h4 className="font-extrabold text-2xl text-zinc-900">$0.00</h4>
                       <span className="text-[10px] text-zinc-400 font-semibold font-mono">FIT Wholesale NET</span>
                     </div>
                   </div>
                   <div className="p-4 border border-zinc-200 rounded bg-zinc-50/50">
                     <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Ingresos Emitidos Estimados (MTD)</p>
                     <div className="flex items-baseline gap-2 mt-1">
-                      <h4 className="font-extrabold text-2xl text-zinc-900">$18,450.00</h4>
-                      <span className="text-[10px] text-zinc-400 font-semibold font-mono">13 Cuentas Emitidas</span>
+                      <h4 className="font-extrabold text-2xl text-zinc-900">$0.00</h4>
+                      <span className="text-[10px] text-zinc-400 font-semibold font-mono">0 Cuentas Emitidas</span>
                     </div>
                   </div>
                 </div>
@@ -1048,34 +1130,9 @@ export default function PropiedadesView({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100 font-medium">
-                        <tr id="checkin-row-1">
-                          <td className="p-3 font-bold text-zinc-900">Eduardo Mendoza & Gp.</td>
-                          <td className="p-3">Habitación Standard Doble</td>
-                          <td className="p-3 font-semibold text-zinc-700">12/06/2026</td>
-                          <td className="p-3 text-zinc-500">19/06/2026</td>
-                          <td className="p-3 font-mono font-bold">2 Pax</td>
-                          <td className="p-3">
-                            <span className="text-[8.5px] uppercase bg-green-50 text-green-700 border border-green-200 py-0.5 px-2 rounded-full font-bold">Confirmada</span>
-                          </td>
-                        </tr>
-                        <tr id="checkin-row-2">
-                          <td className="p-3 font-bold text-zinc-900">Valentina Rossi</td>
-                          <td className="p-3">Suite Familiar de Lujo</td>
-                          <td className="p-3 font-semibold text-zinc-700">18/06/2026</td>
-                          <td className="p-3 text-zinc-500">25/06/2026</td>
-                          <td className="p-3 font-mono font-bold">3 Pax</td>
-                          <td className="p-3">
-                            <span className="text-[8.5px] uppercase bg-green-50 text-green-700 border border-green-200 py-0.5 px-2 rounded-full font-bold">Confirmada</span>
-                          </td>
-                        </tr>
-                        <tr id="checkin-row-3">
-                          <td className="p-3 font-bold text-zinc-900">Corporativo Ron Santa Teresa</td>
-                          <td className="p-3">Superior Deluxe Vista al Campo</td>
-                          <td className="p-3 font-semibold text-zinc-700">01/07/2026</td>
-                          <td className="p-3 text-zinc-500">05/07/2026</td>
-                          <td className="p-3 font-mono font-bold">4 Pax</td>
-                          <td className="p-3">
-                            <span className="text-[8.5px] uppercase bg-amber-50 text-amber-700 border border-amber-200 py-0.5 px-2 rounded-full font-bold">Lista Espera</span>
+                        <tr>
+                          <td colSpan={6} className="p-5 text-center text-zinc-450 italic bg-white">
+                            No hay reservas registradas con check-in próximo para este establecimiento.
                           </td>
                         </tr>
                       </tbody>
@@ -1290,7 +1347,7 @@ export default function PropiedadesView({
         <div className="space-y-6">
 
           {/* Section Breadcrumbs */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-900 text-white p-5 rounded-lg border border-zinc-800 shadow">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-zinc-900/95 backdrop-blur-xs text-white p-5 border-b border-zinc-800 shadow sticky top-16 z-10 -mx-8 px-8">
             <div>
               <div className="flex items-center gap-1.5">
                 <button
@@ -1475,9 +1532,15 @@ export default function PropiedadesView({
                         <button
                           id={`del-room-btn-${rt.id}`}
                           onClick={() => {
-                            if (confirm(`El borrado de "${rt.nombre}" eliminará cascada y planes de tarifación adjuntos. ¿Continuar?`)) {
-                              handleDeleteRoomType(rt.id);
-                            }
+                            showConfirm({
+                              title: "Eliminar tipo de habitación",
+                              message: `El borrado de "${rt.nombre}" eliminará cascada y planes de tarifación adjuntos. ¿Continuar?`,
+                              type: "danger",
+                              confirmText: "Eliminar",
+                              onConfirm: () => {
+                                handleDeleteRoomType(rt.id);
+                              }
+                            });
                           }}
                           className="p-1 px-2.5 bg-zinc-50 hover:bg-red-50 text-zinc-400 hover:text-red-600 border border-zinc-200 hover:border-red-200 rounded font-bold uppercase text-[9px]"
                         >
@@ -1533,16 +1596,32 @@ export default function PropiedadesView({
               </div>
 
               {/* Formulario Cargar Tarifa / Rate Plan — Opción A: Multi-Habitación */}
-              <div className="bg-white p-5 border border-zinc-200 rounded-lg space-y-4 shadow-xs">
+              <div id="rateplan-form-header" className="bg-white p-5 border border-zinc-200 rounded-lg space-y-4 shadow-xs">
                 <div>
                   <h4 className="font-bold text-zinc-905 text-sm uppercase tracking-wider flex items-center gap-1.5">
                     <DollarSign className="w-4.5 h-4.5 text-zinc-700" />
-                    Cargar Plan de Tarifas — Multi-Habitación
+                    {editingPlanGroup ? "Editar Plan de Tarifas" : "Cargar Plan de Tarifas — Multi-Habitación"}
                   </h4>
                   <p className="text-xs text-zinc-450 mt-1">Nombre el plan, configure fechas y asigne precios individuales a cada habitación seleccionada.</p>
                 </div>
 
                 <form onSubmit={handleAddRatePlanSubmit} className="space-y-4">
+                  {/* Cancel Edit Button */}
+                  {editingPlanGroup && (
+                    <div className="flex justify-end mb-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingPlanGroup(null);
+                          setNewRateForm(prev => ({ ...prev, nombrePromocion: "", fechaInicio: "", fechaFin: "" }));
+                          setSelectedRooms({});
+                        }}
+                        className="text-xs text-red-600 hover:text-red-700 underline font-bold cursor-pointer flex items-center gap-1"
+                      >
+                        <X className="w-3.5 h-3.5" /> Cancelar Edición
+                      </button>
+                    </div>
+                  )}
 
                   {/* Nombre del plan + Metodología cobro */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1572,36 +1651,6 @@ export default function PropiedadesView({
                     </div>
                   </div>
 
-                  {/* Mercado objetivo de la tarifa */}
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block">Mercado Objetivo</label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        id="form-market-nacional-btn"
-                        onClick={() => setNewRateForm(prev => ({ ...prev, mercado: "NACIONAL" }))}
-                        className={`flex-1 py-2 px-3 border rounded text-xs font-bold transition-all cursor-pointer text-center ${
-                          newRateForm.mercado === "NACIONAL"
-                            ? "bg-zinc-900 border-zinc-900 text-white shadow-xs"
-                            : "bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50"
-                        }`}
-                      >
-                        Nacional
-                      </button>
-                      <button
-                        type="button"
-                        id="form-market-internacional-btn"
-                        onClick={() => setNewRateForm(prev => ({ ...prev, mercado: "INTERNACIONAL" }))}
-                        className={`flex-1 py-2 px-3 border rounded text-xs font-bold transition-all cursor-pointer text-center ${
-                          newRateForm.mercado === "INTERNACIONAL"
-                            ? "bg-zinc-900 border-zinc-900 text-white shadow-xs"
-                            : "bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50"
-                        }`}
-                      >
-                        Internacional
-                      </button>
-                    </div>
-                  </div>
 
                   {/* Fechas */}
                   <div className="grid grid-cols-2 gap-4">
@@ -1756,9 +1805,13 @@ export default function PropiedadesView({
                     <button
                       id="submit-rate-plan"
                       type="submit"
-                      className="px-6 py-3 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                      className={`px-6 py-3 rounded text-xs font-bold uppercase tracking-wider cursor-pointer ${
+                        editingPlanGroup 
+                          ? "bg-amber-500 hover:bg-amber-600 text-white shadow-md" 
+                          : "bg-zinc-900 hover:bg-zinc-800 text-white"
+                      }`}
                     >
-                      Guardar Plan de Tarifas
+                      {editingPlanGroup ? "Guardar Cambios" : "Guardar Plan de Tarifas"}
                     </button>
                   </div>
                 </form>
@@ -1825,12 +1878,26 @@ export default function PropiedadesView({
                               </div>
                               <div className="flex items-center gap-2">
                                 <button
+                                  id={`edit-group-btn-${planName.replace(/\s+/g, '-')}`}
+                                  type="button"
+                                  onClick={() => handleEditPlanGroup(planName, planRates)}
+                                  className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider bg-zinc-100 text-zinc-700 border border-zinc-200 rounded hover:bg-zinc-200 cursor-pointer transition-colors"
+                                >
+                                  Editar Plan
+                                </button>
+                                <button
                                   id={`delete-group-btn-${planName.replace(/\s+/g, '-')}`}
                                   type="button"
                                   onClick={() => {
-                                    if (confirm(`¿Eliminar el plan "${planName}" con todas sus ${planRates.length} tarifa(s)?`)) {
-                                      handleDeleteRatePlanGroup(planName);
-                                    }
+                                    showConfirm({
+                                      title: "Eliminar plan de tarifas",
+                                      message: `¿Eliminar el plan "${planName}" con todas sus ${planRates.length} tarifa(s)?`,
+                                      type: "danger",
+                                      confirmText: "Eliminar",
+                                      onConfirm: () => {
+                                        handleDeleteRatePlanGroup(planName);
+                                      }
+                                    });
                                   }}
                                   className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 cursor-pointer transition-colors"
                                 >

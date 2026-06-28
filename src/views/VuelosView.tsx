@@ -24,19 +24,65 @@ import {
   Send,
   Save,
   X,
-  Download
+  Download,
+  Info,
+  Printer,
+  XCircle
 } from "lucide-react";
-import type { FlightLeg, B2BClient } from "../types";
+import type { FlightLeg, B2BClient, CompanyConfig } from "../types";
 import type { FlightTicket, Passenger, FlightSegment } from "../types/aereos";
 import { parseGDS, buildRoute, formatGDSDate, SAMPLE_GDS_TEXT } from "../lib/parsers/pnrParser";
+import { useDialog } from "../components/ui/DialogProvider";
 
-// ─── TIPOS LOCALES ────────────────────────────────────────────────────────────
+// ─── TIPOS Y UTILIDADES LOCALES ────────────────────────────────────────────────────────────
+
+const AIRLINES_MAP: Record<string, string> = {
+  "CM": "Copa Airlines",
+  "9V": "Avior Airlines",
+  "B6": "JetBlue",
+  "AA": "American Airlines",
+  "5U": "Rutaca",
+  "QL": "Laser Airlines",
+  "V0": "Conviasa",
+  "P1": "Sky High",
+  "DO": "Sky High",
+  "VH": "Aeropostal",
+  "R7": "Aserca",
+  "J4": "BBA",
+  "AW": "Venezolana",
+  "VCC": "Venezolana",
+  "AF": "Air France",
+  "IB": "Iberia",
+  "UX": "Air Europa",
+  "PU": "Plus Ultra",
+  "LA": "LATAM Airlines",
+  "AV": "Avianca",
+  "P5": "Wingo",
+  "VT": "Turpial Airlines",
+  "T9": "Turpial Airlines",
+  "ROI": "Rutaca",
+  "NK": "Spirit Airlines",
+  "UA": "United Airlines",
+  "DL": "Delta Air Lines",
+  "TK": "Turkish Airlines",
+  "TP": "TAP Air Portugal",
+  "AR": "Aerolíneas Argentinas",
+  "AM": "Aeroméxico",
+};
+
+function getAirlineName(code: string): string {
+  if (!code) return "";
+  return AIRLINES_MAP[code.toUpperCase()] || code;
+}
 
 interface VuelosViewProps {
   flights: FlightLeg[]; // prop legacy del App.tsx
   boletos: FlightTicket[];
-  onBoletosChange: React.Dispatch<React.SetStateAction<FlightTicket[]>>;
+  onAddBoleto: (boleto: FlightTicket) => void;
+  onUpdateBoleto: (boleto: FlightTicket) => void;
+  onDeleteBoleto: (id: string) => void;
   clients?: B2BClient[];
+  companyConfig: CompanyConfig;
 }
 
 type SubView = "listado" | "nuevo" | "expediente";
@@ -66,10 +112,18 @@ function Badge({
 
 // ─── VISTA PRINCIPAL ──────────────────────────────────────────────────────────
 
-export default function VuelosView({ flights: _flights, boletos, onBoletosChange, clients = [] }: VuelosViewProps) {
+export default function VuelosView({ flights: _flights, boletos, onAddBoleto, onUpdateBoleto, onDeleteBoleto, clients = [], companyConfig }: VuelosViewProps) {
   const [subView, setSubView] = useState<SubView>("listado");
   const [search, setSearch] = useState("");
   const [selectedBoletoId, setSelectedBoletoId] = useState<string | null>(null);
+
+  const [activeVoucherBoleto, setActiveVoucherBoleto] = useState<FlightTicket | null>(null);
+  const [showVoucherModal, setShowVoucherModal] = useState(false);
+
+  const handleOpenVoucher = useCallback((boleto: FlightTicket) => {
+    setActiveVoucherBoleto(boleto);
+    setShowVoucherModal(true);
+  }, []);
 
   return (
     <div className="space-y-0">
@@ -83,19 +137,17 @@ export default function VuelosView({ flights: _flights, boletos, onBoletosChange
             setSelectedBoletoId(id);
             setSubView("expediente");
           }}
-          onToggleVinculo={(id) =>
-            onBoletosChange((prev) =>
-              prev.map((b) =>
-                b.id === id ? { ...b, vinculadoAExpediente: !b.vinculadoAExpediente } : b
-              )
-            )
-          }
-          onEliminar={(id) => onBoletosChange((prev) => prev.filter((b) => b.id !== id))}
+          onToggleVinculo={(id) => {
+            const b = boletos.find(bol => bol.id === id);
+            if (b) onUpdateBoleto({ ...b, vinculadoAExpediente: !b.vinculadoAExpediente });
+          }}
+          onEliminar={(id) => onDeleteBoleto(id)}
+          onShowVoucher={handleOpenVoucher}
         />
       ) : subView === "nuevo" ? (
         <NuevoBoletoView
           onGuardar={(boleto) => {
-            onBoletosChange((prev) => [boleto, ...prev]);
+            onAddBoleto(boleto);
             setSubView("listado");
           }}
           onCancelar={() => setSubView("listado")}
@@ -106,10 +158,17 @@ export default function VuelosView({ flights: _flights, boletos, onBoletosChange
           clients={clients}
           onBack={() => setSubView("listado")}
           onUpdateBoleto={(updated) => {
-            onBoletosChange((prev) =>
-              prev.map((b) => (b.id === updated.id ? updated : b))
-            );
+            onUpdateBoleto(updated);
           }}
+          onShowVoucher={handleOpenVoucher}
+        />
+      )}
+
+      {/* MODAL DE VOUCHER DE VUELO */}
+      {showVoucherModal && activeVoucherBoleto && (
+        <FlightVoucherModal 
+          boleto={activeVoucherBoleto} 
+          onClose={() => setShowVoucherModal(false)} 
         />
       )}
     </div>
@@ -128,6 +187,7 @@ function ListadoView({
   onExpediente,
   onToggleVinculo,
   onEliminar,
+  onShowVoucher,
 }: {
   boletos: FlightTicket[];
   search: string;
@@ -136,12 +196,21 @@ function ListadoView({
   onExpediente: (id: string) => void;
   onToggleVinculo: (id: string) => void;
   onEliminar: (id: string) => void;
+  onShowVoucher: (boleto: FlightTicket) => void;
 }) {
+  const [activeTab, setActiveTab] = useState<"Activos" | "Anulados">("Activos");
+
   const filtered = boletos.filter((b) => {
+    // filter tab
+    const isAnulado = b.expedienteAereo?.status === "Anulado";
+    if (activeTab === "Activos" && isAnulado) return false;
+    if (activeTab === "Anulados" && !isAnulado) return false;
+
+    // filter search
     const q = search.toLowerCase();
-    const paxNames = b.pasajeros.map((p) => p.nombre.toLowerCase()).join(" ");
-    const ruta = buildRoute(b.segmentos).toLowerCase();
-    return b.pnr.toLowerCase().includes(q) || paxNames.includes(q) || ruta.includes(q);
+    const paxNames = (b.pasajeros?.map ? b.pasajeros : []).map((p) => (p?.nombre || "").toLowerCase()).join(" ");
+    const ruta = buildRoute(b.segmentos?.map ? b.segmentos : []).toLowerCase();
+    return (b.pnr || "").toLowerCase().includes(q) || paxNames.includes(q) || ruta.includes(q);
   });
 
   return (
@@ -165,6 +234,26 @@ function ListadoView({
         >
           <Plus className="w-4 h-4" />
           Cargar PNR
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-4 border-b border-zinc-200">
+        <button
+          onClick={() => setActiveTab("Activos")}
+          className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${
+            activeTab === "Activos" ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-400 hover:text-zinc-600 cursor-pointer"
+          }`}
+        >
+          Activos ({boletos.filter((b) => b.expedienteAereo?.status !== "Anulado").length})
+        </button>
+        <button
+          onClick={() => setActiveTab("Anulados")}
+          className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${
+            activeTab === "Anulados" ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-400 hover:text-zinc-600 cursor-pointer"
+          }`}
+        >
+          Anulados ({boletos.filter((b) => b.expedienteAereo?.status === "Anulado").length})
         </button>
       </div>
 
@@ -203,13 +292,16 @@ function ListadoView({
 
           {/* Filas */}
           {filtered.map((boleto) => {
-            const primerSeg = boleto.segmentos[0];
-            const ruta = buildRoute(boleto.segmentos);
+            const segmentos = boleto.segmentos?.map ? boleto.segmentos : [];
+            const pasajeros = boleto.pasajeros?.map ? boleto.pasajeros : [];
+            const primerSeg = segmentos[0];
+            const ruta = buildRoute(segmentos);
             return (
               <div
                 key={boleto.id}
                 id={`boleto-row-${boleto.id}`}
-                className="grid grid-cols-12 gap-2 px-5 py-3.5 border-b border-zinc-100 last:border-0 hover:bg-zinc-50/60 transition-colors items-center"
+                onClick={() => onExpediente(boleto.id)}
+                className="grid grid-cols-12 gap-2 px-5 py-3.5 border-b border-zinc-100 last:border-0 hover:bg-zinc-50/60 transition-colors items-center cursor-pointer"
               >
                 {/* PNR */}
                 <div className="col-span-2">
@@ -221,15 +313,15 @@ function ListadoView({
                 {/* Pasajeros */}
                 <div className="col-span-3">
                   <div className="space-y-0.5">
-                    {boleto.pasajeros.slice(0, 2).map((p, i) => (
+                    {pasajeros.slice(0, 2).map((p, i) => (
                       <p key={i} className="text-xs text-zinc-700 font-medium leading-tight truncate">
-                        {p.nombre}
-                        <span className="ml-1 text-[9px] text-zinc-400 font-bold">{p.tipo}</span>
+                        {p?.nombre}
+                        <span className="ml-1 text-[9px] text-zinc-400 font-bold">{p?.tipo}</span>
                       </p>
                     ))}
-                    {boleto.pasajeros.length > 2 && (
+                    {pasajeros.length > 2 && (
                       <p className="text-[10px] text-zinc-400 font-medium">
-                        +{boleto.pasajeros.length - 2} más
+                        +{pasajeros.length - 2} más
                       </p>
                     )}
                   </div>
@@ -243,12 +335,16 @@ function ListadoView({
                     </span>
                     <ArrowRight className="w-3.5 h-3.5 text-zinc-300" />
                     <span className="text-xs font-bold text-zinc-900">
-                      {boleto.segmentos[boleto.segmentos.length - 1]?.destino ?? "—"}
+                      {segmentos[segmentos.length - 1]?.destino ?? "—"}
                     </span>
                   </div>
+                  <p className="text-[10px] text-zinc-500 font-bold mt-0.5">
+                    {primerSeg ? getAirlineName(primerSeg.aerolinea) : ""}
+                    {segmentos.length > 1 && <span className="font-normal text-zinc-400"> (Multi)</span>}
+                  </p>
                   <p className="text-[10px] text-zinc-400 font-medium mt-0.5">
-                    {boleto.segmentos.length} tramo{boleto.segmentos.length !== 1 ? "s" : ""} ·{" "}
-                    {boleto.pasajeros.length} pax
+                    {segmentos.length} tramo{segmentos.length !== 1 ? "s" : ""} ·{" "}
+                    {pasajeros.length} pax
                   </p>
                 </div>
 
@@ -262,7 +358,7 @@ function ListadoView({
                 {/* Precio venta */}
                 <div className="col-span-1">
                   <span className="text-xs font-bold text-zinc-900">
-                    ${boleto.precioVenta.toLocaleString("es-VE")}
+                    ${(boleto.precioVenta || 0).toLocaleString("es-VE")}
                   </span>
                 </div>
 
@@ -274,7 +370,7 @@ function ListadoView({
                     </Badge>
                     {boleto.expedienteAereo && boleto.expedienteAereo.status !== "Borrador" && (
                       <div className="block">
-                        <Badge variant={boleto.expedienteAereo.status === "Facturado" || boleto.expedienteAereo.status === "PagadoAerolinea" ? "info" : boleto.expedienteAereo.status === "Cancelado" ? "warning" : "default"}>
+                        <Badge variant={boleto.expedienteAereo.status === "Facturado" || boleto.expedienteAereo.status === "PagadoAerolinea" ? "info" : "default"}>
                           {boleto.expedienteAereo.status}
                         </Badge>
                       </div>
@@ -288,7 +384,7 @@ function ListadoView({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        alert(`Generando e imprimiendo Voucher para el boleto: ${boleto.pnr}\n\nLos servicios están confirmados y facturados.`);
+                        onShowVoucher(boleto);
                       }}
                       title="Descargar Voucher de Vuelo"
                       className="p-1.5 rounded text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer"
@@ -297,16 +393,11 @@ function ListadoView({
                     </button>
                   )}
                   <button
-                    id={`btn-expediente-${boleto.id}`}
-                    onClick={() => onExpediente(boleto.id)}
-                    title="Gestionar Expediente / Facturación"
-                    className="p-1.5 rounded text-zinc-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-                  >
-                    <FileText className="w-3.5 h-3.5" />
-                  </button>
-                  <button
                     id={`btn-toggle-${boleto.id}`}
-                    onClick={() => onToggleVinculo(boleto.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleVinculo(boleto.id);
+                    }}
                     title={boleto.vinculadoAExpediente ? "Desvincular" : "Marcar vinculado"}
                     className="p-1.5 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors cursor-pointer"
                   >
@@ -315,14 +406,6 @@ function ListadoView({
                     ) : (
                       <Link2 className="w-3.5 h-3.5" />
                     )}
-                  </button>
-                  <button
-                    id={`btn-eliminar-${boleto.id}`}
-                    onClick={() => onEliminar(boleto.id)}
-                    title="Eliminar boleto"
-                    className="p-1.5 rounded text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -358,6 +441,7 @@ function NuevoBoletoView({
   const [precioPvp, setPrecioPvp] = useState("");
   const [costoNetoInput, setCostoNetoInput] = useState("");
   const [baseCalculo, setBaseCalculo] = useState<'PVP' | 'NETO'>('PVP');
+  const [tipoComision, setTipoComision] = useState<'Porcentaje' | 'Fee'>('Porcentaje');
   const [comisionB2B, setComisionB2B] = useState<number>(10);
   const [comisionMayorista, setComisionMayorista] = useState<number>(12);
   const [notas, setNotas] = useState("");
@@ -396,7 +480,11 @@ function NuevoBoletoView({
     setBaseCalculo('NETO');
     const num = parseFloat(val) || 0;
     const suma = comisionB2B + comisionMayorista;
-    setPrecioPvp(num > 0 ? (num * (1 + suma / 100)).toFixed(2) : "");
+    if (tipoComision === 'Porcentaje') {
+      setPrecioPvp(num > 0 ? (num * (1 + suma / 100)).toFixed(2) : "");
+    } else {
+      setPrecioPvp(num > 0 ? (num + suma).toFixed(2) : "");
+    }
   };
 
   const handlePvpChange = (val: string) => {
@@ -404,44 +492,90 @@ function NuevoBoletoView({
     setBaseCalculo('PVP');
     const num = parseFloat(val) || 0;
     const suma = comisionB2B + comisionMayorista;
-    setCostoNetoInput(num > 0 ? (num / (1 + suma / 100)).toFixed(2) : "");
+    if (tipoComision === 'Porcentaje') {
+      setCostoNetoInput(num > 0 ? (num / (1 + suma / 100)).toFixed(2) : "");
+    } else {
+      setCostoNetoInput(num > 0 ? (num - suma).toFixed(2) : "");
+    }
   };
 
   const handleComisionB2BChange = (val: number) => {
     setComisionB2B(val);
     const suma = val + comisionMayorista;
-    if (baseCalculo === 'PVP') {
-      const pvpNum = parseFloat(precioPvp) || 0;
-      setCostoNetoInput(pvpNum > 0 ? (pvpNum / (1 + suma / 100)).toFixed(2) : "");
+    if (tipoComision === 'Porcentaje') {
+      if (baseCalculo === 'PVP') {
+        const pvpNum = parseFloat(precioPvp) || 0;
+        setCostoNetoInput(pvpNum > 0 ? (pvpNum / (1 + suma / 100)).toFixed(2) : "");
+      } else {
+        const netoNum = parseFloat(costoNetoInput) || 0;
+        setPrecioPvp(netoNum > 0 ? (netoNum * (1 + suma / 100)).toFixed(2) : "");
+      }
     } else {
-      const netoNum = parseFloat(costoNetoInput) || 0;
-      setPrecioPvp(netoNum > 0 ? (netoNum * (1 + suma / 100)).toFixed(2) : "");
+      if (baseCalculo === 'PVP') {
+        const pvpNum = parseFloat(precioPvp) || 0;
+        setCostoNetoInput(pvpNum > 0 ? (pvpNum - suma).toFixed(2) : "");
+      } else {
+        const netoNum = parseFloat(costoNetoInput) || 0;
+        setPrecioPvp(netoNum > 0 ? (netoNum + suma).toFixed(2) : "");
+      }
     }
   };
 
   const handleComisionMayoristaChange = (val: number) => {
     setComisionMayorista(val);
     const suma = comisionB2B + val;
-    if (baseCalculo === 'PVP') {
-      const pvpNum = parseFloat(precioPvp) || 0;
-      setCostoNetoInput(pvpNum > 0 ? (pvpNum / (1 + suma / 100)).toFixed(2) : "");
+    if (tipoComision === 'Porcentaje') {
+      if (baseCalculo === 'PVP') {
+        const pvpNum = parseFloat(precioPvp) || 0;
+        setCostoNetoInput(pvpNum > 0 ? (pvpNum / (1 + suma / 100)).toFixed(2) : "");
+      } else {
+        const netoNum = parseFloat(costoNetoInput) || 0;
+        setPrecioPvp(netoNum > 0 ? (netoNum * (1 + suma / 100)).toFixed(2) : "");
+      }
     } else {
-      const netoNum = parseFloat(costoNetoInput) || 0;
-      setPrecioPvp(netoNum > 0 ? (netoNum * (1 + suma / 100)).toFixed(2) : "");
+      if (baseCalculo === 'PVP') {
+        const pvpNum = parseFloat(precioPvp) || 0;
+        setCostoNetoInput(pvpNum > 0 ? (pvpNum - suma).toFixed(2) : "");
+      } else {
+        const netoNum = parseFloat(costoNetoInput) || 0;
+        setPrecioPvp(netoNum > 0 ? (netoNum + suma).toFixed(2) : "");
+      }
     }
+  };
+
+  const handleTipoComisionToggle = () => {
+    setTipoComision(prev => {
+      const newType = prev === 'Porcentaje' ? 'Fee' : 'Porcentaje';
+      // Recalcular en base al nuevo tipo
+      const netoNum = parseFloat(costoNetoInput) || 0;
+      const suma = comisionB2B + comisionMayorista;
+      if (newType === 'Porcentaje') {
+        setPrecioPvp(netoNum > 0 ? (netoNum * (1 + suma / 100)).toFixed(2) : "");
+      } else {
+        setPrecioPvp(netoNum > 0 ? (netoNum + suma).toFixed(2) : "");
+      }
+      return newType;
+    });
   };
 
   const pvpFinal = parseFloat(precioPvp) || 0;
   const costoNetoFinal = parseFloat(costoNetoInput) || 0;
-  const sumaComisiones = comisionB2B + comisionMayorista;
   
-  const comisionBruta = pvpFinal - costoNetoFinal;
-  
-  // Repartición proporcional de la comisión bruta
-  const gananciaAgencia = sumaComisiones > 0 ? comisionBruta * (comisionB2B / sumaComisiones) : 0;
-  const gananciaForatour = sumaComisiones > 0 ? comisionBruta * (comisionMayorista / sumaComisiones) : 0;
-  
-  const netoB2B = pvpFinal - gananciaAgencia;
+  let gananciaAgencia = 0;
+  let gananciaForatour = 0;
+  let netoB2B = 0;
+
+  if (tipoComision === 'Porcentaje') {
+    const sumaComisiones = comisionB2B + comisionMayorista;
+    const comisionBruta = pvpFinal - costoNetoFinal;
+    gananciaAgencia = sumaComisiones > 0 ? comisionBruta * (comisionB2B / sumaComisiones) : 0;
+    gananciaForatour = sumaComisiones > 0 ? comisionBruta * (comisionMayorista / sumaComisiones) : 0;
+    netoB2B = pvpFinal - gananciaAgencia;
+  } else {
+    gananciaAgencia = comisionB2B;
+    gananciaForatour = comisionMayorista;
+    netoB2B = costoNetoFinal + gananciaForatour;
+  }
 
   // ─ Acción: Guardar boleto ─────────────────────────────────────────────────
   const handleGuardar = () => {
@@ -456,8 +590,9 @@ function NuevoBoletoView({
         segmentos,
         costoNeto: costoNetoFinal,
         precioPvp: pvpFinal,
-        comisionB2B: comisionB2B,
-        comisionMayorista: comisionMayorista,
+        comisionB2B,
+        comisionMayorista,
+        tipoComision,
         precioVenta: netoB2B, // Lo que paga la agencia B2B
         vinculadoAExpediente: false,
         notas,
@@ -478,7 +613,7 @@ function NuevoBoletoView({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 border-b border-zinc-200 pb-4 sticky top-16 bg-zinc-50/95 backdrop-blur-xs pt-2 z-10 -mx-8 px-8">
         <button
           id="btn-volver-listado"
           onClick={onCancelar}
@@ -524,7 +659,7 @@ function NuevoBoletoView({
               }}
               placeholder={`Pega el texto de Sabre / KIU / Amadeus aquí...\n\nEjemplo:\nK3W9L2\n 1.1GARCIA/CARLOS MR 2.1LOPEZ/MARIA MRS\n 1 CM 224 Y 15NOV 3 CCSPTY HK2  0700  0825`}
               rows={14}
-              className="w-full p-4 text-xs font-mono text-zinc-700 bg-zinc-950 text-emerald-400 placeholder-zinc-600 focus:outline-none resize-none leading-relaxed"
+              className="w-full p-4 text-xs font-mono bg-zinc-950 text-emerald-400 placeholder-emerald-700/70 focus:outline-none resize-none leading-relaxed"
               style={{ fontFamily: "monospace" }}
             />
             <div className="px-4 py-3 border-t border-zinc-800 bg-zinc-950 flex items-center justify-between">
@@ -586,23 +721,37 @@ function NuevoBoletoView({
               ) : (
                 <div className="divide-y divide-zinc-100">
                   {pasajeros.map((p, i) => (
-                    <div key={i} className="flex items-center justify-between px-4 py-2.5">
-                      <div>
+                    <div key={i} className="flex flex-col gap-2 px-4 py-3 border-b border-zinc-100 last:border-0">
+                      <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-zinc-900 font-mono">
                           {p.nombre}
                         </span>
+                        <Badge
+                          variant={
+                            p.tipo === "CHD" || p.tipo === "INF"
+                              ? "info"
+                              : p.tipo === "MRS" || p.tipo === "MS"
+                              ? "warning"
+                              : "default"
+                          }
+                        >
+                          {p.tipo}
+                        </Badge>
                       </div>
-                      <Badge
-                        variant={
-                          p.tipo === "CHD" || p.tipo === "INF"
-                            ? "info"
-                            : p.tipo === "MRS" || p.tipo === "MS"
-                            ? "warning"
-                            : "default"
-                        }
-                      >
-                        {p.tipo}
-                      </Badge>
+                      <input
+                        type="text"
+                        placeholder="Doc. Identidad / Pasaporte..."
+                        value={p.documento || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPasajeros(prev => {
+                            const arr = [...prev];
+                            arr[i] = { ...arr[i], documento: val };
+                            return arr;
+                          });
+                        }}
+                        className="w-full px-2.5 py-1.5 border border-zinc-200 rounded text-xs focus:outline-none focus:border-zinc-500 font-mono uppercase text-zinc-700"
+                      />
                     </div>
                   ))}
                 </div>
@@ -687,7 +836,7 @@ function NuevoBoletoView({
 
           {/* Datos financieros — OBLIGATORIOS (ingreso manual del agente) */}
           <div className="bg-white border border-zinc-200 rounded overflow-hidden">
-            <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-100">
+            <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-100 flex items-center justify-between flex-wrap gap-3">
               <span className="text-xs font-bold text-zinc-700 uppercase tracking-wider flex items-center gap-2">
                 <DollarSign className="w-3.5 h-3.5 text-zinc-400" />
                 Datos Financieros{" "}
@@ -695,6 +844,23 @@ function NuevoBoletoView({
                   (ingreso manual obligatorio)
                 </span>
               </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase">Tipo de Ganancia:</span>
+                <div className="flex bg-zinc-200/60 p-0.5 rounded-md">
+                  <button
+                    onClick={() => tipoComision !== 'Porcentaje' && handleTipoComisionToggle()}
+                    className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${tipoComision === 'Porcentaje' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
+                  >
+                    Porcentaje (%)
+                  </button>
+                  <button
+                    onClick={() => tipoComision !== 'Fee' && handleTipoComisionToggle()}
+                    className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${tipoComision === 'Fee' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
+                  >
+                    Fee Fijo ($)
+                  </button>
+                </div>
+              </div>
             </div>
             <div className="p-4 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -738,63 +904,129 @@ function NuevoBoletoView({
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
-                    Comisión Agencia (%)
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="field-comision-b2b"
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.5"
-                      value={comisionB2B}
-                      onChange={(e) => handleComisionB2BChange(Math.max(0, parseFloat(e.target.value) || 0))}
-                      className="w-full p-2 pr-8 border border-zinc-200 bg-white rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
-                    Comisión Foratour (%)
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="field-comision-mayorista"
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.5"
-                      value={comisionMayorista}
-                      onChange={(e) => handleComisionMayoristaChange(Math.max(0, parseFloat(e.target.value) || 0))}
-                      className="w-full p-2 pr-8 border border-zinc-200 bg-white rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
-                  </div>
-                </div>
+                {tipoComision === 'Porcentaje' ? (
+                  <>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                        Comisión Agencia (%)
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="field-comision-b2b"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          value={comisionB2B}
+                          onChange={(e) => handleComisionB2BChange(Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="w-full p-2 pr-8 border border-zinc-200 bg-white rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                        Comisión Foratour (%)
+                      </label>
+                      <div className="relative">
+                        <input
+                          id="field-comision-mayorista"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          value={comisionMayorista}
+                          onChange={(e) => handleComisionMayoristaChange(Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="w-full p-2 pr-8 border border-zinc-200 bg-white rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block mb-1">
+                        Fee Fijo Agencia ($)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-500 font-bold">$</span>
+                        <input
+                          id="field-fee-agencia"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={comisionB2B}
+                          onChange={(e) => handleComisionB2BChange(Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="w-full pl-6 pr-3 py-2 border border-emerald-200 bg-emerald-50/50 rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block mb-1">
+                        Fee Fijo Foratour ($)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-500 font-bold">$</span>
+                        <input
+                          id="field-fee-mayorista"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={comisionMayorista}
+                          onChange={(e) => handleComisionMayoristaChange(Math.max(0, parseFloat(e.target.value) || 0))}
+                          className="w-full pl-6 pr-3 py-2 border border-emerald-200 bg-emerald-50/50 rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Indicador de margen */}
               {pvpFinal > 0 && costoNetoFinal > 0 && (
                 <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-md text-xs space-y-2 text-zinc-700 font-semibold">
                   <div className="flex justify-between items-center text-zinc-500">
-                    <span>Costo Neto (Calculado a pagar):</span>
+                    <span>Costo Neto (Calculado a pagar a aerolínea):</span>
                     <span className="font-bold">
                       ${costoNetoFinal.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span>Neto B2B (a Cobrar por Agencia):</span>
-                    <span className="text-zinc-955 font-black">
-                      ${netoB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center text-emerald-700 font-bold border-t border-zinc-200 pt-1.5 mt-1">
-                    <span>Nuestra Ganancia Mayorista ({comisionMayorista}%):</span>
-                    <span>
-                      +${gananciaForatour.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                  {tipoComision === 'Porcentaje' ? (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span>Neto B2B (a Cobrar por Agencia):</span>
+                        <span className="text-zinc-950 font-black">
+                          ${netoB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-emerald-700 font-bold border-t border-zinc-200 pt-1.5 mt-1">
+                        <span>Nuestra Ganancia Mayorista ({comisionMayorista}%):</span>
+                        <span>
+                          +${gananciaForatour.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span>Neto B2B (a Cobrar por Agencia):</span>
+                        <span className="text-zinc-950 font-black">
+                          ${netoB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-emerald-700 font-bold border-t border-zinc-200 pt-1.5 mt-1">
+                        <span>Nuestra Ganancia (Fee Fijo):</span>
+                        <span>
+                          +${gananciaForatour.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-between items-center font-bold text-zinc-900 border-t border-zinc-200 pt-1.5 mt-1">
+                    <span>Precio Venta (PVP):</span>
+                    <span className="text-sm">
+                      ${pvpFinal.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                 </div>
@@ -867,12 +1099,15 @@ function ExpedienteAereoView({
   clients,
   onBack,
   onUpdateBoleto,
+  onShowVoucher,
 }: {
   boleto: FlightTicket;
   clients: B2BClient[];
   onBack: () => void;
   onUpdateBoleto: (boleto: FlightTicket) => void;
+  onShowVoucher: (boleto: FlightTicket) => void;
 }) {
+  const { showAlert, showConfirm } = useDialog();
   // Inicializamos el expediente aéreo si no existe
   const [expediente, setExpediente] = useState(
     boleto.expedienteAereo || {
@@ -898,7 +1133,7 @@ function ExpedienteAereoView({
     const updated = { ...expediente, status: "Solicitado" as const };
     setExpediente(updated);
     onUpdateBoleto({ ...boleto, expedienteAereo: updated });
-    alert("Expediente enviado a facturación exitosamente.");
+    showAlert({ title: "Éxito", message: "Expediente enviado a facturación exitosamente.", type: "success" });
   };
 
   const isCreditAgency = React.useMemo(() => {
@@ -910,7 +1145,7 @@ function ExpedienteAereoView({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-200 pb-4">
+      <div className="flex items-center justify-between border-b border-zinc-200 pb-4 sticky top-16 bg-zinc-50/95 backdrop-blur-xs pt-2 z-10 -mx-8 px-8">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
@@ -950,7 +1185,58 @@ function ExpedienteAereoView({
               >
                 <Send className="w-3.5 h-3.5" /> Enviar a Facturar
               </button>
+              {expediente.status === "Borrador" && (
+                <button
+                  onClick={() => {
+                    showConfirm({
+                      title: "Anular Expediente Aéreo",
+                      message: "Escriba el localizador (PNR) exacto para confirmar la anulación. El expediente cambiará a estado Anulado.",
+                      requireInputToConfirm: boleto.pnr,
+                      type: "danger",
+                      confirmText: "Sí, Anular",
+                      onConfirm: () => {
+                        const updated = { ...expediente, status: "Anulado" as const };
+                        setExpediente(updated);
+                        onUpdateBoleto({ ...boleto, expedienteAereo: updated });
+                        showAlert({ title: "Expediente Anulado", message: "El expediente ha sido anulado correctamente.", type: "success" });
+                      }
+                    });
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 text-xs font-bold rounded hover:bg-red-100 transition-colors cursor-pointer"
+                >
+                  <XCircle className="w-3.5 h-3.5" /> Anular
+                </button>
+              )}
             </>
+          )}
+          {expediente.status === "Anulado" && !boleto.facturarConjunto && (
+            <button
+              onClick={() => {
+                showConfirm({
+                  title: "Reactivar Expediente",
+                  message: "¿Está seguro que desea reactivar este expediente? Volverá al estado Borrador para poder ser editado y enviado nuevamente.",
+                  type: "warning",
+                  confirmText: "Sí, Reactivar",
+                  onConfirm: () => {
+                    const updated = { ...expediente, status: "Borrador" as const };
+                    setExpediente(updated);
+                    onUpdateBoleto({ ...boleto, expedienteAereo: updated });
+                    showAlert({ title: "Expediente Reactivado", message: "El expediente ha sido devuelto al estado Borrador.", type: "success" });
+                  }
+                });
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold rounded hover:bg-amber-100 transition-colors cursor-pointer"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" /> Volver a Activar
+            </button>
+          )}
+          {(expediente.status === "Facturado" || expediente.status === "PagadoAerolinea") && (
+            <button
+              onClick={() => onShowVoucher(boleto)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700 transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" /> Descargar Voucher
+            </button>
           )}
           {expediente.status === "Borrador" && boleto.facturarConjunto && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded">
@@ -975,21 +1261,42 @@ function ExpedienteAereoView({
                 <p className="font-mono text-xl font-black text-zinc-900">{boleto.pnr}</p>
               </div>
 
-              <div>
-                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Ruta</p>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-zinc-800">{primerSeg?.origen ?? "—"}</span>
-                  <ArrowRight className="w-4 h-4 text-zinc-400" />
-                  <span className="font-bold text-zinc-800">{ultimoSeg?.destino ?? "—"}</span>
+              <div className="border-t border-zinc-200 pt-3 mt-3">
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2">Segmentos de Vuelo</p>
+                <div className="space-y-3">
+                  {(boleto.segmentos?.map ? boleto.segmentos : []).map((s, i) => (
+                    <div key={i} className="flex justify-between items-center bg-white p-2 rounded border border-zinc-100 shadow-xs">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span className="font-bold text-zinc-900">{s.origen}</span>
+                          <ArrowRight className="w-3 h-3 text-zinc-400" />
+                          <span className="font-bold text-zinc-900">{s.destino}</span>
+                        </div>
+                        <span className="text-[10px] text-zinc-500 font-medium mt-0.5">
+                          {formatGDSDate(s.fecha)} | {s.horaSalida} - {s.horaLlegada}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="inline-block bg-blue-50 text-blue-700 font-bold px-1.5 py-0.5 rounded text-[10px]">
+                          {getAirlineName(s.aerolinea)} ({s.aerolinea} {s.numeroVuelo})
+                        </span>
+                        <div className="text-[9px] text-zinc-400 mt-1 font-bold uppercase">Clase {s.clase}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <p className="text-[10px] text-zinc-500 mt-1 font-medium">{primerSeg ? formatGDSDate(primerSeg.fecha) : "—"}</p>
               </div>
 
               <div>
-                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Pasajeros ({boleto.pasajeros.length})</p>
-                <div className="space-y-1">
-                  {boleto.pasajeros.map((p, i) => (
-                    <p key={i} className="text-xs text-zinc-700 font-semibold">{p.nombre}</p>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Pasajeros ({(boleto.pasajeros?.map ? boleto.pasajeros : []).length})</p>
+                <div className="space-y-2">
+                  {(boleto.pasajeros?.map ? boleto.pasajeros : []).map((p, i) => (
+                    <div key={i} className="flex flex-col">
+                      <p className="text-xs text-zinc-700 font-semibold">{p.nombre}</p>
+                      {p.documento && (
+                        <p className="text-[10px] text-zinc-500 font-mono mt-0.5">ID/Pasaporte: {p.documento}</p>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1232,6 +1539,23 @@ function ExpedienteAereoView({
                     />
                   </div>
                 </div>
+                <div className="space-y-1.5 col-span-2">
+                  <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Adjuntar Comprobante de Cliente (Simulado)</label>
+                  <div className="border border-dashed border-zinc-300 bg-zinc-50 rounded p-2.5 flex items-center justify-center cursor-pointer hover:bg-zinc-100 relative">
+                    <input
+                      type="file"
+                      disabled={expediente.status !== "Borrador"}
+                      className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) setExpediente({ ...expediente, comprobanteArchivo: file.name });
+                      }}
+                    />
+                    <span className="text-[10px] font-bold text-zinc-600">
+                      {expediente.comprobanteArchivo ? `✓ ${expediente.comprobanteArchivo}` : "Clic para adjuntar archivo"}
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -1275,14 +1599,35 @@ function ExpedienteAereoView({
                   })}
                 />
               </div>
+              <div className="space-y-1.5 col-span-2 mt-2">
+                <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Adjuntar Soporte de Pago Aerolínea (Simulado)</label>
+                <div className="border border-dashed border-zinc-300 bg-zinc-50 rounded p-2.5 flex items-center justify-center cursor-pointer hover:bg-zinc-100 relative">
+                  <input
+                    type="file"
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) setExpediente({
+                        ...expediente,
+                        pagoAerolinea: { ...expediente.pagoAerolinea, comprobanteArchivo: file.name } as any
+                      });
+                    }}
+                  />
+                  <span className="text-[10px] font-bold text-zinc-600">
+                    {expediente.pagoAerolinea?.comprobanteArchivo ? `✓ ${expediente.pagoAerolinea.comprobanteArchivo}` : "Clic para adjuntar soporte"}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="mt-4 flex justify-end">
+            <div className="mt-6 flex justify-end">
               <button
                 onClick={() => {
+                  if (expediente.status !== "Borrador") return;
+                  
                   const updated = {
                     ...expediente,
-                    status: "PagadoAerolinea" as const,
+                    status: "Solicitado" as const,
                     pagoAerolinea: {
                       ...expediente.pagoAerolinea,
                       monto: expediente.pagoAerolinea?.monto || boleto.costoNeto,
@@ -1293,11 +1638,26 @@ function ExpedienteAereoView({
                   };
                   setExpediente(updated);
                   onUpdateBoleto({ ...boleto, expedienteAereo: updated });
-                  alert("Pago a aerolínea registrado. El expediente se ha completado.");
+                  showAlert({ title: "Solicitud enviada", message: "Solicitud enviada a Facturación. El departamento debe aprobar la emisión de factura y pagos.", type: "success" });
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200 rounded hover:bg-blue-100 transition-colors cursor-pointer"
+                disabled={expediente.status !== "Borrador"}
+                className={`flex items-center gap-2 px-6 py-3 text-xs font-bold rounded shadow-xs transition-all ${
+                  expediente.status === "Borrador"
+                    ? "bg-zinc-950 text-white hover:bg-zinc-800 cursor-pointer"
+                    : "bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200"
+                }`}
               >
-                <CheckCircle2 className="w-3.5 h-3.5" /> Marcar como Pagado a Aerolínea
+                {expediente.status === "Borrador" ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    Procesar Liquidación y Enviar a Facturación
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    {expediente.status === "Solicitado" ? "En Revisión por Facturación" : "Liquidación Procesada"}
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -1328,5 +1688,208 @@ function EmptyState({ onNuevo }: { onNuevo: () => void }) {
         Cargar primer PNR
       </button>
     </div>
+  );
+}
+
+// ─── MODAL VOUCHER AÉREO ────────────────────────────────────────────────────────
+function FlightVoucherModal({
+  boleto,
+  onClose
+}: {
+  boleto: FlightTicket;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <style>{`
+        @media print {
+          @page {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          html, body, #root, .min-h-screen, .fixed:not(.print-modal-container) {
+            position: static !important;
+            height: auto !important;
+            min-height: auto !important;
+            overflow: visible !important;
+          }
+          .print-modal-container {
+            position: static !important;
+            display: block !important;
+            background: transparent !important;
+            backdrop-filter: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            height: auto !important;
+            min-height: auto !important;
+            overflow: visible !important;
+            z-index: 99999 !important;
+          }
+          .print-modal-content {
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+            max-width: 100% !important;
+            max-height: none !important;
+            height: auto !important;
+            overflow: visible !important;
+            display: block !important;
+          }
+        }
+      `}</style>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans print-modal-container">
+        <div className="bg-white border border-zinc-200 rounded-lg shadow-xl w-full max-w-3xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh] print-modal-content">
+          {/* Header UI (Not printed) */}
+          <div className="bg-zinc-950 text-white px-5 py-4 flex items-center justify-between print:hidden shrink-0">
+            <div>
+              <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2 font-sans">
+                <Printer className="w-4.5 h-4.5 text-zinc-400" /> Voucher de Vuelo Aéreo
+              </h4>
+              <p className="text-[10px] text-zinc-400 font-semibold mt-0.5 font-sans">
+                Documento de viaje oficial para el pasajero (sin precios expuestos).
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => window.print()}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded transition-colors cursor-pointer flex items-center gap-2"
+              >
+                <Download className="w-3.5 h-3.5" /> Generar PDF / Imprimir
+              </button>
+              <button 
+                onClick={onClose}
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Printable Area */}
+          <div className="p-8 overflow-y-auto flex-1 bg-white print:p-0 print:overflow-visible">
+            {/* Document Header */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b-2 border-zinc-900 pb-6 mb-6">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded bg-zinc-950 text-white flex items-center justify-center font-black text-base font-sans">
+                    F
+                  </div>
+                  <div>
+                    <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans">FORATOUR ERP</h2>
+                    <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">Wholesale Logistics</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-2 font-medium font-sans">
+                  Consolidador Mayorista Aéreo y Terrestre
+                </p>
+              </div>
+              
+              <div className="text-left sm:text-right flex flex-col items-start sm:items-end gap-1.5 font-sans">
+                <span className="px-2.5 py-0.5 bg-blue-100 border border-blue-250 text-blue-800 rounded text-[9px] font-black uppercase tracking-wider">
+                  E-TICKET ITINERARY / RECEIPT
+                </span>
+                <span className="text-xs font-mono font-bold text-zinc-900">PNR: {boleto.pnr}</span>
+              </div>
+            </div>
+
+            {/* Paid Stamp */}
+            <div className="border border-emerald-250 bg-emerald-50/40 rounded-lg p-4 mb-6 flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <h4 className="text-xs font-extrabold uppercase text-emerald-800 font-sans">Estado: BOLETO EMITIDO Y CONFIRMADO</h4>
+                <p className="text-[10.5px] text-zinc-650 leading-relaxed font-semibold font-sans">
+                  Este documento certifica la emisión de los boletos aéreos electrónicos detallados a continuación. Por favor presente este recibo junto a su documento de identidad vigente al momento del chequeo en el aeropuerto.
+                </p>
+              </div>
+              <div className="flex-shrink-0 w-24 h-24 border-4 border-emerald-600/40 rounded-full flex flex-col items-center justify-center text-center rotate-12 font-sans select-none">
+                <span className="text-[9px] font-black uppercase text-emerald-600/60 leading-none">FORATOUR</span>
+                <span className="text-sm font-black text-emerald-600 uppercase tracking-widest mt-1">EMITIDO</span>
+                <span className="text-[8px] font-mono text-emerald-500 mt-0.5 leading-none">OK</span>
+              </div>
+            </div>
+
+            {/* Passenger Info */}
+            <div className="mb-6 space-y-4">
+              <h5 className="text-[9.5px] font-black text-zinc-455 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Datos de los Pasajeros</h5>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {(boleto.pasajeros?.map ? boleto.pasajeros : []).map((p, i) => (
+                  <div key={i} className="flex flex-col gap-0.5">
+                    <span className="text-sm font-black text-zinc-900 font-mono uppercase">
+                      {p.nombre} <span className="text-[9px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded ml-1">{p.tipo}</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-zinc-500">
+                      Doc. Identidad: <span className="text-zinc-800">{p.documento || "No especificado"}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Itinerary */}
+            <div className="space-y-4 mb-6">
+              <h5 className="text-[9.5px] font-black text-zinc-455 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Itinerario de Vuelos</h5>
+              <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30 break-inside-avoid print:break-inside-avoid">
+                {(boleto.segmentos?.map ? boleto.segmentos : []).map((seg, i) => (
+                  <div key={i} className="p-4 bg-white space-y-2 break-inside-avoid print:break-inside-avoid">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider font-sans">
+                        TRAMO {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <span className="px-2 py-0.5 bg-blue-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
+                        CLASE {seg.clase}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">Vuelo</span>
+                          <span className="font-black text-sm text-zinc-900">
+                            {getAirlineName(seg.aerolinea)} <span className="font-mono text-zinc-500 text-xs">({seg.aerolinea} {seg.numeroVuelo})</span>
+                          </span>
+                        </div>
+                        <div className="w-px h-8 bg-zinc-200 mx-2"></div>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">Origen</span>
+                          <span className="font-black text-base text-zinc-900">{seg.origen}</span>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-zinc-300 mx-1" />
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase mb-0.5">Destino</span>
+                          <span className="font-black text-base text-zinc-900">{seg.destino}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="text-right">
+                        <span className="text-[10px] text-zinc-500 font-bold uppercase block mb-0.5">Fecha y Hora de Salida</span>
+                        <span className="font-bold text-sm text-zinc-800 block">
+                          {formatGDSDate(seg.fecha)} · {seg.horaSalida}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* General Instructions */}
+            <div className="bg-zinc-50 border border-zinc-150 rounded p-4 text-[10px] text-zinc-650 font-semibold space-y-2 font-sans mt-8 break-inside-avoid print:break-inside-avoid">
+              <span className="text-[9px] font-black text-zinc-800 uppercase tracking-wider block mb-2 border-b border-zinc-200 pb-1">Instrucciones Importantes</span>
+              <ul className="list-disc pl-4 space-y-1 text-zinc-600">
+                <li>Preséntese en el mostrador de la aerolínea con <strong>al menos 3 horas de antelación</strong> para vuelos internacionales y 2 horas para vuelos domésticos.</li>
+                <li>Los mostradores cierran 60 minutos antes de la salida programada del vuelo.</li>
+                <li>Verifique los requisitos migratorios, sanitarios y de visado correspondientes a su destino final y puntos de tránsito antes de su viaje.</li>
+                <li>La franquicia de equipaje y condiciones de penalidad están determinadas estrictamente por la política de la clase tarifaria adquirida. Consulte a su agente para más detalles.</li>
+              </ul>
+            </div>
+            
+            {/* Disclaimer */}
+            <div className="mt-8 pt-6 border-t border-zinc-200 text-center text-[9px] font-medium text-zinc-400 font-sans break-inside-avoid print:break-inside-avoid">
+              <p>Este boleto electrónico es emitido bajo las condiciones generales de transporte de la aerolínea operadora. {companyConfig.name} opera únicamente como consolidador intermedio y no asume responsabilidad directa por reprogramaciones, cancelaciones o demoras operativas imputables a la aerolínea.</p>
+              <p className="mt-1">{companyConfig.name} | RIF: {companyConfig.rif} | {companyConfig.address} | Email: {companyConfig.email}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

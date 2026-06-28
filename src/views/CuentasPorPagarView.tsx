@@ -17,6 +17,7 @@ import {
   UploadCloud,
   Check
 } from "lucide-react";
+import { useDialog } from "../components/ui/DialogProvider";
 
 interface CuentasPorPagarViewProps {
   obligations: PayableObligation[];
@@ -31,8 +32,9 @@ export default function CuentasPorPagarView({
   statements,
   onAddStatement
 }: CuentasPorPagarViewProps) {
+  const { showAlert } = useDialog();
   // Navigation inside view: "obligaciones" (Bandeja) or "proveedores" (Estados de Cuenta)
-  const [activeTab, setActiveTab] = useState<"obligaciones" | "proveedores">("obligaciones");
+  const [activeTab, setActiveTab] = useState<"obligaciones" | "proveedores" | "pagadas">("obligaciones");
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -94,6 +96,9 @@ export default function CuentasPorPagarView({
   // ─── FILTER OBLIGATIONS ────────────────────────────────────────────────────
   const filteredObligations = useMemo(() => {
     return obligations.filter(o => {
+      if (activeTab === "obligaciones" && o.status === "Pagado Total") return false;
+      if (activeTab === "pagadas" && o.status !== "Pagado Total") return false;
+      
       const matchesSearch = 
         o.providerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         o.locatorId.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -103,7 +108,7 @@ export default function CuentasPorPagarView({
       const matchesStatus = statusFilter === "Todos" || o.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
-  }, [obligations, searchQuery, statusFilter]);
+  }, [obligations, searchQuery, statusFilter, activeTab]);
 
   // ─── PROVIDER HISTORIES (Libro Mayor) ──────────────────────────────────────
   const uniqueProviders = useMemo(() => {
@@ -147,12 +152,12 @@ export default function CuentasPorPagarView({
     const remaining = activeObligationForPayment.netCost - activeObligationForPayment.paidAmount;
 
     if (payVal <= 0) {
-      alert("Por favor, ingrese un monto de liquidación válido.");
+      showAlert({ title: "Monto inválido", message: "Por favor, ingrese un monto de liquidación válido.", type: "warning" });
       return;
     }
 
     if (payVal > remaining + 0.01) {
-      alert(`Monto excedido. El saldo pendiente de esta obligación es $${remaining.toFixed(2)} USD.`);
+      showAlert({ title: "Monto excedido", message: `Monto excedido. El saldo pendiente de esta obligación es $${remaining.toFixed(2)} USD.`, type: "danger" });
       return;
     }
 
@@ -233,6 +238,18 @@ export default function CuentasPorPagarView({
             Bandeja de Obligaciones
           </button>
           <button
+            onClick={() => setActiveTab("pagadas")}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "pagadas" 
+                ? "bg-zinc-950 text-white" 
+                : "text-zinc-500 hover:text-zinc-800"
+            }`}
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Cuentas Pagadas
+          </button>
+
+          <button
             onClick={() => setActiveTab("proveedores")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-bold transition-all cursor-pointer ${
               activeTab === "proveedores" 
@@ -293,7 +310,7 @@ export default function CuentasPorPagarView({
       </div>
 
       {/* --- VIEW CONTENT: BANDEJA DE OBLIGACIONES --- */}
-      {activeTab === "obligaciones" && (
+      {(activeTab === "obligaciones" || activeTab === "pagadas") && (
         <div className="space-y-6">
           
           {/* Filters Bento Box */}
@@ -368,8 +385,28 @@ export default function CuentasPorPagarView({
                           <td className="p-4 font-mono font-bold text-zinc-900">{ob.id}</td>
                           <td className="p-4 font-bold text-zinc-900">{ob.providerName}</td>
                           <td className="p-4 font-bold font-mono text-zinc-700">{ob.locatorId}</td>
-                          <td className="p-4 text-zinc-500 max-w-[220px] truncate" title={ob.serviceDetail}>
-                            {ob.serviceDetail}
+                          <td className="p-4 text-zinc-500 max-w-[220px]">
+                            <div>
+                              <p className={`font-semibold ${(ob.isFrozen || ob.status === "Congelado") ? "text-zinc-400 line-through" : "text-zinc-800"}`}>{ob.serviceDetail}</p>
+                              {(ob.isFrozen || ob.status === "Congelado") && (
+                                <div className="mt-2 bg-amber-50 border border-amber-250 rounded p-2 text-left space-y-1">
+                                  <p className="text-[10px] text-amber-800 font-bold leading-tight flex items-center gap-1">
+                                    ⚠️ Pago Congelado Automáticamente
+                                  </p>
+                                  <p className="text-[9.5px] text-zinc-650 leading-normal font-semibold">
+                                    El servicio fue cancelado o modificado en el expediente.
+                                  </p>
+                                  <p className="text-[9.5px] text-amber-705 font-extrabold leading-normal">
+                                    Acción: Reclamar reembolso de ${(ob.netCost - ob.paidAmount).toFixed(2)} USD a {ob.providerName} o conciliar con Nota de Crédito.
+                                  </p>
+                                </div>
+                              )}
+                              {ob.notes && ob.notes.includes("[Bloqueado]") && (
+                                <p className="text-[9.5px] text-zinc-500 font-medium italic mt-0.5 block max-w-[240px] truncate leading-normal" title={ob.notes}>
+                                  {ob.notes}
+                                </p>
+                              )}
+                            </div>
                           </td>
                           <td className="p-4 text-right font-bold text-zinc-900">
                             ${ob.netCost.toLocaleString("es-ES", { minimumFractionDigits: 2 })} {ob.currency || "USD"}
@@ -385,16 +422,21 @@ export default function CuentasPorPagarView({
                           </td>
                           <td className="p-4 text-center">
                             <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-bold ${
+                              ob.isFrozen || ob.status === "Congelado" ? "bg-red-100 border border-red-300 text-red-800" :
                               ob.status === "Pagado Total" ? "bg-emerald-50 text-emerald-700 border-emerald-250" : 
                               ob.status === "Pagado Parcial" ? "bg-blue-50 text-blue-700 border-blue-200" : 
                               ob.status === "Vencido" ? "bg-red-50 text-red-700 border-red-200 animate-pulse font-black" : 
                               "bg-amber-50 text-amber-700 border-amber-250"
                             }`}>
-                              {ob.status === "Pagado Total" ? "Pagado" : ob.status}
+                              {ob.isFrozen || ob.status === "Congelado" ? "CONGELADO" : ob.status === "Pagado Total" ? "Pagado" : ob.status}
                             </span>
                           </td>
                           <td className="p-4 text-right whitespace-nowrap">
-                            {ob.status !== "Pagado Total" ? (
+                            {(ob.isFrozen || ob.status === "Congelado") ? (
+                              <span className="text-[9.5px] text-red-600 font-bold uppercase flex items-center justify-end gap-1 pr-2">
+                                🔒 Bloqueado
+                              </span>
+                            ) : ob.status !== "Pagado Total" ? (
                               <button
                                 onClick={() => handleOpenPaymentDrawer(ob)}
                                 className="px-3 py-1.5 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs"

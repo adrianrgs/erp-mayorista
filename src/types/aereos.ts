@@ -15,6 +15,8 @@ export interface Passenger {
   nombre: string;
   /** Tipo/título del pasajero según estándar IATA */
   tipo: PassengerType;
+  /** Documento de identidad o Pasaporte del pasajero */
+  documento?: string;
 }
 
 // ─── SEGMENTO DE VUELO ────────────────────────────────────────────────────────
@@ -86,6 +88,10 @@ export interface FlightTicket {
   comisionB2B?: number;
   /** Porcentaje de comisión para la agencia Mayorista (opcional) */
   comisionMayorista?: number;
+  /** Tipo de comisión a aplicar (Porcentaje o Fee fijo) */
+  tipoComision?: 'Porcentaje' | 'Fee';
+  /** Monto fijo de Fee (si aplica) */
+  fee?: number;
   /**
    * Indica si este boleto ya fue vinculado a un expediente/reserva.
    * Por defecto false. Una vez vinculado se bloquea para evitar duplicados.
@@ -128,6 +134,7 @@ export interface PagoAerolinea {
   referencia: string;
   fecha: string;
   notas?: string;
+  comprobanteArchivo?: string;
 }
 
 /**
@@ -141,7 +148,8 @@ export type StatusExpedienteAereo =
   | "Borrador"
   | "Solicitado"
   | "Facturado"
-  | "PagadoAerolinea";
+  | "PagadoAerolinea"
+  | "Anulado";
 
 /**
  * Expediente de facturación propio del módulo de Vuelos.
@@ -167,6 +175,8 @@ export interface AereoExpediente {
   comprobanteMonto?: number;
   /** Método del comprobante de pago del cliente */
   comprobanteMetodo?: string;
+  /** Archivo adjunto del comprobante de pago del cliente */
+  comprobanteArchivo?: string;
   /** Información del pago realizado a la aerolínea/GDS */
   pagoAerolinea?: PagoAerolinea;
   /** Observaciones internas del expediente */

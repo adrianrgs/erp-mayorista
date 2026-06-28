@@ -1,0 +1,734 @@
+extend type Mutation {
+  """
+  ✨ Insert a single `B2BClient` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  b2BClient_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: B2BClient_Data!
+  ): B2BClient_KeyOutput! @fdc_generated(from: "B2BClient", purpose: INSERT_SINGLE)
+  """
+  ✨ Insert a single `FinancialInvoice` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  financialInvoice_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: FinancialInvoice_Data!
+  ): FinancialInvoice_KeyOutput! @fdc_generated(from: "FinancialInvoice", purpose: INSERT_SINGLE)
+  """
+  ✨ Insert a single `FlightLeg` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  flightLeg_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: FlightLeg_Data!
+  ): FlightLeg_KeyOutput! @fdc_generated(from: "FlightLeg", purpose: INSERT_SINGLE)
+  """
+  ✨ Insert a single `HotelProperty` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  hotelProperty_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: HotelProperty_Data!
+  ): HotelProperty_KeyOutput! @fdc_generated(from: "HotelProperty", purpose: INSERT_SINGLE)
+  """
+  ✨ Insert a single `Reservation` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  reservation_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: Reservation_Data!
+  ): Reservation_KeyOutput! @fdc_generated(from: "Reservation", purpose: INSERT_SINGLE)
+  """
+  ✨ Insert a single `TransferService` into the table and return its key. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  transferService_insert(
+    """
+    Data object to insert into the table.
+    """
+    data: TransferService_Data!
+  ): TransferService_KeyOutput! @fdc_generated(from: "TransferService", purpose: INSERT_SINGLE)
+  """
+  ✨ Insert `B2BClient` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  b2BClient_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [B2BClient_Data!]!
+  ): [B2BClient_KeyOutput!]! @fdc_generated(from: "B2BClient", purpose: INSERT_MULTIPLE)
+  """
+  ✨ Insert `FinancialInvoice` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  financialInvoice_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [FinancialInvoice_Data!]!
+  ): [FinancialInvoice_KeyOutput!]! @fdc_generated(from: "FinancialInvoice", purpose: INSERT_MULTIPLE)
+  """
+  ✨ Insert `FlightLeg` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  flightLeg_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [FlightLeg_Data!]!
+  ): [FlightLeg_KeyOutput!]! @fdc_generated(from: "FlightLeg", purpose: INSERT_MULTIPLE)
+  """
+  ✨ Insert `HotelProperty` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  hotelProperty_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [HotelProperty_Data!]!
+  ): [HotelProperty_KeyOutput!]! @fdc_generated(from: "HotelProperty", purpose: INSERT_MULTIPLE)
+  """
+  ✨ Insert `Reservation` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  reservation_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [Reservation_Data!]!
+  ): [Reservation_KeyOutput!]! @fdc_generated(from: "Reservation", purpose: INSERT_MULTIPLE)
+  """
+  ✨ Insert `TransferService` objects into the table and return their keys. Columns not specified in `data` will receive defaults (e.g. `null`).
+  """
+  transferService_insertMany(
+    """
+    List of data objects to insert into the table.
+    """
+    data: [TransferService_Data!]!
+  ): [TransferService_KeyOutput!]! @fdc_generated(from: "TransferService", purpose: INSERT_MULTIPLE)
+  """
+  ✨ Insert or update a single `B2BClient` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `B2BClient`.
+  """
+  b2BClient_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: B2BClient_Data!
+  ): B2BClient_KeyOutput! @fdc_generated(from: "B2BClient", purpose: UPSERT_SINGLE)
+  """
+  ✨ Insert or update a single `FinancialInvoice` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `FinancialInvoice`.
+  """
+  financialInvoice_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: FinancialInvoice_Data!
+  ): FinancialInvoice_KeyOutput! @fdc_generated(from: "FinancialInvoice", purpose: UPSERT_SINGLE)
+  """
+  ✨ Insert or update a single `FlightLeg` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `FlightLeg`.
+  """
+  flightLeg_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: FlightLeg_Data!
+  ): FlightLeg_KeyOutput! @fdc_generated(from: "FlightLeg", purpose: UPSERT_SINGLE)
+  """
+  ✨ Insert or update a single `HotelProperty` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `HotelProperty`.
+  """
+  hotelProperty_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: HotelProperty_Data!
+  ): HotelProperty_KeyOutput! @fdc_generated(from: "HotelProperty", purpose: UPSERT_SINGLE)
+  """
+  ✨ Insert or update a single `Reservation` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Reservation`.
+  """
+  reservation_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: Reservation_Data!
+  ): Reservation_KeyOutput! @fdc_generated(from: "Reservation", purpose: UPSERT_SINGLE)
+  """
+  ✨ Insert or update a single `TransferService` into the table, based on the primary key. Returns the key of the newly inserted or existing updated `TransferService`.
+  """
+  transferService_upsert(
+    """
+    Data object to insert or update if it already exists.
+    """
+    data: TransferService_Data!
+  ): TransferService_KeyOutput! @fdc_generated(from: "TransferService", purpose: UPSERT_SINGLE)
+  """
+  ✨ Insert or update `B2BClient` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `B2BClient`.
+  """
+  b2BClient_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [B2BClient_Data!]!
+  ): [B2BClient_KeyOutput!]! @fdc_generated(from: "B2BClient", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Insert or update `FinancialInvoice` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `FinancialInvoice`.
+  """
+  financialInvoice_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [FinancialInvoice_Data!]!
+  ): [FinancialInvoice_KeyOutput!]! @fdc_generated(from: "FinancialInvoice", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Insert or update `FlightLeg` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `FlightLeg`.
+  """
+  flightLeg_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [FlightLeg_Data!]!
+  ): [FlightLeg_KeyOutput!]! @fdc_generated(from: "FlightLeg", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Insert or update `HotelProperty` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `HotelProperty`.
+  """
+  hotelProperty_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [HotelProperty_Data!]!
+  ): [HotelProperty_KeyOutput!]! @fdc_generated(from: "HotelProperty", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Insert or update `Reservation` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `Reservation`.
+  """
+  reservation_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [Reservation_Data!]!
+  ): [Reservation_KeyOutput!]! @fdc_generated(from: "Reservation", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Insert or update `TransferService` objects into the table, based on the primary key. Returns the key of the newly inserted or existing updated `TransferService`.
+  """
+  transferService_upsertMany(
+    """
+    List of data objects to insert or update if it already exists.
+    """
+    data: [TransferService_Data!]!
+  ): [TransferService_KeyOutput!]! @fdc_generated(from: "TransferService", purpose: UPSERT_MULTIPLE)
+  """
+  ✨ Update a single `B2BClient` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `B2BClient` or `null` if not found.
+  """
+  b2BClient_update(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: B2BClient_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: B2BClient_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: B2BClient_Data!
+  ): B2BClient_KeyOutput @fdc_generated(from: "B2BClient", purpose: UPDATE_SINGLE)
+  """
+  ✨ Update a single `FinancialInvoice` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `FinancialInvoice` or `null` if not found.
+  """
+  financialInvoice_update(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: FinancialInvoice_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: FinancialInvoice_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: FinancialInvoice_Data!
+  ): FinancialInvoice_KeyOutput @fdc_generated(from: "FinancialInvoice", purpose: UPDATE_SINGLE)
+  """
+  ✨ Update a single `FlightLeg` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `FlightLeg` or `null` if not found.
+  """
+  flightLeg_update(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: FlightLeg_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: FlightLeg_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: FlightLeg_Data!
+  ): FlightLeg_KeyOutput @fdc_generated(from: "FlightLeg", purpose: UPDATE_SINGLE)
+  """
+  ✨ Update a single `HotelProperty` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `HotelProperty` or `null` if not found.
+  """
+  hotelProperty_update(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: HotelProperty_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: HotelProperty_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: HotelProperty_Data!
+  ): HotelProperty_KeyOutput @fdc_generated(from: "HotelProperty", purpose: UPDATE_SINGLE)
+  """
+  ✨ Update a single `Reservation` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `Reservation` or `null` if not found.
+  """
+  reservation_update(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Reservation_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Reservation_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: Reservation_Data!
+  ): Reservation_KeyOutput @fdc_generated(from: "Reservation", purpose: UPDATE_SINGLE)
+  """
+  ✨ Update a single `TransferService` based on `id`, `key` or `first`, setting columns specified in `data`. Returns the key of the updated `TransferService` or `null` if not found.
+  """
+  transferService_update(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: TransferService_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: TransferService_FirstRow
+
+    """
+    Data object containing fields to be updated.
+    """
+    data: TransferService_Data!
+  ): TransferService_KeyOutput @fdc_generated(from: "TransferService", purpose: UPDATE_SINGLE)
+  """
+  ✨ Update `B2BClient` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  b2BClient_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: B2BClient_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: B2BClient_Data!
+  ): Int! @fdc_generated(from: "B2BClient", purpose: UPDATE_MULTIPLE)
+  """
+  ✨ Update `FinancialInvoice` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  financialInvoice_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: FinancialInvoice_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: FinancialInvoice_Data!
+  ): Int! @fdc_generated(from: "FinancialInvoice", purpose: UPDATE_MULTIPLE)
+  """
+  ✨ Update `FlightLeg` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  flightLeg_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: FlightLeg_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: FlightLeg_Data!
+  ): Int! @fdc_generated(from: "FlightLeg", purpose: UPDATE_MULTIPLE)
+  """
+  ✨ Update `HotelProperty` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  hotelProperty_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: HotelProperty_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: HotelProperty_Data!
+  ): Int! @fdc_generated(from: "HotelProperty", purpose: UPDATE_MULTIPLE)
+  """
+  ✨ Update `Reservation` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  reservation_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: Reservation_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: Reservation_Data!
+  ): Int! @fdc_generated(from: "Reservation", purpose: UPDATE_MULTIPLE)
+  """
+  ✨ Update `TransferService` objects matching `where` conditions (or `all`, if true) according to `data`. Returns the number of rows updated.
+  """
+  transferService_updateMany(
+    """
+    Filter condition to specify which rows to update.
+    """
+    where: TransferService_Filter
+
+    """
+    Set to true to update all rows.
+    """
+    all: Boolean = false
+
+    """
+    Data object containing fields to update.
+    """
+    data: TransferService_Data!
+  ): Int! @fdc_generated(from: "TransferService", purpose: UPDATE_MULTIPLE)
+  """
+  ✨ Delete a single `B2BClient` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  b2BClient_delete(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: B2BClient_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: B2BClient_FirstRow
+  ): B2BClient_KeyOutput @fdc_generated(from: "B2BClient", purpose: DELETE_SINGLE)
+  """
+  ✨ Delete a single `FinancialInvoice` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  financialInvoice_delete(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: FinancialInvoice_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: FinancialInvoice_FirstRow
+  ): FinancialInvoice_KeyOutput @fdc_generated(from: "FinancialInvoice", purpose: DELETE_SINGLE)
+  """
+  ✨ Delete a single `FlightLeg` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  flightLeg_delete(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: FlightLeg_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: FlightLeg_FirstRow
+  ): FlightLeg_KeyOutput @fdc_generated(from: "FlightLeg", purpose: DELETE_SINGLE)
+  """
+  ✨ Delete a single `HotelProperty` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  hotelProperty_delete(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: HotelProperty_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: HotelProperty_FirstRow
+  ): HotelProperty_KeyOutput @fdc_generated(from: "HotelProperty", purpose: DELETE_SINGLE)
+  """
+  ✨ Delete a single `Reservation` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  reservation_delete(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: Reservation_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: Reservation_FirstRow
+  ): Reservation_KeyOutput @fdc_generated(from: "Reservation", purpose: DELETE_SINGLE)
+  """
+  ✨ Delete a single `TransferService` based on `id`, `key` or `first` and return its key (or `null` if not found).
+  """
+  transferService_delete(
+    """
+    The unique ID of the object.
+    """
+    id: String
+
+    """
+    ✨ `_expr` server value variant of `id` (The unique ID of the object.)
+    """
+    id_expr: String_Expr
+
+    """
+    The key used to identify the object.
+    """
+    key: TransferService_Key
+
+    """
+    Fetch the first row based on the filters and ordering.
+    """
+    first: TransferService_FirstRow
+  ): TransferService_KeyOutput @fdc_generated(from: "TransferService", purpose: DELETE_SINGLE)
+  """
+  ✨ Delete `B2BClient` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  b2BClient_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: B2BClient_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "B2BClient", purpose: DELETE_MULTIPLE)
+  """
+  ✨ Delete `FinancialInvoice` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  financialInvoice_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: FinancialInvoice_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "FinancialInvoice", purpose: DELETE_MULTIPLE)
+  """
+  ✨ Delete `FlightLeg` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  flightLeg_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: FlightLeg_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "FlightLeg", purpose: DELETE_MULTIPLE)
+  """
+  ✨ Delete `HotelProperty` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  hotelProperty_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: HotelProperty_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "HotelProperty", purpose: DELETE_MULTIPLE)
+  """
+  ✨ Delete `Reservation` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  reservation_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: Reservation_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "Reservation", purpose: DELETE_MULTIPLE)
+  """
+  ✨ Delete `TransferService` objects matching `where` conditions (or `all`, if true). Returns the number of rows deleted.
+  """
+  transferService_deleteMany(
+    """
+    Filter condition to specify which rows to delete.
+    """
+    where: TransferService_Filter
+
+    """
+    Set to true to delete all rows.
+    """
+    all: Boolean = false
+  ): Int! @fdc_generated(from: "TransferService", purpose: DELETE_MULTIPLE)
+}

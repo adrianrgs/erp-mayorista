@@ -1,0 +1,42 @@
+import json
+import re
+
+log_file = "/Users/adriangonzalezsalazar/.gemini/antigravity-ide/brain/01041cff-3813-4809-be25-0a9288cf7799/.system_generated/logs/transcript_full.jsonl"
+
+last_full_content = None
+
+with open(log_file, 'r') as f:
+    for line in f:
+        if 'export default function App' in line:
+            try:
+                entry = json.loads(line)
+                
+                # Check if this is a replace_file_content args
+                if "tool_calls" in entry:
+                    for call in entry["tool_calls"]:
+                        if call["name"] == "replace_file_content":
+                            args = call.get("args", {})
+                            if "App.tsx" in args.get("TargetFile", ""):
+                                # This is a chunk replacement, might not be full file
+                                pass
+                
+                # Check if it's the result of view_file or cat
+                if "content" in entry and isinstance(entry["content"], str):
+                    if "import React" in entry["content"] and "export default function App" in entry["content"]:
+                        # It might be the full file content!
+                        last_full_content = entry["content"]
+                        
+                # Also check tool responses
+                if entry.get("type") == "TOOL_RESPONSE" and "output" in entry.get("content", ""):
+                    out = entry["content"]
+                    if "import React" in out and "export default function App" in out:
+                        last_full_content = out
+            except:
+                pass
+
+if last_full_content:
+    with open("recovered_app.txt", "w") as f:
+        f.write(last_full_content)
+    print("Recovered full content to recovered_app.txt")
+else:
+    print("Could not find full App.tsx in logs")

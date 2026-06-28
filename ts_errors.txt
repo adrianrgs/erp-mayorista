@@ -1,0 +1,5 @@
+src/App.tsx(633,22): error TS2322: Type '{ properties: any; onUpdateProperty: (updated: any) => void; detailedProperties: any; setDetailedProperties: any; roomTypes: any; setRoomTypes: any; ratePlans: any; setRatePlans: any; stopSales: any; setStopSales: any; }' is not assignable to type 'PropiedadesViewProps'.
+  Property 'setDetailedProperties' does not exist on type 'PropiedadesViewProps'. Did you mean 'detailedProperties'?
+src/App.tsx(680,21): error TS2322: Type '{ flights: any; boletos: any[]; onBoletosChange: any; clients: any[]; }' is not assignable to type 'VuelosViewProps'.
+  Property 'onBoletosChange' does not exist on type 'VuelosViewProps'.
+src/App.tsx(724,20): error TS2739: Type '{ clients: any[]; onUpdateClient: (updated: any) => void; invoices: any[]; onUpdateInvoice: (updated: any) => void; reservations: any[]; onAddInvoice: (newInv: any) => void; }' is missing the following properties from type 'CobranzasViewProps': vouchers, onAddVoucher, onUpdateVoucher
