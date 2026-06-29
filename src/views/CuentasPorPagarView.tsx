@@ -163,12 +163,18 @@ export default function CuentasPorPagarView({
   }, [obligations, searchQuery, statusFilter, activeTab]);
 
   // ─── PROVIDER HISTORIES (Libro Mayor) ──────────────────────────────────────
+  // Strips reservation-specific passenger data from provider names, e.g.
+  // "LIDOTEL (Hab 1: [ANGORA SI (ADT), 5 (ADT)])" → "LIDOTEL"
+  const normalizeProviderName = (name: string) =>
+    name.replace(/\s*\(Hab\s*\d+:.*$/i, '').trim();
+
   const uniqueProviders = useMemo(() => {
-    return Array.from(new Set(statements.map(s => s.providerName)));
+    const normalized = statements.map(s => normalizeProviderName(s.providerName));
+    return Array.from(new Set(normalized)).sort();
   }, [statements]);
 
   const activeProviderStatements = useMemo(() => {
-    return statements.filter(s => s.providerName === selectedProvider);
+    return statements.filter(s => normalizeProviderName(s.providerName) === selectedProvider);
   }, [statements, selectedProvider]);
 
   const providerBalance = useMemo(() => {

@@ -103,7 +103,12 @@ export default function AdministracionView({
 
   // Real Liquidity (Cobros verificados/pagados menos pagos reales a proveedores)
   const realCashCollected = invoices
-    .filter(i => i.type === "Cobro" && i.status === "Pagado")
+    .filter(i => i.type === "Cobro" && i.status === "Pagado" && !i.id?.startsWith("RET-"))
+    .reduce((sum, i) => sum + i.amount, 0);
+
+  // RET- invoices = saldoFavor cash withdrawals (outflow, must be subtracted)
+  const realWithdrawals = invoices
+    .filter(i => i.id?.startsWith("RET-") && i.status === "Pagado")
     .reduce((sum, i) => sum + i.amount, 0);
 
   const realPaymentsMade = invoices
@@ -113,7 +118,7 @@ export default function AdministracionView({
       .filter(o => o.status === "Pagado Total")
       .reduce((sum, o) => sum + (o.paidAmount || 0), 0);
 
-  const realLiquidity = realCashCollected - realPaymentsMade;
+  const realLiquidity = realCashCollected - realPaymentsMade - realWithdrawals;
 
   // 2. Commercial Intelligence calculations
   // Top 5 Agencies
@@ -167,10 +172,13 @@ export default function AdministracionView({
   const otrosPercent = totalProductVolume > 0 ? Math.round((otrosVolume / totalProductVolume) * 100) : 0;
 
   // Best Selling Destinations/Properties
+  const normalizeHotelName = (name: string) =>
+    name.replace(/\s*\(Hab\s*\d+:.*$/i, '').trim();
+
   const hotelStats: { [name: string]: { volume: number; count: number; destination: string } } = {};
   activeReservations.forEach(r => {
-    const hotel = r.hotelName || "Servicios Varios";
-    const prop = detailedProperties.find(p => p.nombre === r.hotelName);
+    const hotel = normalizeHotelName(r.hotelName || "Servicios Varios");
+    const prop = detailedProperties.find(p => p.nombre === normalizeHotelName(r.hotelName || ""));
     const dest = prop?.ciudad || "Múltiples destinos";
     if (!hotelStats[hotel]) {
       hotelStats[hotel] = { volume: 0, count: 0, destination: dest };

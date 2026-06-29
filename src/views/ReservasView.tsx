@@ -1227,7 +1227,9 @@ export default function ReservasView({
     });
 
     const hotelSrv = cartServices.find(s => s.tipo === ServiceType.ALOJAMIENTO);
-    const hotelName = hotelSrv ? hotelSrv.descripcion.split(" - ")[0].replace("Hotel: ", "") : "Multi-servicio Terrestre";
+    const hotelName = hotelSrv
+      ? hotelSrv.descripcion.split(" - ")[0].replace("Hotel: ", "").replace(/\s*\(Hab\s*\d+:.*$/i, "").trim()
+      : "Multi-servicio Terrestre";
 
     if (isEditingReservationId) {
       const updatedRes: Reservation = {

@@ -33,6 +33,57 @@ export class PropertiesService {
     return data.stopSales || [];
   }
 
+  async createRoomType(dto: any) {
+    const now = new Date().toISOString();
+    await this.dc.executeMutation('InsertRoomType', { ...dto, updatedAt: now });
+    return { success: true, id: dto.id };
+  }
+
+  async updateRoomType(id: string, dto: any) {
+    const now = new Date().toISOString();
+    await this.dc.executeMutation('UpdateRoomType', { id, ...dto, updatedAt: now });
+    return { success: true };
+  }
+
+  async removeRoomType(id: string) {
+    await this.dc.executeMutation('DeleteRoomType', { id });
+    return { success: true };
+  }
+
+  async createRatePlan(dto: any) {
+    const now = new Date().toISOString();
+    await this.dc.executeMutation('InsertRatePlan', { ...dto, updatedAt: now });
+    return { success: true, id: dto.id };
+  }
+
+  async updateRatePlan(id: string, dto: any) {
+    const now = new Date().toISOString();
+    await this.dc.executeMutation('UpdateRatePlan', { id, ...dto, updatedAt: now });
+    return { success: true };
+  }
+
+  async removeRatePlan(id: string) {
+    await this.dc.executeMutation('DeleteRatePlan', { id });
+    return { success: true };
+  }
+
+  async createStopSale(dto: any) {
+    const now = new Date().toISOString();
+    await this.dc.executeMutation('InsertStopSale', { ...dto, updatedAt: now });
+    return { success: true, id: dto.id };
+  }
+
+  async updateStopSale(id: string, dto: any) {
+    const now = new Date().toISOString();
+    await this.dc.executeMutation('UpdateStopSale', { id, ...dto, updatedAt: now });
+    return { success: true };
+  }
+
+  async removeStopSale(id: string) {
+    await this.dc.executeMutation('DeleteStopSale', { id });
+    return { success: true };
+  }
+
   async create(dto: any) {
     const now = new Date().toISOString();
     await this.dc.executeMutation('InsertDetailedProperty', { ...dto, updatedAt: now });
