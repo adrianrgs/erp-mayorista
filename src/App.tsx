@@ -83,7 +83,11 @@ import {
 } from "lucide-react";
 
 export default function App() {
-  const [authenticated, setAuthenticated] = useState(true);
+  const [authenticated, setAuthenticated] = useState(isAuthenticated());
+
+  if (!authenticated) {
+    return <LoginScreen onLogin={() => setAuthenticated(true)} />;
+  }
 
   // Navigation Section
   const [currentSection, setCurrentSection] = useState<ProjectView>(ProjectView.PROPIEDADES);
