@@ -460,6 +460,78 @@ export default function App() {
         }
       }
 
+      // 3. Apply credit variation balance impact using invoice + voucher context
+      // The reconciler cannot compute the correct split between debt clearance and overpayment
+      // refund without invoice/voucher data, so we handle it here.
+      // Supplements are handled exclusively by FacturacionView ("Facturar Suplemento" button).
+      if (result.newVariations.some(v => v.type === "Credito")) {
+        const totalCredit = result.newVariations
+          .filter(v => v.type === "Credito")
+          .reduce((sum, v) => sum + Math.abs(v.amountSale), 0);
+
+        const agencyName = finalRes.agenciaName;
+        const clientObj = clients.find(c => c.nombre.toLowerCase() === (agencyName || "").toLowerCase());
+
+        if (clientObj && totalCredit > 0) {
+          const isCreditClient =
+            clientObj.tipo === "A Crédito" || (finalRes as any).facturacionTipo === "Crédito";
+
+          // Invoices linked to this reservation (FAC- prefix = original billing invoice)
+          const relatedInvoices = invoices.filter(inv =>
+            inv.clientName?.includes(finalRes.id) &&
+            inv.status === "Facturado" &&
+            inv.id?.startsWith("FAC-")
+          );
+
+          const totalInvoiced = relatedInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+          const totalPaid = relatedInvoices.reduce((sum, inv) => {
+            return sum + vouchers
+              .filter(v => v.invoiceId === inv.id && v.status === "Verificado")
+              .reduce((s, v) => s + v.amount, 0);
+          }, 0);
+
+          // What the client still owed on those invoices before this modification
+          const invoiceRemaining = Math.max(0, totalInvoiced - totalPaid);
+          const newTotalDue = finalRes.totalPrice;
+
+          let newSaldoDeber = clientObj.saldoDeber;
+          let newSaldoFavor = clientObj.saldoFavor;
+
+          if (isCreditClient) {
+            if (totalPaid >= newTotalDue) {
+              // Client has already paid more than the new reservation amount → overpaid
+              // Clear the invoice's outstanding debt from the global account and give back the excess
+              const excess = totalPaid - newTotalDue; // e.g. $200 paid − $90 new = $110
+              newSaldoDeber = Math.max(0, newSaldoDeber - invoiceRemaining); // clear $160 debt
+              if (excess > 0) newSaldoFavor += excess; // credit $110 to saldoFavor
+              for (const inv of relatedInvoices) {
+                await handleUpdateInvoice({ ...inv, status: "Pagado" });
+              }
+            } else {
+              // Client still owes more than what they paid → reduce saldoDeber by credit amount
+              newSaldoDeber = Math.max(0, newSaldoDeber - totalCredit);
+            }
+          } else {
+            // Contado client: any overpayment beyond the new amount goes to saldoFavor
+            const excess = Math.max(0, totalPaid - newTotalDue);
+            if (excess > 0) {
+              newSaldoFavor += excess;
+              for (const inv of relatedInvoices) {
+                await handleUpdateInvoice({ ...inv, status: "Pagado" });
+              }
+            }
+          }
+
+          if (newSaldoDeber !== clientObj.saldoDeber || newSaldoFavor !== clientObj.saldoFavor) {
+            await handleUpdateClient({
+              ...clientObj,
+              saldoDeber: newSaldoDeber,
+              saldoFavor: newSaldoFavor
+            });
+          }
+        }
+      }
+
       // Print reconciler logs for audit trail
       if (result.log.length > 0) {
         console.log("--- HISTORIAL DE CONCILIACIÓN FINANCIERA ---");
@@ -721,16 +793,20 @@ export default function App() {
 
   // --- PAYMENT VOUCHERS ---
   const handleAddVoucher = async (newVoucher: PaymentVoucher) => {
+    setVouchers(prev => [...prev, newVoucher]);
     try {
-      setVouchers(prev => [...prev, newVoucher]);
       await insertPaymentVoucher(dataConnect, { ...newVoucher });
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to insert payment voucher", e);
+    }
   };
   const handleUpdateVoucher = async (updated: PaymentVoucher) => {
+    setVouchers(prev => prev.map(v => v.id === updated.id ? updated : v));
     try {
-      setVouchers(prev => prev.map(v => v.id === updated.id ? updated : v));
-      await updatePaymentVoucher(dataConnect, { ...updated });
-    } catch (e) {}
+      await updatePaymentVoucher(dataConnect, { id: updated.id, status: updated.status });
+    } catch (e) {
+      console.error("Failed to update payment voucher", e);
+    }
   };
 
   // --- EXTRA SERVICES & RATES ---

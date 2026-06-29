@@ -2237,13 +2237,17 @@ export default function ReservasView({
                 </h4>
                 {(() => {
                   const resInvoices = invoices.filter(inv => inv.clientName.includes(`Localizador ${activeRes.id}`) && inv.type === "Cobro");
-                  const paidInvoicesTotal = resInvoices.filter(inv => inv.status === "Pagado").reduce((sum, inv) => sum + inv.amount, 0);
-                  const unpaidInvoiceIds = resInvoices.filter(inv => inv.status !== "Pagado").map(inv => inv.id);
-                  const partialVerifiedVouchers = (vouchers || []).filter(v => 
-                    v.status === "Verificado" && 
-                    (v.locatorId === activeRes.id || (v.invoiceId && unpaidInvoiceIds.includes(v.invoiceId)))
+                  // Only FAC- invoices represent cash collected; NC- (credits) and ABO- (wallet transfers) are excluded
+                  const paidInvoicesTotal = resInvoices
+                    .filter(inv => inv.status === "Pagado" && inv.id.startsWith("FAC-"))
+                    .reduce((sum, inv) => sum + inv.amount, 0);
+                  const unpaidFacIds = resInvoices.filter(inv => inv.status !== "Pagado" && inv.id.startsWith("FAC-")).map(inv => inv.id);
+                  // Vouchers on unpaid FAC invoices count as partial collections
+                  const partialVerifiedVouchers = (vouchers || []).filter(v =>
+                    v.status === "Verificado" &&
+                    (v.locatorId === activeRes.id || (v.invoiceId && unpaidFacIds.includes(v.invoiceId)))
                   );
-                  const totalCobrado = paidInvoicesTotal + partialVerifiedVouchers.reduce((sum, v) => sum + v.amount, 0);
+                  const totalCobrado = Math.max(0, paidInvoicesTotal + partialVerifiedVouchers.reduce((sum, v) => sum + v.amount, 0));
                   const adjustments = (activeRes.variaciones || []).reduce((sum, v) => sum + v.amountSale, 0);
                   const originalPrice = activeRes.totalPrice - adjustments;
                   const pctCobrado = activeRes.totalPrice > 0 ? Math.min(100, Math.round((totalCobrado / activeRes.totalPrice) * 100)) : 0;
@@ -2483,60 +2487,98 @@ export default function ReservasView({
 
               {/* Liquidación a Proveedores */}
               {(() => {
-                const pPay = getProviderPaymentStatus(activeRes.id);
+                const resObligations = (payableObligations || []).filter(o => o.locatorId === activeRes.id);
+                const totalNeto = resObligations.reduce((s, o) => s + o.netCost, 0);
+                const totalAbonado = resObligations.reduce((s, o) => s + o.paidAmount, 0);
+                const totalPendiente = totalNeto - totalAbonado;
+
+                const oblStatusInfo = (o: any) => {
+                  if (o.isFrozen || o.status === "Congelado") return { label: "Congelado", color: "text-red-700 bg-red-50 border-red-200" };
+                  if (o.status === "Pagado Total") return { label: "Pagado", color: "text-emerald-700 bg-emerald-50 border-emerald-250" };
+                  if (o.status === "Pagado Parcial") return { label: "Abono Parcial", color: "text-blue-700 bg-blue-50 border-blue-200" };
+                  if (o.status === "Vencido") return { label: "Vencido", color: "text-red-750 bg-red-50 border-red-200" };
+                  return { label: "Pendiente", color: "text-amber-700 bg-amber-50 border-amber-250" };
+                };
+
                 return (
                   <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-3 shadow-xs text-left">
-                    <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block text-zinc-650">Liquidación a Proveedores</h4>
-                    {pPay.obligation ? (
-                      <div className="space-y-2.5 text-xs font-semibold">
-                        <div className="flex justify-between text-zinc-550">
-                          <span>Proveedor Legal:</span>
-                          <span className="text-zinc-900 font-extrabold">{pPay.obligation.providerName}</span>
-                        </div>
-                        <div className="flex justify-between text-zinc-550 font-mono">
-                          <span>Costo Neto:</span>
-                          <span className="text-zinc-900">${pPay.obligation.netCost.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
-                        </div>
-                        <div className="flex justify-between text-zinc-550 font-mono">
-                          <span>Importe Abonado:</span>
-                          <span className="text-emerald-700">${pPay.obligation.paidAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
-                        </div>
-                        <div className="flex justify-between border-t border-zinc-100 pt-2 text-zinc-555 font-mono">
-                          <span>Saldo Pendiente:</span>
-                          <span className={`font-black text-xs ${(pPay.obligation.netCost - pPay.obligation.paidAmount) > 0 ? "text-red-650" : "text-zinc-400"}`}>
-                            ${(pPay.obligation.netCost - pPay.obligation.paidAmount).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center border-t border-zinc-100 pt-2.5">
-                          <span>Estatus Pago:</span>
-                          <span className={`px-2 py-0.5 rounded text-[8.5px] uppercase tracking-wider border font-bold ${pPay.color}`}>
-                            {pPay.status}
-                          </span>
-                        </div>
-                        {pPay.obligation.attachedFile && (
-                          <div className="border-t border-zinc-100 pt-2.5 space-y-2">
-                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Soporte de Tesorería</span>
-                            <div className="p-2 bg-zinc-50 border border-zinc-200 rounded flex items-center justify-between">
-                              <span className="font-mono text-[10.5px] text-zinc-700 truncate max-w-[180px] font-bold" title={pPay.obligation.attachedFile}>
-                                {pPay.obligation.attachedFile}
+                    <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2 text-zinc-650">
+                      Liquidación a Proveedores
+                    </h4>
+
+                    {resObligations.length === 0 ? (
+                      <div className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-550 text-[11px] rounded font-semibold leading-relaxed">
+                        No hay obligaciones de costo neto emitidas en Cuentas por Pagar para este expediente. Asegúrese de enviar a facturar y aprobar la reserva.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {resObligations.map(obl => {
+                          const { label, color } = oblStatusInfo(obl);
+                          const remaining = obl.netCost - obl.paidAmount;
+                          return (
+                            <div key={obl.id} className="border border-zinc-150 rounded-lg overflow-hidden">
+                              {/* Provider header */}
+                              <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 border-b border-zinc-150">
+                                <span className="text-[10px] font-extrabold text-zinc-800 uppercase tracking-wide">{obl.providerName}</span>
+                                <span className={`px-2 py-0.5 rounded text-[8px] uppercase tracking-wider border font-bold ${color}`}>{label}</span>
+                              </div>
+                              {/* Obligation detail */}
+                              <div className="px-3 py-2.5 space-y-1.5 text-xs font-semibold">
+                                <p className="text-[10px] text-zinc-500 leading-snug">{obl.serviceDetail}</p>
+                                <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-[10.5px]">
+                                  <div className="text-center">
+                                    <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Costo Neto</span>
+                                    <span className="text-zinc-800 font-black">${obl.netCost.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                  </div>
+                                  <div className="text-center">
+                                    <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Abonado</span>
+                                    <span className="text-emerald-700 font-black">${obl.paidAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                  </div>
+                                  <div className="text-center">
+                                    <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Pendiente</span>
+                                    <span className={`font-black ${remaining > 0 ? "text-red-600" : remaining < 0 ? "text-emerald-700" : "text-zinc-400"}`}>
+                                      ${remaining.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                                    </span>
+                                  </div>
+                                </div>
+                                {obl.attachedFile && (
+                                  <div className="pt-1.5 border-t border-zinc-100 flex items-center justify-between">
+                                    <span className="font-mono text-[10px] text-zinc-600 truncate max-w-[160px]" title={obl.attachedFile}>
+                                      {obl.attachedFile}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => { setSelectedObligationForReceipt(obl); setShowProvReceiptModal(true); }}
+                                      className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-[9px] font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1"
+                                    >
+                                      <Download className="w-3 h-3" /> Ver
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Totals row — only shown when there are multiple obligations */}
+                        {resObligations.length > 1 && (
+                          <div className="border-t border-zinc-200 pt-2 grid grid-cols-3 gap-2 text-center font-mono text-[10.5px]">
+                            <div>
+                              <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Total Neto</span>
+                              <span className="text-zinc-800 font-black">${totalNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div>
+                              <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Total Abonado</span>
+                              <span className="text-emerald-700 font-black">${totalAbonado.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div>
+                              <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Total Pendiente</span>
+                              <span className={`font-black ${totalPendiente > 0 ? "text-red-600" : totalPendiente < 0 ? "text-emerald-700" : "text-zinc-400"}`}>
+                                ${totalPendiente.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedObligationForReceipt(pPay.obligation);
-                                  setShowProvReceiptModal(true);
-                                }}
-                                className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-[9.5px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs flex items-center gap-1"
-                              >
-                                <Download className="w-3.5 h-3.5" /> Ver Soporte
-                              </button>
                             </div>
                           </div>
                         )}
-                      </div>
-                    ) : (
-                      <div className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-550 text-[11px] rounded font-semibold leading-relaxed">
-                        No hay obligaciones de costo neto emitidas en Cuentas por Pagar para este expediente. Asegúrese de enviar a facturar y aprobar la reserva.
                       </div>
                     )}
                   </div>

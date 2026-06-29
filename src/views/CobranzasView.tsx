@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import { Reservation, FinancialInvoice, B2BClient, PaymentVoucher, CompanyConfig } from "../types";
-import { 
-  Users, 
-  Search, 
-  Filter, 
-  Plus, 
-  Printer, 
-  ArrowLeft, 
-  ShieldAlert, 
-  AlertCircle, 
+import {
+  Users,
+  Search,
+  Filter,
+  Plus,
+  Printer,
+  ArrowLeft,
+  ShieldAlert,
+  AlertCircle,
   CheckCircle2,
   DollarSign,
   X,
@@ -28,7 +28,7 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Eye,
-  Wallet
+  Banknote
 } from "lucide-react";
 
 interface CobranzasViewProps {
@@ -63,7 +63,7 @@ export default function CobranzasView({
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<FinancialInvoice | null>(null);
   
   // Tab states for the client details card
-  const [activeTab, setActiveTab] = useState<"facturas" | "comprobantes" | "billetera">("facturas");
+  const [activeTab, setActiveTab] = useState<"facturas" | "comprobantes">("facturas");
   
   // Notification state
   const [statusMessage, setStatusMessage] = useState("");
@@ -71,6 +71,15 @@ export default function CobranzasView({
   const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState<PaymentVoucher | null>(null);
   const [selectedReceiptVoucher, setSelectedReceiptVoucher] = useState<{voucher: PaymentVoucher, clientName: string} | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  // Withdrawal of saldo a favor
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawForm, setWithdrawForm] = useState({
+    amount: "",
+    method: "Transferencia Bancaria",
+    reference: "",
+    notes: ""
+  });
 
   // Payment Form States
   const [paymentForm, setPaymentForm] = useState({
@@ -291,6 +300,33 @@ export default function CobranzasView({
     setTimeout(() => setStatusMessage(""), 5000);
   };
 
+  const handleWithdrawSaldoFavor = () => {
+    if (!activeClient) return;
+    const amount = parseFloat(withdrawForm.amount);
+    if (isNaN(amount) || amount <= 0) { alert("Ingrese un monto válido."); return; }
+    if (amount > activeClient.saldoFavor) { alert("El monto excede el saldo a favor disponible."); return; }
+
+    onUpdateClient({ ...activeClient, saldoFavor: Math.max(0, activeClient.saldoFavor - amount) });
+
+    if (onAddInvoice) {
+      onAddInvoice({
+        id: `RET-${Math.floor(1000 + Math.random() * 9000)}`,
+        clientName: `Retiro Saldo a Favor: ${activeClient.nombre} — Ref. ${withdrawForm.reference || "S/N"}`,
+        date: new Date().toISOString().split("T")[0],
+        dueDate: new Date().toISOString().split("T")[0],
+        amount,
+        vatAmount: 0,
+        type: "Cobro",
+        status: "Pagado"
+      });
+    }
+
+    setStatusMessage(`✓ Reintegro de $${amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD procesado para ${activeClient.nombre}.`);
+    setTimeout(() => setStatusMessage(""), 5000);
+    setShowWithdrawModal(false);
+    setWithdrawForm({ amount: "", method: "Transferencia Bancaria", reference: "", notes: "" });
+  };
+
   const handlePrintReceipt = (vou: PaymentVoucher, clientName: string) => {
     setSelectedReceiptVoucher({ voucher: vou, clientName });
   };
@@ -494,9 +530,20 @@ export default function CobranzasView({
 
                   <div className="bg-zinc-50 p-3.5 rounded-md border border-zinc-200 text-left">
                     <span className="text-[9px] text-zinc-450 uppercase font-bold tracking-wider block">Saldo a Favor (Abonos)</span>
-                    <p className="font-black text-emerald-700 text-sm mt-1 font-mono">
-                      +${activeClient.saldoFavor.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
-                    </p>
+                    <div className="flex items-end justify-between mt-1">
+                      <p className="font-black text-emerald-700 text-sm font-mono">
+                        +${activeClient.saldoFavor.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                      </p>
+                      {activeClient.saldoFavor > 0 && (
+                        <button
+                          onClick={() => { setWithdrawForm(f => ({ ...f, amount: activeClient.saldoFavor.toFixed(2) })); setShowWithdrawModal(true); }}
+                          className="flex items-center gap-1 px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[9px] font-bold uppercase tracking-wider"
+                          title="Retirar saldo a favor (reembolso en efectivo)"
+                        >
+                          <Banknote className="w-3 h-3" /> Retirar
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -553,16 +600,6 @@ export default function CobranzasView({
                         {pendingVouchersCount}
                       </span>
                     )}
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("billetera")}
-                    className={`px-5 py-3.5 transition-all cursor-pointer flex items-center gap-1.5 ${
-                      activeTab === "billetera" 
-                        ? "bg-white text-zinc-955 border-b-2 border-b-zinc-955 font-black" 
-                        : "text-zinc-450 hover:text-zinc-805"
-                    }`}
-                  >
-                    <Wallet className="w-4 h-4" /> Billetera B2B
                   </button>
                 </div>
 
@@ -684,96 +721,6 @@ export default function CobranzasView({
                         </div>
                       );
                     })()
-                  ) : activeTab === "billetera" ? (
-                    <div className="space-y-6">
-                      <div className="relative overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-950 text-white rounded-2xl p-6 shadow-xl border border-zinc-700/50 flex flex-col justify-between h-48 max-w-md mx-auto">
-                        {/* Chip & Logo */}
-                        <div className="flex justify-between items-start">
-                          <div className="space-y-1 text-left">
-                            <span className="text-[8.5px] uppercase font-bold text-zinc-400 tracking-widest block">Billetera B2B Virtual</span>
-                            <h4 className="font-extrabold text-sm uppercase text-zinc-100">{activeClient.nombre}</h4>
-                          </div>
-                          {/* Simulated Chip */}
-                          <div className="w-9 h-7 bg-amber-400/90 rounded-md border border-amber-300/40 relative overflow-hidden shadow-sm">
-                            <div className="absolute inset-0 grid grid-cols-3 gap-0.5 p-1 opacity-40">
-                              <div className="border border-zinc-950/20" />
-                              <div className="border border-zinc-950/20" />
-                              <div className="border border-zinc-950/20" />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Card Number & Balance */}
-                        <div className="space-y-4 text-left">
-                          <div className="flex justify-between items-end">
-                            <div>
-                              <span className="text-[8px] uppercase font-bold text-zinc-550 tracking-wider block">Número de Cuenta</span>
-                              <span className="font-mono text-xs text-zinc-300 font-bold tracking-widest">WLT-{activeClient.id.slice(-6).toUpperCase()}-B2B</span>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-[8px] uppercase font-bold text-zinc-550 tracking-wider block">Saldo Disponible</span>
-                              <span className="font-mono text-xl font-black text-emerald-400 tracking-tight">
-                                +${activeClient.saldoFavor.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="border border-zinc-200 rounded-lg overflow-hidden">
-                        <table className="w-full text-xs text-left text-zinc-700">
-                          <thead className="bg-zinc-50 uppercase text-[9.5px] tracking-wider text-zinc-500 font-bold border-b border-zinc-200">
-                            <tr>
-                              <th className="px-4 py-3">ID / Fecha</th>
-                              <th className="px-4 py-3">Localizador</th>
-                              <th className="px-4 py-3">Concepto</th>
-                              <th className="px-4 py-3 text-right">Monto</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-zinc-200">
-                            {(() => {
-                              const walletTransactions = reservations
-                                .filter(r => r.agenciaName && r.agenciaName.toLowerCase() === activeClient.nombre.toLowerCase() && r.variaciones)
-                                .flatMap(r => (r.variaciones || []).map(v => ({
-                                  ...v,
-                                  locatorId: r.id
-                                })))
-                                .filter(v => v.type === "Credito" || v.type === "Penalidad");
-
-                              if (walletTransactions.length === 0) {
-                                return (
-                                  <tr>
-                                    <td colSpan={4} className="px-4 py-8 text-center text-zinc-400 font-semibold italic">
-                                      No se registran movimientos en la billetera virtual de esta agencia.
-                                    </td>
-                                  </tr>
-                                );
-                              }
-
-                              return walletTransactions.map((tx, idx) => (
-                                <tr key={tx.id || idx} className="hover:bg-zinc-50/50">
-                                  <td className="px-4 py-3 font-semibold">
-                                    <span className="font-mono text-[10.5px] block text-zinc-900">{tx.id}</span>
-                                    <span className="text-[9px] text-zinc-400 block font-normal">{tx.date}</span>
-                                  </td>
-                                  <td className="px-4 py-3 font-mono font-bold text-blue-900">
-                                    {tx.locatorId}
-                                  </td>
-                                  <td className="px-4 py-3 text-zinc-800 leading-normal font-medium">
-                                    {tx.reason}
-                                  </td>
-                                  <td className="px-4 py-3 text-right font-mono font-extrabold">
-                                    <span className={tx.amountSale <= 0 ? "text-emerald-700" : "text-red-700"}>
-                                      {tx.amountSale <= 0 ? "+" : "-"}${Math.abs(tx.amountSale).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
-                                    </span>
-                                  </td>
-                                </tr>
-                              ));
-                            })()}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
                   ) : (
                     // Payment Vouchers list and auditing panel
                     (() => {
@@ -1380,6 +1327,95 @@ export default function CobranzasView({
                     Imprimir / PDF
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WITHDRAW SALDO A FAVOR MODAL */}
+      {showWithdrawModal && activeClient && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200">
+              <div className="flex items-center gap-2">
+                <Banknote className="w-4 h-4 text-emerald-700" />
+                <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wide">Retirar Saldo a Favor</h3>
+              </div>
+              <button onClick={() => setShowWithdrawModal(false)} className="text-zinc-400 hover:text-zinc-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm">
+                <span className="text-[9px] text-emerald-700 font-bold uppercase tracking-wider block">Saldo disponible</span>
+                <p className="font-black text-emerald-800 text-base font-mono">
+                  +${activeClient.saldoFavor.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                </p>
+                <p className="text-[9.5px] text-emerald-700 mt-0.5">Cliente: {activeClient.nombre}</p>
+              </div>
+
+              <div>
+                <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Monto a retirar (USD)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={activeClient.saldoFavor}
+                  value={withdrawForm.amount}
+                  onChange={e => setWithdrawForm(f => ({ ...f, amount: e.target.value }))}
+                  className="w-full p-2.5 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+
+              <div>
+                <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Método de devolución</label>
+                <select
+                  value={withdrawForm.method}
+                  onChange={e => setWithdrawForm(f => ({ ...f, method: e.target.value }))}
+                  className="w-full p-2.5 border border-zinc-200 rounded text-sm font-bold text-zinc-700 focus:outline-none"
+                >
+                  <option>Transferencia Bancaria</option>
+                  <option>Efectivo</option>
+                  <option>Cheque</option>
+                  <option>Nota de Crédito Manual</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Referencia / Número de transacción</label>
+                <input
+                  type="text"
+                  value={withdrawForm.reference}
+                  onChange={e => setWithdrawForm(f => ({ ...f, reference: e.target.value }))}
+                  placeholder="Ej: TRF-002854"
+                  className="w-full p-2.5 border border-zinc-200 rounded text-sm text-zinc-700 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Notas (opcional)</label>
+                <textarea
+                  value={withdrawForm.notes}
+                  onChange={e => setWithdrawForm(f => ({ ...f, notes: e.target.value }))}
+                  rows={2}
+                  placeholder="Motivo o instrucciones adicionales..."
+                  className="w-full p-2.5 border border-zinc-200 rounded text-sm text-zinc-700 focus:outline-none resize-none"
+                />
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t border-zinc-200 flex justify-end gap-3 bg-zinc-50">
+              <button
+                onClick={() => setShowWithdrawModal(false)}
+                className="px-4 py-2 border border-zinc-200 text-zinc-600 rounded text-xs font-bold uppercase tracking-wider hover:bg-zinc-100"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleWithdrawSaldoFavor}
+                className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold uppercase tracking-wider flex items-center gap-2"
+              >
+                <Banknote className="w-3.5 h-3.5" /> Confirmar Reintegro
               </button>
             </div>
           </div>

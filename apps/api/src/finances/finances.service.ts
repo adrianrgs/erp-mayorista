@@ -40,12 +40,17 @@ export class FinancesService {
   }
 
   async createVoucher(dto: any) {
-    await this.dc.executeMutation('InsertPaymentVoucher', { ...dto, updatedAt: new Date().toISOString() });
-    return { success: true, id: dto.id };
+    // InsertPaymentVoucher does not declare $updatedAt — only pass declared variables
+    const { id, clientId, clientName, invoiceId, locatorId, method, reference, amount, date, status, bankName, notes, attachedFile } = dto;
+    await this.dc.executeMutation('InsertPaymentVoucher', {
+      id, clientId, clientName, invoiceId, locatorId, method, reference, amount, date, status, bankName, notes, attachedFile,
+    });
+    return { success: true, id };
   }
 
   async updateVoucher(id: string, dto: any) {
-    await this.dc.executeMutation('UpdatePaymentVoucher', { id, ...dto, updatedAt: new Date().toISOString() });
+    // UpdatePaymentVoucher only declares $id and $status
+    await this.dc.executeMutation('UpdatePaymentVoucher', { id, status: dto.status });
     return { success: true };
   }
 

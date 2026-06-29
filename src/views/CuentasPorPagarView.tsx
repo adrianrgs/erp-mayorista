@@ -56,6 +56,56 @@ export default function CuentasPorPagarView({
     attachedFile: ""
   });
 
+  // Frozen obligation resolution modal
+  const [resolveObligation, setResolveObligation] = useState<PayableObligation | null>(null);
+  const [resolveForm, setResolveForm] = useState({
+    outcome: "full" as "full" | "partial" | "none",
+    refundAmount: "",
+    notes: ""
+  });
+
+  const handleResolveObligation = () => {
+    if (!resolveObligation) return;
+    const isOverpayment = resolveObligation.status === "Pagado Total" && resolveObligation.paidAmount > resolveObligation.netCost;
+    // For overpayment: only the excess is at stake. For frozen: the full paidAmount is at stake.
+    const base = isOverpayment
+      ? resolveObligation.paidAmount - resolveObligation.netCost
+      : resolveObligation.paidAmount;
+
+    let refund = 0;
+    let resolutionNote = "";
+
+    if (resolveForm.outcome === "full") {
+      refund = base;
+      resolutionNote = isOverpayment
+        ? `[Overpago Recuperado] Proveedor reembolsó $${refund.toFixed(2)} USD de excedente pagado.`
+        : `[Resuelto] Proveedor reembolsó $${refund.toFixed(2)} USD completos.`;
+    } else if (resolveForm.outcome === "partial") {
+      refund = parseFloat(resolveForm.refundAmount) || 0;
+      resolutionNote = isOverpayment
+        ? `[Overpago Parcial] Proveedor reembolsó $${refund.toFixed(2)} de $${base.toFixed(2)} USD. Diferencia absorbida: $${(base - refund).toFixed(2)} USD.`
+        : `[Resuelto Parcial] Proveedor reembolsó $${refund.toFixed(2)} de $${base.toFixed(2)} USD. Pérdida absorbida: $${(base - refund).toFixed(2)} USD.`;
+    } else {
+      // No refund: for overpayment we write off the excess (set paidAmount = netCost so obligation balances)
+      refund = isOverpayment ? base : 0;
+      resolutionNote = isOverpayment
+        ? `[Overpago Absorbido] Excedente de $${base.toFixed(2)} USD dado de baja. Proveedor no reembolsará.`
+        : `[Sin Reembolso] Proveedor no reembolsará. Pérdida absorbida: $${base.toFixed(2)} USD.`;
+    }
+
+    const resolved: PayableObligation = {
+      ...resolveObligation,
+      status: "Pagado Total",
+      isFrozen: false,
+      paidAmount: resolveObligation.paidAmount - refund,
+      notes: `${resolveObligation.notes || ""}\n${resolveForm.notes ? resolveForm.notes + " — " : ""}${resolutionNote}`
+    };
+    onUpdateObligation(resolved);
+    triggerNotification(`${isOverpayment ? "Overpago" : "Obligación"} ${resolveObligation.id} resuelto/a. ${resolutionNote}`);
+    setResolveObligation(null);
+    setResolveForm({ outcome: "full", refundAmount: "", notes: "" });
+  };
+
   // Success notifications
   const [notification, setNotification] = useState("");
 
@@ -96,7 +146,9 @@ export default function CuentasPorPagarView({
   // ─── FILTER OBLIGATIONS ────────────────────────────────────────────────────
   const filteredObligations = useMemo(() => {
     return obligations.filter(o => {
-      if (activeTab === "obligaciones" && o.status === "Pagado Total") return false;
+      const isOverpaid = o.paidAmount > o.netCost;
+      // Overpaid obligations need action even though status is "Pagado Total" — keep in obligaciones tab
+      if (activeTab === "obligaciones" && o.status === "Pagado Total" && !isOverpaid) return false;
       if (activeTab === "pagadas" && o.status !== "Pagado Total") return false;
       
       const matchesSearch = 
@@ -414,7 +466,7 @@ export default function CuentasPorPagarView({
                           <td className="p-4 text-right font-bold text-emerald-700">
                             ${ob.paidAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
                           </td>
-                          <td className={`p-4 text-right font-black font-mono ${remaining > 0 ? "text-red-650" : "text-zinc-400"}`}>
+                          <td className={`p-4 text-right font-black font-mono ${remaining > 0 ? "text-red-650" : remaining < 0 ? "text-emerald-700" : "text-zinc-400"}`}>
                             ${remaining.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
                           </td>
                           <td className="p-4 text-center font-mono text-[10.5px] text-zinc-650">
@@ -433,9 +485,29 @@ export default function CuentasPorPagarView({
                           </td>
                           <td className="p-4 text-right whitespace-nowrap">
                             {(ob.isFrozen || ob.status === "Congelado") ? (
-                              <span className="text-[9.5px] text-red-600 font-bold uppercase flex items-center justify-end gap-1 pr-2">
-                                🔒 Bloqueado
-                              </span>
+                              ob.paidAmount > 0 ? (
+                                <button
+                                  onClick={() => { setResolveObligation(ob); setResolveForm({ outcome: "full", refundAmount: ob.paidAmount.toFixed(2), notes: "" }); }}
+                                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs"
+                                >
+                                  Resolver
+                                </button>
+                              ) : (
+                                <span className="text-[9.5px] text-red-600 font-bold uppercase flex items-center justify-end gap-1 pr-2">
+                                  🔒 Bloqueado
+                                </span>
+                              )
+                            ) : ob.status === "Pagado Total" && ob.paidAmount > ob.netCost ? (
+                              <button
+                                onClick={() => {
+                                  const excess = ob.paidAmount - ob.netCost;
+                                  setResolveObligation(ob);
+                                  setResolveForm({ outcome: "full", refundAmount: excess.toFixed(2), notes: "" });
+                                }}
+                                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs"
+                              >
+                                Recuperar ${(ob.paidAmount - ob.netCost).toFixed(2)}
+                              </button>
                             ) : ob.status !== "Pagado Total" ? (
                               <button
                                 onClick={() => handleOpenPaymentDrawer(ob)}
@@ -784,6 +856,128 @@ export default function CuentasPorPagarView({
           </div>
         </div>
       )}
+
+      {/* RESOLVE FROZEN OBLIGATION MODAL */}
+      {resolveObligation && (() => {
+        const isOverpayment = resolveObligation.status === "Pagado Total" && resolveObligation.paidAmount > resolveObligation.netCost;
+        const excess = isOverpayment ? resolveObligation.paidAmount - resolveObligation.netCost : 0;
+        const base = isOverpayment ? excess : resolveObligation.paidAmount;
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200">
+                <div>
+                  <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wide">
+                    {isOverpayment ? "Recuperar Overpago al Proveedor" : "Resolver Obligación Congelada"}
+                  </h3>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">{resolveObligation.id} — {resolveObligation.providerName} — Exp. {resolveObligation.locatorId}</p>
+                </div>
+                <button onClick={() => setResolveObligation(null)} className="text-zinc-400 hover:text-zinc-700">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div className={`${isOverpayment ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"} border rounded-lg p-3 text-xs space-y-1`}>
+                  <div className="flex justify-between">
+                    <span className={`${isOverpayment ? "text-emerald-700" : "text-amber-700"} font-bold`}>Monto neto del servicio:</span>
+                    <span className="font-mono font-black">${resolveObligation.netCost.toFixed(2)} USD</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className={`${isOverpayment ? "text-emerald-700" : "text-amber-700"} font-bold`}>Total abonado al proveedor:</span>
+                    <span className="font-mono font-black">${resolveObligation.paidAmount.toFixed(2)} USD</span>
+                  </div>
+                  {isOverpayment && (
+                    <div className="flex justify-between pt-1 border-t border-emerald-200">
+                      <span className="text-emerald-800 font-black">Excedente a recuperar:</span>
+                      <span className="font-mono font-black text-emerald-800">${excess.toFixed(2)} USD</span>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-xs text-zinc-600 font-semibold">
+                  {isOverpayment
+                    ? "¿El proveedor reembolsará el excedente de $" + excess.toFixed(2) + " USD?"
+                    : "¿Qué resolución aplica con el proveedor?"}
+                </p>
+
+                <div className="space-y-2">
+                  {[
+                    {
+                      value: "full",
+                      label: isOverpayment
+                        ? `Proveedor devuelve el excedente completo ($${excess.toFixed(2)} USD recuperados)`
+                        : `Proveedor reembolsó completo ($${base.toFixed(2)} USD recuperados)`,
+                      color: "emerald"
+                    },
+                    { value: "partial", label: "Reembolso parcial (ingresar monto recuperado)", color: "blue" },
+                    {
+                      value: "none",
+                      label: isOverpayment
+                        ? `Sin reembolso — excedente de $${excess.toFixed(2)} USD dado de baja`
+                        : `Sin reembolso — pérdida absorbida ($${base.toFixed(2)} USD)`,
+                      color: "red"
+                    }
+                  ].map(opt => (
+                    <label key={opt.value} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer ${resolveForm.outcome === opt.value ? `border-${opt.color}-400 bg-${opt.color}-50` : "border-zinc-200 hover:border-zinc-300"}`}>
+                      <input
+                        type="radio"
+                        name="outcome"
+                        value={opt.value}
+                        checked={resolveForm.outcome === opt.value}
+                        onChange={() => setResolveForm(f => ({ ...f, outcome: opt.value as any }))}
+                        className="mt-0.5"
+                      />
+                      <span className="text-xs font-semibold text-zinc-700">{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {resolveForm.outcome === "partial" && (
+                  <div>
+                    <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Monto recuperado (USD)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max={base}
+                      value={resolveForm.refundAmount}
+                      onChange={e => setResolveForm(f => ({ ...f, refundAmount: e.target.value }))}
+                      className="w-full p-2.5 border border-zinc-200 rounded text-sm font-mono font-bold text-zinc-900 focus:outline-none focus:border-blue-400"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Notas / evidencia (opcional)</label>
+                  <textarea
+                    value={resolveForm.notes}
+                    onChange={e => setResolveForm(f => ({ ...f, notes: e.target.value }))}
+                    rows={2}
+                    placeholder="Ej: Email confirmación reembolso, referencia transferencia..."
+                    className="w-full p-2.5 border border-zinc-200 rounded text-sm text-zinc-700 focus:outline-none resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="px-5 py-4 border-t border-zinc-200 flex justify-end gap-3 bg-zinc-50">
+                <button
+                  onClick={() => setResolveObligation(null)}
+                  className="px-4 py-2 border border-zinc-200 text-zinc-600 rounded text-xs font-bold uppercase tracking-wider hover:bg-zinc-100"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleResolveObligation}
+                  className={`px-5 py-2 ${isOverpayment ? "bg-emerald-700 hover:bg-emerald-800" : "bg-zinc-900 hover:bg-zinc-800"} text-white rounded text-xs font-bold uppercase tracking-wider flex items-center gap-2`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" /> {isOverpayment ? "Confirmar Recuperación" : "Confirmar Resolución"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

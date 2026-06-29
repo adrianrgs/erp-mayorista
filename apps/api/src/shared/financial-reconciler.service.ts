@@ -40,9 +40,6 @@ export class FinancialReconcilerService {
     const isBilled = (oldRes.servicios || []).some(
       (s) => s.statusFacturacion === 'Facturado',
     );
-    const isCreditClient =
-      updatedClient?.tipo === 'A Crédito' ||
-      newRes.facturacionTipo === 'Crédito';
 
     const oldServices = oldRes.servicios || [];
     const newServices = newRes.servicios || [];
@@ -51,57 +48,42 @@ export class FinancialReconcilerService {
     const genId = (prefix: string) =>
       `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    // HELPER: Register a credit event for logging only.
+    // The actual saldoDeber / saldoFavor adjustment is computed in the calling service where
+    // invoice and voucher data is available to correctly split debt-clearance vs. overpayment-refund.
     const applyCreditToClient = (amount: number, reason: string) => {
       if (!updatedClient) return;
-      if (isCreditClient) {
-        const originalDebt = updatedClient.saldoDeber;
-        updatedClient.saldoDeber = Math.max(0, updatedClient.saldoDeber - amount);
-        log.push(
-          `[Crédito B2B] Se redujo la deuda de ${updatedClient.nombre} por $${amount.toFixed(2)} (Deuda anterior: $${originalDebt.toFixed(2)}, Deuda actual: $${updatedClient.saldoDeber.toFixed(2)})`,
-        );
-      } else {
-        const originalWallet = updatedClient.saldoFavor;
-        updatedClient.saldoFavor += amount;
-        log.push(
-          `[Billetera Virtual] Se abonaron $${amount.toFixed(2)} al saldo a favor de ${updatedClient.nombre} (Saldo anterior: $${originalWallet.toFixed(2)}, Saldo actual: $${updatedClient.saldoFavor.toFixed(2)})`,
-        );
-        newWalletTransactions.push({
-          id: genId('TX-WLT'),
-          clientId: updatedClient.id,
-          reservationId: newRes.id,
-          type: 'Abono_Cancelacion',
-          amount,
-          status: 'Disponible',
-          notes: reason,
-          createdAt: new Date().toISOString(),
-        });
-      }
+      log.push(`[Crédito Registrado] ${updatedClient.nombre}: $${amount.toFixed(2)} crédito pendiente de ajuste de saldo — ${reason}`);
     };
 
     const applyDebitToClient = (amount: number, reason: string) => {
       if (!updatedClient) return;
-      const originalDebt = updatedClient.saldoDeber;
-      updatedClient.saldoDeber += amount;
-      log.push(
-        `[Suplemento B2B] Se incrementó la deuda de ${updatedClient.nombre} por $${amount.toFixed(2)} (Deuda anterior: $${originalDebt.toFixed(2)}, Deuda actual: $${updatedClient.saldoDeber.toFixed(2)})`,
-      );
-      if (!isCreditClient && updatedClient.saldoFavor > 0) {
-        const applyAmount = Math.min(updatedClient.saldoFavor, updatedClient.saldoDeber);
-        updatedClient.saldoFavor -= applyAmount;
-        updatedClient.saldoDeber -= applyAmount;
+
+      if (updatedClient.saldoFavor > 0) {
+        const autoApply = Math.min(updatedClient.saldoFavor, amount);
+        updatedClient.saldoFavor -= autoApply;
+        amount -= autoApply;
         log.push(
-          `[Billetera Virtual] Se aplicaron automáticamente $${applyAmount.toFixed(2)} del saldo a favor de ${updatedClient.nombre} para pagar el suplemento.`,
+          `[Billetera Virtual] Se aplicaron $${autoApply.toFixed(2)} del saldo a favor de ${updatedClient.nombre} para pagar el suplemento.`,
         );
         newWalletTransactions.push({
           id: genId('TX-WLT'),
           clientId: updatedClient.id,
           reservationId: newRes.id,
           type: 'Cargo_Pago',
-          amount: applyAmount,
+          amount: autoApply,
           status: 'Disponible',
           notes: `Pago automático de suplemento: ${reason}`,
           createdAt: new Date().toISOString(),
         });
+      }
+
+      if (amount > 0) {
+        const previousDebt = updatedClient.saldoDeber;
+        updatedClient.saldoDeber += amount;
+        log.push(
+          `[Suplemento] ${updatedClient.nombre}: deuda $${previousDebt.toFixed(2)}→$${updatedClient.saldoDeber.toFixed(2)} (${reason})`,
+        );
       }
     };
 
@@ -210,7 +192,7 @@ export class FinancialReconcilerService {
             currentVariations.push(variation);
 
             if (deltaSale > 0) {
-              applyDebitToClient(deltaSale, `Suplemento tarifa: ${sNew.descripcion}`);
+              log.push(`[Suplemento Pendiente] $${deltaSale.toFixed(2)} sobre "${sNew.descripcion}" — pendiente de aprobación en Facturación.`);
             } else {
               applyCreditToClient(Math.abs(deltaSale), `Crédito por rebaja tarifa: ${sNew.descripcion}`);
             }
@@ -232,37 +214,11 @@ export class FinancialReconcilerService {
             });
           }
         } else {
-          log.push(`[Servicio Adicional] Nuevo servicio "${sNew.descripcion}" agregado.`);
-          const variation: FinancialVariation = {
-            id: genId('VAR-SUP'),
-            reservationId: newRes.id,
-            serviceItemId: sNew.id,
-            type: 'Suplemento',
-            amountNet: sNew.precioNeto,
-            amountSale: sNew.precioVenta,
-            reason: `Servicio adicional: ${sNew.descripcion}`,
-            date: new Date().toISOString().split('T')[0],
-          };
-          newVariations.push(variation);
-          currentVariations.push(variation);
-          applyDebitToClient(sNew.precioVenta, `Servicio adicional: ${sNew.descripcion}`);
-
-          const newOblId = genId('OBL');
-          const newObl: PayableObligation = {
-            id: newOblId,
-            dueDate: newRes.checkIn,
-            providerName: sNew.proveedor || 'Proveedor Desconocido',
-            serviceDetail: `${sNew.tipo}: ${sNew.descripcion}`,
-            locatorId: newRes.id,
-            netCost: sNew.precioNeto,
-            paidAmount: 0,
-            status: 'Pendiente',
-            date: new Date().toISOString().split('T')[0],
-            currency: 'USD',
-            updatedAt: new Date().toISOString(),
-          };
-          updatedPayableObligations.unshift(newObl);
-          log.push(`[Cuentas por Pagar] Se creó la obligación ${newOblId} para el nuevo servicio.`);
+          // New service — financial effects are handled exclusively by FacturacionView
+          // when billing is approved, to avoid double-charging.
+          log.push(
+            `[Nuevo Servicio] "${sNew.descripcion}" (${sNew.statusFacturacion}) detectado. Pendiente de aprobación en Facturación.`,
+          );
         }
       });
     }

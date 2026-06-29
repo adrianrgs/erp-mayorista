@@ -643,23 +643,8 @@ export default function FacturacionView({
       onAddInvoice(creditNote);
     }
 
-    // Revert client's saldoDeber for the credit amount (amountSale is negative)
-    const agencyRecord = clients.find(c => c.nombre === activeRes.agenciaName);
-    if (agencyRecord && onUpdateClient) {
-      const creditAmount = Math.abs(variation.amountSale);
-      const isCreditClient = agencyRecord.tipo === "A Crédito" || activeRes.facturacionTipo === "Crédito";
-      if (isCreditClient) {
-        onUpdateClient({
-          ...agencyRecord,
-          saldoDeber: Math.max(0, agencyRecord.saldoDeber - creditAmount)
-        });
-      } else {
-        onUpdateClient({
-          ...agencyRecord,
-          saldoFavor: agencyRecord.saldoFavor + creditAmount
-        });
-      }
-    }
+    // Client balance was already updated by the financial reconciler when the reservation was modified.
+    // Do NOT update balances here — that would double-count the credit.
 
     const updatedVariations = (activeRes.variaciones || []).map((v: any) => {
       if (v.id === variation.id) {
@@ -674,7 +659,7 @@ export default function FacturacionView({
       __billingOnly: true
     } as any);
 
-    setStatusMessage(`✓ Nota de Crédito emitida con éxito. Documento: ${creditNote.id} — Se revirtió el saldo del cliente.`);
+    setStatusMessage(`✓ Nota de Crédito emitida con éxito. Documento: ${creditNote.id}`);
     setTimeout(() => setStatusMessage(""), 5000);
   };
 
@@ -976,9 +961,6 @@ export default function FacturacionView({
 
     setStatusMessage(`✓ ¡Facturación aprobada con éxito (${modeMessage}) para el Expediente ${activeRes.id}! Se ha emitido la factura por $${pendingTotal.toLocaleString("es-ES")} USD.${overpaidText}`);
     setTimeout(() => setStatusMessage(""), 6000);
-
-    // Go back to Level 1
-    setSelectedResId(null);
   };
 
   const handleRejectBilling = () => {
@@ -1272,16 +1254,22 @@ export default function FacturacionView({
                       const totalCount = services.length + jointFlights.length;
                       const percent = totalCount > 0 ? Math.round((billedCount / totalCount) * 100) : 100;
                       const hasRequest = requestedCount > 0 || jointFlights.some(b => b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador");
+                      const hasBilled = billedCount > 0;
+                      const draftCount = services.filter(s => s.statusFacturacion === "Borrador").length;
+                      const pendingVariationSupplements = (r.variaciones || []).filter((v: any) => v.type === "Suplemento" && !v.invoiceId).length;
+                      const pendingVariationCredits = (r.variaciones || []).filter((v: any) => v.type === "Credito" && !v.invoiceId).length;
+                      const hasPendingSupplement = hasBilled && (draftCount > 0 || pendingVariationSupplements > 0);
+                      const hasPendingCreditNote = hasBilled && pendingVariationCredits > 0;
                       const isCancellationRequest = r.status === "Cancelada" && (
                         services.some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado") ||
                         jointFlights.some(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador")
                       );
 
                       return (
-                        <tr 
-                          key={r.id} 
+                        <tr
+                          key={r.id}
                           onClick={() => setSelectedResId(r.id)}
-                          className={`hover:bg-zinc-50/50 cursor-pointer transition-colors ${isCancellationRequest ? "bg-red-50/20" : ""}`}
+                          className={`hover:bg-zinc-50/50 cursor-pointer transition-colors ${isCancellationRequest ? "bg-red-50/20" : hasPendingCreditNote ? "bg-orange-50/20" : hasPendingSupplement ? "bg-blue-50/20" : ""}`}
                         >
                           <td className="p-3 font-mono font-bold text-zinc-900">
                             <div className="flex items-center gap-1.5">
@@ -1290,6 +1278,10 @@ export default function FacturacionView({
                                 <span className="w-2.5 h-2.5 rounded-full bg-red-655 animate-pulse" title="Anulación Solicitada" />
                               ) : hasRequest ? (
                                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" title="Aprobación Pendiente" />
+                              ) : hasPendingCreditNote ? (
+                                <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" title="Nota de crédito pendiente de emitir" />
+                              ) : hasPendingSupplement ? (
+                                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" title="Suplemento pendiente de facturar" />
                               ) : null}
                             </div>
                             <span className={`text-[8.5px] font-black uppercase px-1 rounded-sm mt-0.5 inline-block ${
@@ -1320,11 +1312,19 @@ export default function FacturacionView({
                                   <span className="px-1 py-0.25 bg-amber-50 text-amber-700 rounded border border-amber-200 text-[8px] font-black uppercase">
                                     {requestedCount} Solicitado
                                   </span>
+                                ) : hasPendingCreditNote ? (
+                                  <span className="px-1 py-0.25 bg-orange-50 text-orange-700 rounded border border-orange-200 text-[8px] font-black uppercase">
+                                    {pendingVariationCredits} Nota de Crédito
+                                  </span>
+                                ) : hasPendingSupplement ? (
+                                  <span className="px-1 py-0.25 bg-blue-50 text-blue-700 rounded border border-blue-200 text-[8px] font-black uppercase">
+                                    {draftCount + pendingVariationSupplements} Suplemento
+                                  </span>
                                 ) : null}
                               </div>
                               <div className="w-28 bg-zinc-100 h-1.5 rounded-full overflow-hidden border border-zinc-200">
-                                <div 
-                                  className={`h-full rounded-full ${isCancellationRequest ? "bg-red-500" : hasRequest ? "bg-amber-500" : "bg-emerald-500"}`} 
+                                <div
+                                  className={`h-full rounded-full ${isCancellationRequest ? "bg-red-500" : hasRequest ? "bg-amber-500" : hasPendingCreditNote ? "bg-orange-500" : hasPendingSupplement ? "bg-blue-500" : "bg-emerald-500"}`}
                                   style={{ width: `${percent}%` }}
                                 />
                               </div>
@@ -1340,12 +1340,16 @@ export default function FacturacionView({
                               className={`px-2.5 py-1 rounded text-[10px] font-extrabold uppercase tracking-wider cursor-pointer border transition-all ${
                                 isCancellationRequest
                                   ? "bg-red-700 border-red-750 hover:bg-red-800 text-white"
-                                  : hasRequest 
-                                    ? "bg-amber-900 border-amber-900 hover:bg-amber-950 text-white" 
-                                    : "bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-900 hover:text-white"
+                                  : hasRequest
+                                    ? "bg-amber-900 border-amber-900 hover:bg-amber-950 text-white"
+                                    : hasPendingCreditNote
+                                      ? "bg-orange-600 border-orange-600 hover:bg-orange-700 text-white"
+                                      : hasPendingSupplement
+                                        ? "bg-blue-700 border-blue-700 hover:bg-blue-800 text-white"
+                                        : "bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-900 hover:text-white"
                               }`}
                             >
-                              {isCancellationRequest ? "Anular" : hasRequest ? "Aprobar" : "Revisar"}
+                              {isCancellationRequest ? "Anular" : hasRequest ? "Aprobar" : hasPendingCreditNote ? "Nota C." : hasPendingSupplement ? "Suplemento" : "Revisar"}
                             </button>
                           </td>
                         </tr>
@@ -1600,32 +1604,30 @@ export default function FacturacionView({
                   {(activeRes.variaciones || []).filter((v: any) => !v.invoiceId).map((v: any) => {
                     const isPositive = v.amountSale > 0;
                     return (
-                      <div key={v.id} className="p-3 flex items-center justify-between gap-4 bg-white">
-                        <div className="space-y-0.5 text-left flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase ${isPositive ? "bg-emerald-50 text-emerald-700 border border-emerald-250" : "bg-red-50 text-red-700 border border-red-200"}`}>
-                              {v.type}
-                            </span>
-                            <span className="text-[9px] font-mono text-zinc-400">{v.id}</span>
-                            <span className="text-[9px] font-sans text-zinc-400">{v.date}</span>
-                          </div>
-                          <p className="text-xs font-bold text-zinc-950 mt-1">{v.reason}</p>
-                          <span className={`text-xs font-black block mt-0.5 ${isPositive ? "text-emerald-700" : "text-red-750"}`}>
+                      <div key={v.id} className="p-3 bg-white space-y-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase ${isPositive ? "bg-emerald-50 text-emerald-700 border border-emerald-250" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                            {v.type}
+                          </span>
+                          <span className="text-[9px] font-mono text-zinc-400">{v.id}</span>
+                          <span className="text-[9px] font-sans text-zinc-400">{v.date}</span>
+                        </div>
+                        <p className="text-xs font-bold text-zinc-950">{v.reason}</p>
+                        <div className="flex items-center justify-between gap-3 pt-0.5">
+                          <span className={`text-xs font-black ${isPositive ? "text-emerald-700" : "text-red-750"}`}>
                             {isPositive ? "+" : ""}${v.amountSale.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
                           </span>
-                        </div>
-                        <div className="flex-shrink-0">
                           {isPositive ? (
                             <button
                               onClick={() => handleInvoiceVariation(v)}
-                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9.5px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs flex items-center gap-1 transition-all"
+                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9.5px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs flex items-center gap-1 transition-all shrink-0"
                             >
                               Facturar Suplemento
                             </button>
                           ) : (
                             <button
                               onClick={() => handleCreditNoteVariation(v)}
-                              className="px-2.5 py-1.5 bg-red-650 hover:bg-red-750 text-white rounded text-[9.5px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs flex items-center gap-1 transition-all"
+                              className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[9.5px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs flex items-center gap-1 transition-all shrink-0"
                             >
                               Emitir Nota de Crédito
                             </button>
