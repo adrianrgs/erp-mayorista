@@ -1,7 +1,7 @@
 import { FlightTicket } from "./types/aereos";
 import React, { useState } from "react";
 import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, OperationalTransfer, mapToOperationalTransfer, mapToTransferService, FinancialInvoice, B2BClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement, PaymentVoucher, CompanyConfig } from "./types";
-import { Property, RoomType, RatePlan, StopSale, ExtraService, ServiceRate } from "./types/producto";
+import { Property, RoomType, RatePlan, StopSale, ExtraService, ServiceRate, Proveedor } from "./types/producto";
 
 import {
   listReservations, insertReservation, updateReservation, deleteReservation,
@@ -20,7 +20,8 @@ import {
   listServiceRates, insertServiceRate, updateServiceRate, deleteServiceRate,
   updateInvoice, updateClient,
   listPayableObligations, insertPayableObligation, updatePayableObligation, deletePayableObligation,
-  listProviderStatements, insertProviderStatement, deleteProviderStatement
+  listProviderStatements, insertProviderStatement, deleteProviderStatement,
+  listProveedores, insertProveedor, updateProveedor
 } from "./lib/dataconnect-shim";
 import { isAuthenticated, logout } from "./lib/api";
 import LoginScreen from "./components/LoginScreen";
@@ -56,7 +57,8 @@ import { reconcileDossierUpdate } from "./lib/financialReconciler";
 
 import ServiciosView from "./views/ServiciosView";
 import BuscadorGlobalView from "./views/BuscadorGlobalView";
-import { ChevronDown, Search, Box, Activity, Receipt, CreditCard, ArrowDownRight } from "lucide-react";
+import ProveedoresView from "./views/ProveedoresView";
+import { ChevronDown, Search, Box, Activity, Receipt, CreditCard, ArrowDownRight, Briefcase } from "lucide-react";
 
 
 import { 
@@ -141,6 +143,25 @@ export default function App() {
   const [serviceRates, setServiceRates] = useState<ServiceRate[]>([]);
 
   const [providerStatements, setProviderStatements] = useState<ProviderStatement[]>(initialProviderStatements);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+
+  const handleAddProveedor = async (p: Proveedor) => {
+    setProveedores(prev => [...prev, p]);
+    try {
+      await insertProveedor(dataConnect, p);
+    } catch (e) {
+      console.error("Failed to insert proveedor", e);
+    }
+  };
+
+  const handleUpdateProveedor = async (p: Proveedor) => {
+    setProveedores(prev => prev.map(x => x.id === p.id ? p : x));
+    try {
+      await updateProveedor(dataConnect, p);
+    } catch (e) {
+      console.error("Failed to update proveedor", e);
+    }
+  };
 
   const handleUpdateObligation = async (updated: any) => {
     updated.updatedAt = new Date().toISOString();
@@ -215,7 +236,7 @@ export default function App() {
 
 
 
-  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({ comercial: true, operaciones: true, finanzas: true });
+  const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({ comercial: true, operaciones: true, finanzas: true, directorio: true });
   const toggleMenu = (key: string) => setExpandedMenus(p => ({ ...p, [key]: !p[key] }));
 
 
@@ -270,6 +291,8 @@ export default function App() {
         if (obs.data.payableObligations.length > 0) setPayableObligations(obs.data.payableObligations);
         const stm = await listProviderStatements(dataConnect);
         if (stm.data.providerStatements.length > 0) setProviderStatements(stm.data.providerStatements);
+        const provs = await listProveedores(dataConnect);
+        if (provs.data.proveedores.length > 0) setProveedores(provs.data.proveedores);
       } catch (err) {
         console.error("Failed to load Firebase data", err);
       }
@@ -1032,85 +1055,87 @@ export default function App() {
           </div>
         </button>
 
-        {/* Navigation Modules (5 Departments) */}
-        <nav className="flex-1 space-y-3 overflow-y-auto pb-6">
-          {/* COMERCIAL & BOOKING */}
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 overflow-y-auto pb-6">
+
+          {/* BUSCADOR GLOBAL — botón principal arriba */}
+          <button
+            id="nav-buscador"
+            onClick={() => setCurrentSection(ProjectView.BUSCADOR)}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all cursor-pointer mb-3 ${currentSection === ProjectView.BUSCADOR ? 'bg-white/10 text-white font-semibold border border-white/10' : 'text-zinc-300 hover:text-white hover:bg-zinc-900/60 border border-transparent'}`}
+          >
+            <Search className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-bold tracking-wide">Buscador Global</span>
+          </button>
+
+          <div className="h-px bg-zinc-800 mb-3" />
+
+          {/* COMERCIAL */}
           <div className="px-1">
             <button onClick={() => toggleMenu('comercial')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
-              <span>Comercial & Booking</span>
+              <span>Comercial</span>
               <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.comercial ? '' : '-rotate-90'}`} />
             </button>
             {expandedMenus.comercial && (
               <div className="space-y-1 mt-1 pl-1">
                 <button id="nav-propiedades" onClick={() => setCurrentSection(ProjectView.PROPIEDADES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.PROPIEDADES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
                   <Building2 className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">1. Propiedades y Tarifas</span>
+                  <span className="text-xs font-semibold">Propiedades y Tarifas</span>
                 </button>
                 <button id="nav-servicios" onClick={() => setCurrentSection(ProjectView.SERVICIOS_VARIOS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.SERVICIOS_VARIOS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
                   <Box className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Servicios Varios (Producto)</span>
-                </button>
-                <button id="nav-reservas" onClick={() => setCurrentSection(ProjectView.RESERVAS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer $
-                  {currentSection === ProjectView.SERVICIOS_VARIOS && (
-                    <ServiciosView 
-                      extraServices={extraServices}
-                      onAddExtraService={handleAddExtraService}
-                      onUpdateExtraService={handleUpdateExtraService}
-                      
-                      serviceRates={serviceRates}
-                      onAddServiceRate={handleAddServiceRate}
-                      onDeleteServiceRate={handleDeleteServiceRate}
-                      
-                    />
-                  )}
-                  {currentSection === ProjectView.BUSCADOR && (
-                    <BuscadorGlobalView 
-                      reservations={reservations} 
-                      invoices={invoices} 
-                      boletos={boletos}
-                      payableObligations={payableObligations}
-                      onNavigate={setCurrentSection}
-                    />
-                  )}
-
-                  {currentSection === ProjectView.RESERVAS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <Calendar className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">2. Reservas (Booking)</span>
-                </button>
-                <button id="nav-clientes" onClick={() => setCurrentSection(ProjectView.CLIENTES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.CLIENTES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <Users className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">6. Clientes B2B</span>
-                </button>
-                <button id="nav-buscador" onClick={() => setCurrentSection(ProjectView.BUSCADOR)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.BUSCADOR ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <Search className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Buscador Global</span>
+                  <span className="text-xs font-semibold">Servicios Varios</span>
                 </button>
               </div>
             )}
           </div>
 
           {/* OPERACIONES */}
-          <div className="px-1">
+          <div className="px-1 mt-2">
             <button onClick={() => toggleMenu('operaciones')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
               <span>Operaciones & Tráfico</span>
               <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.operaciones ? '' : '-rotate-90'}`} />
             </button>
             {expandedMenus.operaciones && (
               <div className="space-y-1 mt-1 pl-1">
+                <button id="nav-reservas" onClick={() => setCurrentSection(ProjectView.RESERVAS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.RESERVAS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <Calendar className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">Reservas (Booking)</span>
+                </button>
                 <button id="nav-vuelos" onClick={() => setCurrentSection(ProjectView.VUELOS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.VUELOS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
                   <Plane className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">3. Vuelos (Air Control)</span>
+                  <span className="text-xs font-semibold">Vuelos (Air Control)</span>
                 </button>
                 <button id="nav-operaciones" onClick={() => setCurrentSection(ProjectView.OPERACIONES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.OPERACIONES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
                   <Activity className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">4. Ops. Receptivo</span>
+                  <span className="text-xs font-semibold">Ops. Receptivo</span>
                 </button>
               </div>
             )}
           </div>
 
-          {/* FINANZAS */}
-          <div className="px-1">
+          {/* DIRECTORIO */}
+          <div className="px-1 mt-2">
+            <button onClick={() => toggleMenu('directorio')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
+              <span>Directorio</span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.directorio ? '' : '-rotate-90'}`} />
+            </button>
+            {expandedMenus.directorio && (
+              <div className="space-y-1 mt-1 pl-1">
+                <button id="nav-clientes" onClick={() => setCurrentSection(ProjectView.CLIENTES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.CLIENTES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <Users className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">Clientes B2B</span>
+                </button>
+                <button id="nav-proveedores" onClick={() => setCurrentSection(ProjectView.PROVEEDORES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.PROVEEDORES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <Briefcase className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">Proveedores</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ADMIN & FINANZAS */}
+          <div className="px-1 mt-2">
             <button onClick={() => toggleMenu('finanzas')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
               <span>Admin & Finanzas</span>
               <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.finanzas ? '' : '-rotate-90'}`} />
@@ -1119,19 +1144,19 @@ export default function App() {
               <div className="space-y-1 mt-1 pl-1">
                 <button id="nav-admin" onClick={() => setCurrentSection(ProjectView.ADMINISTRACION)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.ADMINISTRACION ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
                   <Wallet className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">5. Administración/BI</span>
+                  <span className="text-xs font-semibold">Administración / BI</span>
                 </button>
                 <button id="nav-facturacion" onClick={() => setCurrentSection(ProjectView.FACTURACION)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.FACTURACION ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
                   <Receipt className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">7. Dpto. Facturación</span>
+                  <span className="text-xs font-semibold">Dpto. Facturación</span>
                 </button>
                 <button id="nav-cobranzas" onClick={() => setCurrentSection(ProjectView.COBRANZAS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.COBRANZAS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
                   <CreditCard className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">8. Cuentas por Cobrar</span>
+                  <span className="text-xs font-semibold">Cuentas por Cobrar</span>
                 </button>
                 <button id="nav-pagos" onClick={() => setCurrentSection(ProjectView.CUENTAS_PAGAR)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.CUENTAS_PAGAR ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
                   <ArrowDownRight className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">9. Cuentas por Pagar</span>
+                  <span className="text-xs font-semibold">Cuentas por Pagar</span>
                 </button>
               </div>
             )}
@@ -1216,27 +1241,32 @@ onDeleteStopSale={handleDeleteStopSale}
                  )}
                   
                   {currentSection === ProjectView.SERVICIOS_VARIOS && (
-                    <ServiciosView 
+                    <ServiciosView
                       extraServices={extraServices}
                       onAddExtraService={handleAddExtraService}
                       onUpdateExtraService={handleUpdateExtraService}
-                      
                       serviceRates={serviceRates}
                       onAddServiceRate={handleAddServiceRate}
                       onDeleteServiceRate={handleDeleteServiceRate}
-                      
+                      proveedores={proveedores}
                     />
                   )}
                   {currentSection === ProjectView.BUSCADOR && (
-                    <BuscadorGlobalView 
-                      reservations={reservations} 
-                      invoices={invoices} 
+                    <BuscadorGlobalView
+                      reservations={reservations}
+                      invoices={invoices}
                       boletos={boletos}
                       payableObligations={payableObligations}
                       onNavigate={setCurrentSection}
                     />
                   )}
-
+                  {currentSection === ProjectView.PROVEEDORES && (
+                    <ProveedoresView
+                      proveedores={proveedores}
+                      onAddProveedor={handleAddProveedor}
+                      onUpdateProveedor={handleUpdateProveedor}
+                    />
+                  )}
                   {currentSection === ProjectView.RESERVAS && (
                     <ReservasView 
                       reservations={reservations} 

@@ -81,11 +81,42 @@ export interface ExtraService {
   id: string;
   nombre: string;
   providerName: string;
+  providerId?: string;
   category: ServiceCategory;
   ubicacion: string;
   descripcion: string;
   politicasCancelacion: string;
   status: "Activo" | "Inactivo";
+}
+
+// ─── PROVEEDORES DE SERVICIOS (NO HOTELEROS) ──────────────────────────────────
+
+export enum TipoProveedor {
+  EXCURSION = "Excursión",
+  TRASLADO = "Traslado",
+  BUCEO = "Buceo",
+  FULL_DAY = "Full Day",
+  TICKET = "Ticket / Entrada",
+  ASISTENCIA = "Asistencia",
+  GUIA = "Guía Turístico",
+  OTRO = "Otro"
+}
+
+export interface Proveedor {
+  id: string;
+  nombre: string;
+  tipo: TipoProveedor;
+  contactoPrincipal: string;
+  telefono: string;
+  email: string;
+  rif: string;
+  ubicacion: string;
+  pais: string;
+  comision: number;
+  condicionesPago: string;
+  datosBancarios: string;
+  status: "Activo" | "Inactivo";
+  notas?: string;
 }
 
 export interface ServiceRate {

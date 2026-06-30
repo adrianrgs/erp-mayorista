@@ -558,18 +558,21 @@ mutation InsertExtraService(
   $id: String!
   $nombre: String!
   $providerName: String!
+  $providerId: String
   $category: String!
   $ubicacion: String!
   $descripcion: String!
   $politicasCancelacion: String!
   $status: String!
-, $updatedAt: String) @auth(level: PUBLIC) {
+  $updatedAt: String
+) @auth(level: PUBLIC) {
   extraService_insert(
     data: {
       id: $id
-      
-    updatedAt: $updatedAt,nombre: $nombre
+      updatedAt: $updatedAt
+      nombre: $nombre
       providerName: $providerName
+      providerId: $providerId
       category: $category
       ubicacion: $ubicacion
       descripcion: $descripcion
@@ -583,19 +586,21 @@ mutation UpdateExtraService(
   $id: String!
   $nombre: String
   $providerName: String
+  $providerId: String
   $category: String
   $ubicacion: String
   $descripcion: String
   $politicasCancelacion: String
   $status: String
-, $updatedAt: String) @auth(level: PUBLIC) {
+  $updatedAt: String
+) @auth(level: PUBLIC) {
   extraService_update(
     id: $id
-    
     data: {
-    updatedAt: $updatedAt,
+      updatedAt: $updatedAt
       nombre: $nombre
       providerName: $providerName
+      providerId: $providerId
       category: $category
       ubicacion: $ubicacion
       descripcion: $descripcion
@@ -678,4 +683,79 @@ mutation UpdateServiceRate(
 mutation DeleteServiceRate($id: String!) @auth(level: PUBLIC) {
   serviceRate_delete(id: $id
     )
+}
+
+mutation InsertProveedor(
+  $id: String!
+  $nombre: String!
+  $tipo: String!
+  $contactoPrincipal: String!
+  $telefono: String!
+  $email: String!
+  $rif: String!
+  $ubicacion: String!
+  $pais: String!
+  $comision: Float!
+  $condicionesPago: String!
+  $datosBancarios: String!
+  $status: String!
+  $notas: String
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  proveedor_insert(data: {
+    id: $id
+    updatedAt: $updatedAt
+    nombre: $nombre
+    tipo: $tipo
+    contactoPrincipal: $contactoPrincipal
+    telefono: $telefono
+    email: $email
+    rif: $rif
+    ubicacion: $ubicacion
+    pais: $pais
+    comision: $comision
+    condicionesPago: $condicionesPago
+    datosBancarios: $datosBancarios
+    status: $status
+    notas: $notas
+  })
+}
+
+mutation UpdateProveedor(
+  $id: String!
+  $nombre: String
+  $tipo: String
+  $contactoPrincipal: String
+  $telefono: String
+  $email: String
+  $rif: String
+  $ubicacion: String
+  $pais: String
+  $comision: Float
+  $condicionesPago: String
+  $datosBancarios: String
+  $status: String
+  $notas: String
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  proveedor_update(id: $id data: {
+    updatedAt: $updatedAt
+    nombre: $nombre
+    tipo: $tipo
+    contactoPrincipal: $contactoPrincipal
+    telefono: $telefono
+    email: $email
+    rif: $rif
+    ubicacion: $ubicacion
+    pais: $pais
+    comision: $comision
+    condicionesPago: $condicionesPago
+    datosBancarios: $datosBancarios
+    status: $status
+    notas: $notas
+  })
+}
+
+mutation DeleteProveedor($id: String!) @auth(level: PUBLIC) {
+  proveedor_delete(id: $id)
 }

@@ -10,7 +10,8 @@ export enum ProjectView {
   CUENTAS_PAGAR = "cuentaspagar",
   SERVICIOS_VARIOS = "servicios_varios",
   BUSCADOR = "buscador",
-  CONFIGURACION = "configuracion"
+  CONFIGURACION = "configuracion",
+  PROVEEDORES = "proveedores"
 }
 
 export interface CompanyConfig {

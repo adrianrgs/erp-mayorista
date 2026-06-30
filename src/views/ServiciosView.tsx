@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ExtraService, ServiceRate, ServiceCategory, PricingModel } from "../types/producto";
+import { ExtraService, ServiceRate, ServiceCategory, PricingModel, Proveedor } from "../types/producto";
 import { Search, Plus, MapPin, Edit3, Trash2, Tag, Compass, X, Save } from "lucide-react";
 
 interface ServiciosViewProps {
@@ -9,6 +9,7 @@ interface ServiciosViewProps {
   onUpdateExtraService: (srv: ExtraService) => void;
   onAddServiceRate: (rate: ServiceRate) => void;
   onDeleteServiceRate: (id: string) => void;
+  proveedores?: Proveedor[];
 }
 
 export default function ServiciosView({
@@ -17,7 +18,8 @@ export default function ServiciosView({
   onAddExtraService,
   onUpdateExtraService,
   onAddServiceRate,
-  onDeleteServiceRate
+  onDeleteServiceRate,
+  proveedores = []
 }: ServiciosViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState<ServiceCategory | "ALL">("ALL");
@@ -237,12 +239,33 @@ export default function ServiciosView({
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Proveedor Local (DMC)</label>
-                      <input 
-                        type="text" 
-                        value={serviceForm.providerName || ""} 
-                        onChange={e => setServiceForm({...serviceForm, providerName: e.target.value})}
-                        className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-semibold bg-white"
-                      />
+                      {proveedores.length > 0 ? (
+                        <select
+                          value={serviceForm.providerId || ""}
+                          onChange={e => {
+                            const prov = proveedores.find(p => p.id === e.target.value);
+                            setServiceForm({
+                              ...serviceForm,
+                              providerId: e.target.value,
+                              providerName: prov?.nombre || ""
+                            });
+                          }}
+                          className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-semibold bg-white"
+                        >
+                          <option value="">— Seleccionar proveedor —</option>
+                          {proveedores.filter(p => p.status === "Activo").map(p => (
+                            <option key={p.id} value={p.id}>{p.nombre} ({p.tipo})</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={serviceForm.providerName || ""}
+                          onChange={e => setServiceForm({ ...serviceForm, providerName: e.target.value })}
+                          className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-semibold bg-white"
+                          placeholder="Nombre del proveedor"
+                        />
+                      )}
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Categoría</label>

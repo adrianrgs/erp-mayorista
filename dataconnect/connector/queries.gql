@@ -255,8 +255,9 @@ query ListExtraServices @auth(level: PUBLIC) {
   extraServices {
     id
     updatedAt
-nombre
+    nombre
     providerName
+    providerId
     category
     ubicacion
     descripcion
@@ -280,5 +281,25 @@ extraServiceId
     capacidadMaxima
     netoTotal
     ventaTotal
+  }
+}
+
+query ListProveedores @auth(level: PUBLIC) {
+  proveedors {
+    id
+    updatedAt
+    nombre
+    tipo
+    contactoPrincipal
+    telefono
+    email
+    rif
+    ubicacion
+    pais
+    comision
+    condicionesPago
+    datosBancarios
+    status
+    notas
   }
 }

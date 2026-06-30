@@ -353,3 +353,26 @@ export const deleteProviderStatement = async (_dc: any, vars: { id: string }) =>
   await api.delete(`/finances/statements/${vars.id}`);
   return { data: {} };
 };
+
+// ─── PROVEEDORES ──────────────────────────────────────────────────────────────
+
+export const listProveedores = async (_dc?: any) => {
+  const r = await api.get("/proveedores");
+  return { data: { proveedores: r.data } };
+};
+
+export const insertProveedor = async (_dc: any, vars: any) => {
+  await api.post("/proveedores", vars);
+  return { data: {} };
+};
+
+export const updateProveedor = async (_dc: any, vars: any) => {
+  const { id, ...rest } = vars;
+  await api.patch(`/proveedores/${id}`, rest);
+  return { data: {} };
+};
+
+export const deleteProveedor = async (_dc: any, vars: { id: string }) => {
+  await api.delete(`/proveedores/${vars.id}`);
+  return { data: {} };
+};

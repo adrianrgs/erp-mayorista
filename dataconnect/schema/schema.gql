@@ -263,6 +263,7 @@ type ExtraService @table {
   id: String! @col(dataType: "varchar(50)")
   nombre: String!
   providerName: String!
+  providerId: String
   category: String!
   ubicacion: String!
   descripcion: String!
@@ -284,5 +285,23 @@ type ServiceRate @table {
   capacidadMaxima: Int
   netoTotal: Float
   ventaTotal: Float
+  updatedAt: String
+}
+
+type Proveedor @table {
+  id: String! @col(dataType: "varchar(50)")
+  nombre: String!
+  tipo: String!
+  contactoPrincipal: String!
+  telefono: String!
+  email: String!
+  rif: String!
+  ubicacion: String!
+  pais: String!
+  comision: Float!
+  condicionesPago: String!
+  datosBancarios: String!
+  status: String!
+  notas: String
   updatedAt: String
 }
