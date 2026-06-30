@@ -853,10 +853,10 @@ export default function ReservasView({
         const rate = serviceRates?.find(r => r.id === svRateId);
         if (srv && rate) {
           const pvpVal = parseFloat(salePrice) || 0;
-          const b2bComVal = comisionB2B;
-          const ownComVal = comisionPropia;
-          sPrice = Math.round(pvpVal * (1 - b2bComVal / 100) * 100) / 100;
-          nPrice = Math.round(pvpVal * (1 - (b2bComVal + ownComVal) / 100) * 100) / 100;
+          // Cobro B2B = PVP menos comisión B2B
+          sPrice = Math.round(pvpVal * (1 - comisionB2B / 100) * 100) / 100;
+          // Neto = costo fijo del proveedor según la tarifa (no se deriva del PVP)
+          nPrice = parseFloat(netPrice) || 0;
           if (rate.pricingModel === "Por Persona") {
             desc = `Servicio Adicional: ${srv.nombre} - ${svAdults} Adultos, ${svChildren} Niños (Del ${rate.temporadaInicio} al ${rate.temporadaFin})`;
           } else {
@@ -936,8 +936,11 @@ export default function ReservasView({
         svAdults,
         svChildren,
         svVehicles,
+        pvp: parseFloat(salePrice) || 0,
         netPrice: nPrice,
-        salePrice: sPrice
+        salePrice: sPrice,
+        comisionB2B,
+        comisionPropia
       };
     }
 
@@ -4269,9 +4272,9 @@ export default function ReservasView({
             ) : (activeServiceType === ServiceType.SERVICIO_VARIO) ? (
               <div className="border-t border-zinc-150 pt-4 space-y-4 font-sans">
                 {(() => {
+                  const rate = serviceRates?.find(r => r.id === svRateId);
                   let pvp = 0;
                   let costoNeto = 0;
-                  const rate = serviceRates?.find(r => r.id === svRateId);
                   if (rate) {
                     if (rate.pricingModel === "Por Persona") {
                       pvp = (rate.ventaAdulto || 0) * svAdults + (rate.ventaNino || 0) * svChildren;
@@ -4281,53 +4284,114 @@ export default function ReservasView({
                       costoNeto = (rate.netoTotal || 0) * svVehicles;
                     }
                   }
-                  const ganancia = pvp - costoNeto;
+                  const cobroB2B = Math.round(pvp * (1 - comisionB2B / 100) * 100) / 100;
+                  const ganancia = cobroB2B - costoNeto;
 
                   return (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Costo Neto Mayorista (a Pagar)</label>
-                        <div className="relative">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
-                          <input
-                            type="text"
-                            readOnly
-                            className="w-full pl-6 pr-3 py-2.5 border border-emerald-100 bg-emerald-50/20 rounded text-xs font-black text-emerald-800 text-right cursor-not-allowed"
-                            value={costoNeto.toLocaleString("es-ES")}
-                          />
+                    <>
+                      {/* Inputs de comisión */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">PVP del Servicio ($)</label>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                            <input
+                              type="text"
+                              readOnly
+                              className="w-full pl-6 pr-3 py-2.5 border border-zinc-150 bg-zinc-50 rounded text-xs font-extrabold text-zinc-700 text-right cursor-not-allowed"
+                              value={pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Comisión Agencia B2B (%)</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                              value={comisionB2B}
+                              onChange={(e) => setComisionB2B(Math.max(0, parseFloat(e.target.value) || 0))}
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Comisión Mi Agencia (%)</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                              value={comisionPropia}
+                              onChange={(e) => setComisionPropia(Math.max(0, parseFloat(e.target.value) || 0))}
+                            />
+                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="space-y-1.5">
-                        <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Cobro B2B (A Pagar por Agencia)</label>
-                        <div className="relative">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
-                          <input
-                            type="text"
-                            readOnly
-                            className="w-full pl-6 pr-3 py-2.5 border border-zinc-200 bg-zinc-50 rounded text-xs font-black text-zinc-900 text-right cursor-not-allowed"
-                            value={pvp.toLocaleString("es-ES")}
-                          />
+                      {/* Resumen financiero calculado */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-zinc-100 pt-3.5">
+                        <div className="space-y-1.5">
+                          <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Costo Neto Mayorista (a Pagar)</label>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                            <input
+                              type="text"
+                              readOnly
+                              className="w-full pl-6 pr-3 py-2.5 border border-emerald-100 bg-emerald-50/20 rounded text-xs font-black text-emerald-800 text-right cursor-not-allowed"
+                              value={costoNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                            />
+                          </div>
+                          <span className="text-[9px] text-zinc-450 font-medium leading-tight block">
+                            Costo fijo del proveedor según tarifa.
+                          </span>
                         </div>
-                      </div>
 
-                      <div className="space-y-1.5">
-                        <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Nuestra Ganancia Mayorista</label>
-                        <div className="relative">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-[10px]">$</span>
-                          <input
-                            type="text"
-                            readOnly
-                            className="w-full pl-6 pr-3 py-2.5 border border-emerald-250 bg-emerald-50 rounded text-xs font-black text-emerald-755 text-right cursor-not-allowed"
-                            value={ganancia.toLocaleString("es-ES")}
-                          />
+                        <div className="space-y-1.5">
+                          <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Cobro B2B (A Pagar por Agencia)</label>
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                            <input
+                              type="text"
+                              readOnly
+                              className="w-full pl-6 pr-3 py-2.5 border border-zinc-200 bg-zinc-50 rounded text-xs font-black text-zinc-900 text-right cursor-not-allowed"
+                              value={cobroB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                            />
+                          </div>
+                          <span className="text-[9px] text-zinc-450 font-medium leading-tight block">
+                            Agencia B2B retiene su {comisionB2B}% de comisión.
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Nuestra Ganancia Mayorista</label>
+                          <div className="relative">
+                            <span className={`absolute left-2.5 top-1/2 -translate-y-1/2 font-bold text-[10px] ${ganancia >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>$</span>
+                            <input
+                              type="text"
+                              readOnly
+                              className={`w-full pl-6 pr-3 py-2.5 rounded text-xs font-black text-right cursor-not-allowed ${ganancia >= 0 ? 'border border-emerald-250 bg-emerald-50 text-emerald-700' : 'border border-red-200 bg-red-50 text-red-700'}`}
+                              value={ganancia.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                            />
+                          </div>
+                          <span className={`text-[9px] font-bold leading-tight block ${ganancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                            Cobro B2B menos costo neto del proveedor.
+                          </span>
                         </div>
                       </div>
-                    </div>
+                    </>
                   );
                 })()}
               </div>
-            ) : (activeServiceType === ServiceType.TRASLADO || activeServiceType === ServiceType.SEGURO || activeServiceType === ServiceType.MANUAL || activeServiceType === ServiceType.SERVICIO_VARIO) ? (
+            ) : (activeServiceType === ServiceType.TRASLADO || activeServiceType === ServiceType.SEGURO || activeServiceType === ServiceType.MANUAL) ? (
               <div className="border-t border-zinc-150 pt-4 space-y-4 font-sans">
                 {/* Inputs for PVP and Commissions */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
