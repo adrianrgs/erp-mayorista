@@ -122,7 +122,7 @@ export default function OperacionesView({
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<OperationalTransfer["status"] | "Todos">("Todos");
   const [directionFilter, setDirectionFilter] = useState<DirectionFilter>('Todos');
-  const [dateFilter, setDateFilter] = useState<'Todos' | 'Hoy' | 'Mañana' | 'Esta Semana'>('Hoy');
+  const [dateFilter, setDateFilter] = useState<'Todos' | 'Hoy' | 'Mañana' | 'Esta Semana'>('Todos');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [actionMsg, setActionMsg] = useState("");
   const [showVehicleModal, setShowVehicleModal] = useState(false);
@@ -493,28 +493,52 @@ export default function OperacionesView({
 
   const handleOptimizeShared = () => {
     // 1. Filtrar traslados activos
-    const activeTransfers = transfers.filter(t => 
-      t.status !== 'Completado' && 
-      t.status !== 'Cancelado'
+    const activeTransfers = transfers.filter(t =>
+      t.status !== 'Completado' && t.status !== 'Cancelado'
     );
-    
+
     const sharedTransfers = activeTransfers.filter(t => t.tipoTraslado === 'Compartido');
-    const unassignedPrivateTransfers = activeTransfers.filter(t => t.tipoTraslado === 'Privado' && !t.vehiculoId);
+    // Incluir traslados sin tipoTraslado definido (e.g. auto-generados desde reservas)
+    const unassignedPrivateTransfers = activeTransfers.filter(t =>
+      t.tipoTraslado !== 'Compartido' && !t.vehiculoId
+    );
 
     if (sharedTransfers.length === 0 && unassignedPrivateTransfers.length === 0) {
       notify("No hay traslados activos para optimizar.");
       return;
     }
 
+    // Mapas locales para rastrear asignaciones dentro del loop y evitar leer estado obsoleto
+    const vehicleToDriver = new Map<string, string>(
+      fleetVehicles.filter(v => v.conductorAsignadoId).map(v => [v.id, v.conductorAsignadoId!])
+    );
+    const driverToVehicle = new Map<string, string>(
+      fleetDrivers.filter(d => d.vehiculoAsignadoId).map(d => [d.id, d.vehiculoAsignadoId!])
+    );
+
+    const assignDriver = (vehicle: FleetVehicle): string | undefined => {
+      if (vehicleToDriver.has(vehicle.id)) return vehicleToDriver.get(vehicle.id);
+      const d = fleetDrivers.find(drv =>
+        drv.status !== "Fuera de Turno" && !driverToVehicle.has(drv.id)
+      );
+      if (d) {
+        vehicleToDriver.set(vehicle.id, d.id);
+        driverToVehicle.set(d.id, vehicle.id);
+        onUpdateDriver({ ...d, vehiculoAsignadoId: vehicle.id });
+        onUpdateVehicle({ ...vehicle, conductorAsignadoId: d.id });
+        return d.id;
+      }
+      return undefined;
+    };
+
     const groups: OperationalTransfer[][] = [];
     const unvisited = [...sharedTransfers];
 
-    // 2. Agrupar por ventanas de tiempo (usando overlapTolerance)
+    // 2. Agrupar traslados compartidos por ventanas de tiempo
     while (unvisited.length > 0) {
       const current = unvisited.shift()!;
       const sTime = current.fechaHora.getTime();
       const group = [current];
-      
       for (let i = unvisited.length - 1; i >= 0; i--) {
         const t = unvisited[i];
         const diffHrs = Math.abs(t.fechaHora.getTime() - sTime) / (1000 * 60 * 60);
@@ -528,119 +552,82 @@ export default function OperacionesView({
 
     let optimizedCount = 0;
 
-    // 3. Para cada grupo, asignar óptimamente
+    // 3. Asignar compartidos: First-Fit Decreasing por grupo de tiempo
     for (const group of groups) {
-      // First-Fit Decreasing: ordenar por pax descendente
       group.sort((a, b) => b.paxCount - a.paxCount);
 
-      // Usar vehículos disponibles ordenados por capacidad descendente
       const availableVehicles = fleetVehicles
         .filter(v => v.status !== "Mantenimiento")
         .sort((a, b) => b.capacidad - a.capacidad);
 
-      const vehicleOccupancy = new Map<string, number>(); 
-      
+      const vehicleOccupancy = new Map<string, number>();
+
       for (const t of group) {
         let assigned = false;
         for (const v of availableVehicles) {
           const currentOccupancy = vehicleOccupancy.get(v.id) || 0;
           if (currentOccupancy + t.paxCount <= v.capacidad) {
             vehicleOccupancy.set(v.id, currentOccupancy + t.paxCount);
-            
-            let dId = v.conductorAsignadoId;
-            if (!dId) {
-               const d = fleetDrivers.find(drv => drv.status !== "Fuera de Turno" && !drv.vehiculoAsignadoId);
-               if (d) {
-                 dId = d.id;
-                 onUpdateDriver({ ...d, vehiculoAsignadoId: v.id });
-                 onUpdateVehicle({ ...v, conductorAsignadoId: d.id });
-               }
-            }
-
+            const dId = assignDriver(v);
             const driverName = fleetDrivers.find(drv => drv.id === dId)?.nombre;
-
-            // Update only if it changed
             if (t.vehiculoId !== v.id || t.conductorId !== dId) {
-              const updated: OperationalTransfer = {
+              onUpdateTransfer({
                 ...t,
                 vehiculoId: v.id,
                 vehicleType: `${v.marca} ${v.modelo}`,
                 conductorId: dId || null,
                 driverName: driverName || undefined,
-                status: "Asignado"
-              };
-              onUpdateTransfer(updated);
+                status: "Asignado",
+              });
               optimizedCount++;
             }
             assigned = true;
             break;
           }
         }
-        if (!assigned) {
-          if (t.status !== "Sin Asignar" || t.vehiculoId) {
-             onUpdateTransfer({
-               ...t,
-               vehiculoId: undefined,
-               vehicleType: undefined,
-               conductorId: null,
-               driverName: undefined,
-               status: "Sin Asignar"
-             });
-             optimizedCount++;
-          }
+        if (!assigned && (t.status !== "Sin Asignar" || t.vehiculoId)) {
+          onUpdateTransfer({
+            ...t,
+            vehiculoId: undefined,
+            vehicleType: undefined,
+            conductorId: null,
+            driverName: undefined,
+            status: "Sin Asignar",
+          });
+          optimizedCount++;
         }
       }
     }
 
-    // 4. Optimizar Traslados Privados (asignar el vehículo de menor capacidad posible)
-    // Para los privados, cada traslado necesita su propio vehículo.
+    // 4. Asignar privados/sin-tipo: menor vehículo disponible sin conflicto horario
     unassignedPrivateTransfers.sort((a, b) => b.paxCount - a.paxCount);
 
     for (const t of unassignedPrivateTransfers) {
-      // Ordenar de menor capacidad a mayor capacidad para no desperdiciar los grandes
       const availableVehicles = fleetVehicles
         .filter(v => v.status !== "Mantenimiento" && v.capacidad >= t.paxCount)
         .sort((a, b) => a.capacidad - b.capacidad);
 
       for (const v of availableVehicles) {
-        // En privados, no sumamos paxCount al currentOccupancy si queremos uso exclusivo, 
-        // pero podemos verificar si el vehículo ya está asignado a otro traslado privado en esa misma hora.
-        // Simplificación: si el conductor asociado o vehículo no tiene solapes en la misma hora, asignamos.
-        
-        let dId = v.conductorAsignadoId;
-        if (!dId) {
-           const d = fleetDrivers.find(drv => drv.status !== "Fuera de Turno" && !drv.vehiculoAsignadoId);
-           if (d) {
-             dId = d.id;
-             onUpdateDriver({ ...d, vehiculoAsignadoId: v.id });
-             onUpdateVehicle({ ...v, conductorAsignadoId: d.id });
-           }
-        }
-
-        const driverName = fleetDrivers.find(drv => drv.id === dId)?.nombre;
-
-        // Verificar si el vehículo ya está en uso en ese tiempo (tolerancia de 2 horas)
         const sTime = t.fechaHora.getTime();
-        const isInUse = activeTransfers.some(otherT => 
-          otherT.vehiculoId === v.id && 
+        const isInUse = activeTransfers.some(otherT =>
+          otherT.vehiculoId === v.id &&
           Math.abs(otherT.fechaHora.getTime() - sTime) / (1000 * 60 * 60) <= overlapTolerance
         );
-
         if (!isInUse) {
+          const dId = assignDriver(v);
+          const driverName = fleetDrivers.find(drv => drv.id === dId)?.nombre;
           const updated: OperationalTransfer = {
             ...t,
             vehiculoId: v.id,
             vehicleType: `${v.marca} ${v.modelo}`,
             conductorId: dId || null,
             driverName: driverName || undefined,
-            status: "Asignado"
+            status: "Asignado",
           };
           onUpdateTransfer(updated);
-          
-          // Actualizamos la lista local para evitar asignarlo de nuevo en la misma franja
-          activeTransfers.push(updated); 
+          activeTransfers.push(updated);
           optimizedCount++;
-          break; // Vehículo asignado, pasamos al siguiente traslado
+          break;
         }
       }
     }
@@ -748,10 +735,10 @@ export default function OperacionesView({
 
                 {/* Fila 2: Filtros Compactos (Selects) */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <select 
-                    value={dateFilter} 
+                  <select
+                    value={dateFilter}
                     onChange={e => setDateFilter(e.target.value as any)}
-                    className="px-2 py-1.5 text-[10px] font-bold rounded-md border border-zinc-200 bg-zinc-50 text-zinc-600 focus:outline-none focus:border-zinc-400 cursor-pointer"
+                    className={`px-2 py-1.5 text-[10px] font-bold rounded-md border focus:outline-none focus:border-zinc-400 cursor-pointer ${dateFilter !== 'Todos' ? 'border-indigo-400 text-indigo-700 bg-indigo-50' : 'border-zinc-200 text-zinc-600 bg-zinc-50'}`}
                   >
                     <option value="Todos">📅 Todas las Fechas</option>
                     <option value="Hoy">📍 Hoy</option>

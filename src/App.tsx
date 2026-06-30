@@ -361,19 +361,56 @@ export default function App() {
       const hasTransfer = newRes.servicios?.some(s => s.tipo === "Traslado" || s.tipo === "Rent a Car");
       if (hasTransfer) {
         const matchedFlight = flights.find(f => f.flightNo === newRes.flightNo);
+        const tServicio = newRes.servicios?.find(s => s.tipo === "Traslado" || s.tipo === "Rent a Car");
+        const tDet = tServicio?.detalles || {};
+        const defaultAirport = matchedFlight
+          ? `Llegadas Aeropuerto (Vuelo ${matchedFlight.flightNo})`
+          : "Aeropuerto Internacional Local";
+
         const newTrans: TransferService = {
-          id: `TR-${Math.floor(200 + Math.random() * 800)}`,
+          id: `TR-${Date.now()}-${Math.floor(Math.random() * 100)}`,
           leadPassenger: newRes.holder,
-          paxCount: newRes.pax,
-          pickupLocation: matchedFlight ? `Llegadas Aeropuerto (Vuelo ${matchedFlight.flightNo})` : "Aeropuerto Internacional Local",
-          dropoffLocation: newRes.hotelName,
-          date: newRes.checkIn,
-          time: "14:00",
+          paxCount: Number(tDet.transPax || newRes.pax),
+          pickupLocation: tDet.transPickup || defaultAirport,
+          dropoffLocation: tDet.transDropoff || newRes.hotelName,
+          date: tDet.transDate || newRes.checkIn,
+          time: tDet.transTime || "14:00",
           provider: "Foratour Receptivo S.A.",
           status: "No Asignado",
-          vehicleType: newRes.pax > 4 ? "Minivan de Línea" : "Berlina Ejecutiva"
+          vehicleType: tDet.transVehicle || (newRes.pax > 4 ? "Minivan de Línea" : "Berlina Ejecutiva"),
+          tipoTraslado: tDet.transServiceType === "compartido" ? "Compartido" : "Privado",
+          reservationId: newRes.id,
+          direction: "IN",
+          updatedAt: new Date().toISOString(),
         };
         setTransfers(prev => [newTrans, ...prev]);
+        insertTransferService(dataConnect, { ...newTrans }).catch(e =>
+          console.error("Failed to insert transfer service for reservation", newRes.id, e)
+        );
+
+        // Si es ida y vuelta, generar también el traslado de retorno
+        if (tDet.transTripType === "round-trip" && tDet.transReturnDate) {
+          const returnTrans: TransferService = {
+            id: `TR-${Date.now() + 1}-${Math.floor(Math.random() * 100)}`,
+            leadPassenger: newRes.holder,
+            paxCount: Number(tDet.transPax || newRes.pax),
+            pickupLocation: tDet.transReturnDropoff || tDet.transDropoff || newRes.hotelName,
+            dropoffLocation: tDet.transPickup || "Aeropuerto Internacional Local",
+            date: tDet.transReturnDate,
+            time: tDet.transReturnTime || "10:00",
+            provider: "Foratour Receptivo S.A.",
+            status: "No Asignado",
+            vehicleType: tDet.transVehicle || (newRes.pax > 4 ? "Minivan de Línea" : "Berlina Ejecutiva"),
+            tipoTraslado: tDet.transServiceType === "compartido" ? "Compartido" : "Privado",
+            reservationId: newRes.id,
+            direction: "OUT",
+            updatedAt: new Date().toISOString(),
+          };
+          setTransfers(prev => [returnTrans, ...prev]);
+          insertTransferService(dataConnect, { ...returnTrans }).catch(e =>
+            console.error("Failed to insert return transfer service for reservation", newRes.id, e)
+          );
+        }
       }
     }
   };
@@ -624,10 +661,10 @@ export default function App() {
     const existing = transfers.find(t => t.id === updated.id);
     if (existing) {
       setTransfers(prev => prev.map(t => t.id === updated.id ? ts : t));
-      try { await updateTransferService(dataConnect, { ...ts }); } catch (e) {}
+      try { await updateTransferService(dataConnect, { ...ts }); } catch (e) { console.error("Failed to update transfer service", ts.id, e); }
     } else {
       setTransfers(prev => [...prev, ts]);
-      try { await insertTransferService(dataConnect, { ...ts }); } catch (e) {}
+      try { await insertTransferService(dataConnect, { ...ts }); } catch (e) { console.error("Failed to insert transfer service", ts.id, e); }
     }
   };
 
