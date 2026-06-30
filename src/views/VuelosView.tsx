@@ -447,6 +447,16 @@ function NuevoBoletoView({
   const [notas, setNotas] = useState("");
   const [guardando, setGuardando] = useState(false);
 
+  // ─ Modo de entrada ───────────────────────────────────────────────────────────
+  const [inputMode, setInputMode] = useState<'parser' | 'manual'>('parser');
+  const [manualPaxNombre, setManualPaxNombre] = useState("");
+  const [manualPaxTipo, setManualPaxTipo] = useState<"MR" | "MRS" | "MS" | "CHD" | "INF">("MR");
+  const [manualPaxDoc, setManualPaxDoc] = useState("");
+  const [manualSeg, setManualSeg] = useState({
+    aerolinea: "", numeroVuelo: "", origen: "", destino: "",
+    fecha: "", horaSalida: "", horaLlegada: "", clase: "Y", status: "HK1",
+  });
+
   // ─ Acción: Analizar PNR ────────────────────────────────────────────────────
   const handleAnalizar = useCallback(() => {
     if (!rawText.trim()) return;
@@ -629,86 +639,179 @@ function NuevoBoletoView({
         </h2>
       </div>
 
+      {/* Toggle de modo de entrada */}
+      <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-lg w-fit">
+        <button
+          onClick={() => setInputMode('parser')}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${inputMode === 'parser' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          Parser GDS
+        </button>
+        <button
+          onClick={() => setInputMode('manual')}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${inputMode === 'manual' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
+        >
+          <Edit3 className="w-3.5 h-3.5" />
+          Entrada Manual
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* ── COLUMNA IZQUIERDA: PNR INPUT ── */}
         <div className="space-y-4">
-          {/* Textarea GDS */}
-          <div className="bg-white border border-zinc-200 rounded overflow-hidden">
-            <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+
+          {/* ── MODO PARSER ── */}
+          {inputMode === 'parser' && (
+            <>
+              {/* Textarea GDS */}
+              <div className="bg-white border border-zinc-200 rounded overflow-hidden">
+                <div className="px-4 py-3 border-b border-zinc-100 bg-zinc-50 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
+                      Terminal GDS
+                    </span>
+                  </div>
+                  <button
+                    id="btn-load-sample"
+                    onClick={handleLoadSample}
+                    className="text-[10px] text-zinc-400 hover:text-zinc-700 font-semibold uppercase tracking-wide cursor-pointer transition-colors flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    Cargar Ejemplo
+                  </button>
+                </div>
+                <textarea
+                  id="gds-raw-input"
+                  value={rawText}
+                  onChange={(e) => {
+                    setRawText(e.target.value);
+                    if (parseAttempted) setParseAttempted(false);
+                  }}
+                  placeholder={`Pega el texto de Sabre / KIU / Amadeus aquí...\n\nEjemplo:\nK3W9L2\n 1.1GARCIA/CARLOS MR 2.1LOPEZ/MARIA MRS\n 1 CM 224 Y 15NOV 3 CCSPTY HK2  0700  0825`}
+                  rows={14}
+                  className="w-full p-4 text-xs font-mono bg-zinc-950 text-emerald-400 placeholder-emerald-700/70 focus:outline-none resize-none leading-relaxed"
+                  style={{ fontFamily: "monospace" }}
+                />
+                <div className="px-4 py-3 border-t border-zinc-800 bg-zinc-950 flex items-center justify-between">
+                  <span className="text-[10px] text-zinc-500 font-mono">
+                    {rawText.split("\n").length} líneas · {rawText.length} caracteres
+                  </span>
+                  <button
+                    id="btn-analizar-pnr"
+                    onClick={handleAnalizar}
+                    disabled={!rawText.trim() || isParsing}
+                    className="flex items-center gap-2 px-5 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-xs font-bold rounded transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {isParsing ? (
+                      <>
+                        <div className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
+                        Analizando...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Analizar Reserva
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Advertencias del parser */}
+              {parseWarnings.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
+                  <div className="flex items-center gap-1.5 text-amber-700 font-bold text-[10px] uppercase tracking-wider mb-1">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Advertencias del Parser
+                  </div>
+                  {parseWarnings.map((w, i) => (
+                    <p key={i} className="text-xs text-amber-700 leading-relaxed">
+                      {w}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── MODO MANUAL: formulario agregar pasajero ── */}
+          {inputMode === 'manual' && (
+            <div className="bg-white border border-zinc-200 rounded overflow-hidden">
+              <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-100 flex items-center gap-2">
+                <Users className="w-3.5 h-3.5 text-zinc-400" />
                 <span className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
-                  Terminal GDS
+                  Agregar Pasajero
                 </span>
               </div>
-              <button
-                id="btn-load-sample"
-                onClick={handleLoadSample}
-                className="text-[10px] text-zinc-400 hover:text-zinc-700 font-semibold uppercase tracking-wide cursor-pointer transition-colors flex items-center gap-1"
-              >
-                <Sparkles className="w-3 h-3" />
-                Cargar Ejemplo
-              </button>
-            </div>
-            <textarea
-              id="gds-raw-input"
-              value={rawText}
-              onChange={(e) => {
-                setRawText(e.target.value);
-                if (parseAttempted) setParseAttempted(false);
-              }}
-              placeholder={`Pega el texto de Sabre / KIU / Amadeus aquí...\n\nEjemplo:\nK3W9L2\n 1.1GARCIA/CARLOS MR 2.1LOPEZ/MARIA MRS\n 1 CM 224 Y 15NOV 3 CCSPTY HK2  0700  0825`}
-              rows={14}
-              className="w-full p-4 text-xs font-mono bg-zinc-950 text-emerald-400 placeholder-emerald-700/70 focus:outline-none resize-none leading-relaxed"
-              style={{ fontFamily: "monospace" }}
-            />
-            <div className="px-4 py-3 border-t border-zinc-800 bg-zinc-950 flex items-center justify-between">
-              <span className="text-[10px] text-zinc-500 font-mono">
-                {rawText.split("\n").length} líneas · {rawText.length} caracteres
-              </span>
-              <button
-                id="btn-analizar-pnr"
-                onClick={handleAnalizar}
-                disabled={!rawText.trim() || isParsing}
-                className="flex items-center gap-2 px-5 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-xs font-bold rounded transition-colors cursor-pointer disabled:cursor-not-allowed"
-              >
-                {isParsing ? (
-                  <>
-                    <div className="w-3 h-3 border border-white/40 border-t-white rounded-full animate-spin" />
-                    Analizando...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Analizar Reserva
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Advertencias del parser */}
-          {parseWarnings.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
-              <div className="flex items-center gap-1.5 text-amber-700 font-bold text-[10px] uppercase tracking-wider mb-1">
-                <AlertTriangle className="w-3.5 h-3.5" />
-                Advertencias del Parser
+              <div className="p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                      Nombre (APELLIDO/NOMBRE)
+                    </label>
+                    <input
+                      type="text"
+                      value={manualPaxNombre}
+                      onChange={(e) => setManualPaxNombre(e.target.value.toUpperCase())}
+                      placeholder="GARCIA/CARLOS"
+                      className="w-full px-3 py-2 border border-zinc-200 rounded text-xs font-mono text-zinc-900 focus:outline-none focus:border-zinc-500 uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                      Tipo
+                    </label>
+                    <select
+                      value={manualPaxTipo}
+                      onChange={(e) => setManualPaxTipo(e.target.value as "MR" | "MRS" | "MS" | "CHD" | "INF")}
+                      className="w-full px-3 py-2 border border-zinc-200 rounded text-xs font-bold text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white"
+                    >
+                      <option value="MR">MR (Adulto M)</option>
+                      <option value="MRS">MRS (Adulto F)</option>
+                      <option value="MS">MS (Adulto F)</option>
+                      <option value="CHD">CHD (Niño)</option>
+                      <option value="INF">INF (Infante)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                      Documento
+                    </label>
+                    <input
+                      type="text"
+                      value={manualPaxDoc}
+                      onChange={(e) => setManualPaxDoc(e.target.value.toUpperCase())}
+                      placeholder="Pasaporte / CI"
+                      className="w-full px-3 py-2 border border-zinc-200 rounded text-xs font-mono text-zinc-700 focus:outline-none focus:border-zinc-500 uppercase"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (!manualPaxNombre.trim()) return;
+                    setPasajeros(prev => [...prev, { nombre: manualPaxNombre.trim(), tipo: manualPaxTipo, documento: manualPaxDoc.trim() || undefined }]);
+                    setManualPaxNombre("");
+                    setManualPaxDoc("");
+                  }}
+                  disabled={!manualPaxNombre.trim()}
+                  className="w-full py-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-xs font-bold rounded transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Agregar Pasajero
+                </button>
               </div>
-              {parseWarnings.map((w, i) => (
-                <p key={i} className="text-xs text-amber-700 leading-relaxed">
-                  {w}
-                </p>
-              ))}
             </div>
           )}
 
-          {/* Resultado del parseo: pasajeros */}
-          {parseAttempted && !isParsing && (
+          {/* Lista de pasajeros (parser: solo tras parsear; manual: siempre) */}
+          {(inputMode === 'manual' || (parseAttempted && !isParsing)) && (
             <div className="bg-white border border-zinc-200 rounded overflow-hidden">
               <div className="px-4 py-2.5 bg-zinc-50 border-b border-zinc-100 flex items-center gap-2">
                 <Users className="w-3.5 h-3.5 text-zinc-400" />
                 <span className="text-xs font-bold text-zinc-700 uppercase tracking-wider">
-                  Pasajeros Detectados
+                  {inputMode === 'manual' ? 'Pasajeros' : 'Pasajeros Detectados'}
                 </span>
                 <Badge variant={pasajeros.length > 0 ? "success" : "warning"}>
                   {pasajeros.length}
@@ -716,7 +819,7 @@ function NuevoBoletoView({
               </div>
               {pasajeros.length === 0 ? (
                 <p className="text-xs text-zinc-400 p-4 font-medium">
-                  Sin pasajeros detectados. Revisa el formato.
+                  {inputMode === 'manual' ? 'Agrega pasajeros con el formulario de arriba.' : 'Sin pasajeros detectados. Revisa el formato.'}
                 </p>
               ) : (
                 <div className="divide-y divide-zinc-100">
@@ -726,17 +829,25 @@ function NuevoBoletoView({
                         <span className="text-xs font-bold text-zinc-900 font-mono">
                           {p.nombre}
                         </span>
-                        <Badge
-                          variant={
-                            p.tipo === "CHD" || p.tipo === "INF"
-                              ? "info"
-                              : p.tipo === "MRS" || p.tipo === "MS"
-                              ? "warning"
-                              : "default"
-                          }
-                        >
-                          {p.tipo}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={
+                              p.tipo === "CHD" || p.tipo === "INF"
+                                ? "info"
+                                : p.tipo === "MRS" || p.tipo === "MS"
+                                ? "warning"
+                                : "default"
+                            }
+                          >
+                            {p.tipo}
+                          </Badge>
+                          <button
+                            onClick={() => setPasajeros(prev => prev.filter((_, idx) => idx !== i))}
+                            className="text-zinc-300 hover:text-red-500 transition-colors cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <input
                         type="text"
@@ -787,11 +898,11 @@ function NuevoBoletoView({
                 />
               </div>
 
-              {/* Segmentos detectados */}
-              {segmentos.length > 0 && (
+              {/* Segmentos */}
+              {(segmentos.length > 0 || inputMode === 'manual') && (
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-2">
-                    Itinerario Detectado ({segmentos.length} tramo{segmentos.length !== 1 ? "s" : ""})
+                    Itinerario ({segmentos.length} tramo{segmentos.length !== 1 ? "s" : ""})
                   </label>
                   <div className="space-y-2">
                     {segmentos.map((seg, i) => (
@@ -817,14 +928,136 @@ function NuevoBoletoView({
                         <Badge variant={seg.status.startsWith("HK") ? "success" : "warning"}>
                           {seg.status}
                         </Badge>
+                        <button
+                          onClick={() => setSegmentos(prev => prev.filter((_, idx) => idx !== i))}
+                          className="text-zinc-300 hover:text-red-500 transition-colors cursor-pointer flex-shrink-0"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Estado vacío de segmentos */}
-              {parseAttempted && !isParsing && segmentos.length === 0 && (
+              {/* Formulario para agregar tramo en modo manual */}
+              {inputMode === 'manual' && (
+                <div className="border border-zinc-200 rounded p-3 space-y-2 bg-zinc-50">
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Agregar Tramo</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-0.5">Aerolínea</label>
+                      <input
+                        type="text"
+                        maxLength={3}
+                        value={manualSeg.aerolinea}
+                        onChange={(e) => setManualSeg(s => ({ ...s, aerolinea: e.target.value.toUpperCase() }))}
+                        placeholder="CM"
+                        className="w-full px-2 py-1.5 border border-zinc-200 rounded text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-0.5">N° Vuelo</label>
+                      <input
+                        type="text"
+                        value={manualSeg.numeroVuelo}
+                        onChange={(e) => setManualSeg(s => ({ ...s, numeroVuelo: e.target.value }))}
+                        placeholder="224"
+                        className="w-full px-2 py-1.5 border border-zinc-200 rounded text-xs font-mono text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-0.5">Origen</label>
+                      <input
+                        type="text"
+                        maxLength={3}
+                        value={manualSeg.origen}
+                        onChange={(e) => setManualSeg(s => ({ ...s, origen: e.target.value.toUpperCase() }))}
+                        placeholder="CCS"
+                        className="w-full px-2 py-1.5 border border-zinc-200 rounded text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-0.5">Destino</label>
+                      <input
+                        type="text"
+                        maxLength={3}
+                        value={manualSeg.destino}
+                        onChange={(e) => setManualSeg(s => ({ ...s, destino: e.target.value.toUpperCase() }))}
+                        placeholder="PTY"
+                        className="w-full px-2 py-1.5 border border-zinc-200 rounded text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-0.5">Fecha</label>
+                      <input
+                        type="text"
+                        value={manualSeg.fecha}
+                        onChange={(e) => setManualSeg(s => ({ ...s, fecha: e.target.value.toUpperCase() }))}
+                        placeholder="15NOV"
+                        className="w-full px-2 py-1.5 border border-zinc-200 rounded text-xs font-mono text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-0.5">Clase</label>
+                      <input
+                        type="text"
+                        maxLength={1}
+                        value={manualSeg.clase}
+                        onChange={(e) => setManualSeg(s => ({ ...s, clase: e.target.value.toUpperCase() }))}
+                        placeholder="Y"
+                        className="w-full px-2 py-1.5 border border-zinc-200 rounded text-xs font-mono font-bold text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-0.5">Hora Salida</label>
+                      <input
+                        type="text"
+                        value={manualSeg.horaSalida}
+                        onChange={(e) => setManualSeg(s => ({ ...s, horaSalida: e.target.value }))}
+                        placeholder="07:00"
+                        className="w-full px-2 py-1.5 border border-zinc-200 rounded text-xs font-mono text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase block mb-0.5">Hora Llegada</label>
+                      <input
+                        type="text"
+                        value={manualSeg.horaLlegada}
+                        onChange={(e) => setManualSeg(s => ({ ...s, horaLlegada: e.target.value }))}
+                        placeholder="08:25"
+                        className="w-full px-2 py-1.5 border border-zinc-200 rounded text-xs font-mono text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (!manualSeg.aerolinea || !manualSeg.origen || !manualSeg.destino) return;
+                      setSegmentos(prev => [...prev, {
+                        aerolinea: manualSeg.aerolinea,
+                        numeroVuelo: manualSeg.numeroVuelo,
+                        origen: manualSeg.origen,
+                        destino: manualSeg.destino,
+                        fecha: manualSeg.fecha,
+                        horaSalida: manualSeg.horaSalida,
+                        horaLlegada: manualSeg.horaLlegada,
+                        clase: manualSeg.clase || "Y",
+                        status: manualSeg.status || "HK1",
+                        terminal: "",
+                      }]);
+                      setManualSeg({ aerolinea: "", numeroVuelo: "", origen: "", destino: "", fecha: "", horaSalida: "", horaLlegada: "", clase: "Y", status: "HK1" });
+                    }}
+                    disabled={!manualSeg.aerolinea || !manualSeg.origen || !manualSeg.destino}
+                    className="w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-xs font-bold rounded transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Agregar Tramo
+                  </button>
+                </div>
+              )}
+
+              {/* Estado vacío de segmentos en modo parser */}
+              {inputMode === 'parser' && parseAttempted && !isParsing && segmentos.length === 0 && (
                 <div className="p-3 bg-zinc-50 border border-zinc-200 rounded text-center">
                   <p className="text-xs text-zinc-400 font-medium">
                     No se detectaron segmentos. Verifica el formato del texto.
@@ -1079,7 +1312,7 @@ function NuevoBoletoView({
           </div>
 
           {/* Hint de validación */}
-          {!canGuardar && parseAttempted && (
+          {!canGuardar && (parseAttempted || inputMode === 'manual') && (
             <p className="text-[10px] text-zinc-400 text-center font-medium">
               Requerido: PNR de 6 chars · al menos 1 pasajero · 1 segmento · precio de venta
             </p>

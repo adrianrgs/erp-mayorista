@@ -798,13 +798,13 @@ export default function App() {
   const handleAddBoleto = async (newBol: FlightTicket) => {
     try {
       setBoletos(prev => [...prev, newBol]);
-      await insertFlightTicket(dataConnect, { ...newBol, pasajeros: JSON.stringify(newBol.pasajeros) });
+      await insertFlightTicket(dataConnect, { ...newBol });
     } catch (e) {}
   };
   const handleUpdateBoleto = async (updated: FlightTicket) => {
     try {
       setBoletos(prev => prev.map(b => b.id === updated.id ? updated : b));
-      await updateFlightTicket(dataConnect, { ...updated, pasajeros: JSON.stringify(updated.pasajeros) });
+      await updateFlightTicket(dataConnect, { ...updated });
     } catch (e) {}
   };
   const handleDeleteBoleto = async (id: string) => {
