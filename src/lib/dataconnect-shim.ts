@@ -376,3 +376,50 @@ export const deleteProveedor = async (_dc: any, vars: { id: string }) => {
   await api.delete(`/proveedores/${vars.id}`);
   return { data: {} };
 };
+
+// ─── FISCAL / CONTABILIDAD ────────────────────────────────────────────────────
+
+export const listTaxJurisdictions = async () => {
+  const r = await api.get("/finances/jurisdiction");
+  return { data: { taxJurisdictions: r.data ? [r.data] : [] } };
+};
+
+export const listExchangeRates = async () => {
+  const r = await api.get("/finances/exchange-rates");
+  return { data: { exchangeRates: Array.isArray(r.data) ? r.data : [] } };
+};
+
+export const listWithholdingCertificates = async () => {
+  const r = await api.get("/finances/withholding-certificates");
+  return { data: { withholdingCertificates: Array.isArray(r.data) ? r.data : [] } };
+};
+
+export const listJournalEntries = async () => {
+  const r = await api.get("/finances/journal-entries");
+  return { data: { journalEntries: Array.isArray(r.data) ? r.data : [] } };
+};
+
+export const upsertTaxJurisdiction = async (_dc: any, vars: any) => {
+  await api.post("/finances/jurisdiction", vars);
+  return { data: {} };
+};
+
+export const insertExchangeRate = async (_dc: any, vars: any) => {
+  await api.post("/finances/exchange-rates", vars);
+  return { data: {} };
+};
+
+export const insertWithholdingCertificate = async (_dc: any, vars: any) => {
+  await api.post("/finances/withholding-certificates", vars);
+  return { data: {} };
+};
+
+export const deleteWithholdingCertificate = async (_dc: any, vars: { id: string }) => {
+  await api.delete(`/finances/withholding-certificates/${vars.id}`);
+  return { data: {} };
+};
+
+export const insertJournalEntry = async (_dc: any, vars: any) => {
+  await api.post("/finances/journal-entries", vars);
+  return { data: {} };
+};

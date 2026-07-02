@@ -42,9 +42,10 @@ import {
   ArrowRight,
   Activity
 } from "lucide-react";
-import { FinancialInvoice, PayableObligation } from "../types";
+import { FinancialInvoice, PayableObligation, PaymentVoucher } from "../types";
 import { useDialog } from "../components/ui/DialogProvider";
 import { reconcileDossierUpdate } from "../lib/financialReconciler";
+import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
 
 interface ReservasViewProps {
   reservations: Reservation[];
@@ -68,6 +69,8 @@ interface ReservasViewProps {
   extraServices?: ExtraService[];
   serviceRates?: ServiceRate[];
   companyConfig: CompanyConfig;
+  jurisdiction?: TaxJurisdiction;
+  currentExchangeRate?: number;
 }
 
 // Helper to calculate pricing for an individual room
@@ -143,8 +146,11 @@ export default function ReservasView({
   fleetVehicles = [],
   extraServices = [],
   serviceRates = [],
-  companyConfig
+  companyConfig,
+  jurisdiction,
+  currentExchangeRate,
 }: ReservasViewProps) {
+  const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const { showAlert, showConfirm } = useDialog();
   // Navigation inside the module:
   // 1: List (dashboard), 2: Expediente (details), 3: Crear Expediente (Cart), 4: Configurar Servicio
@@ -962,7 +968,8 @@ export default function ReservasView({
             precioVenta: sPrice,
             precioPvp: calculatedPvp,
             comisionB2B: comisionB2B,
-            proveedor: activeServiceType === ServiceType.TRASLADO ? transSupplier :
+            proveedor: activeServiceType === ServiceType.ALOJAMIENTO ? (detailedProperties.find(p => p.id === hotelId)?.nombre || hotelSearchQuery || activeRes?.hotelName) :
+                       activeServiceType === ServiceType.TRASLADO ? transSupplier :
                        activeServiceType === ServiceType.RENT_A_CAR ? carSupplier :
                        activeServiceType === ServiceType.SEGURO ? insSupplier :
                        activeServiceType === ServiceType.MANUAL ? manualSupplier :
@@ -983,7 +990,8 @@ export default function ReservasView({
         precioVenta: sPrice,
         precioPvp: calculatedPvp,
         comisionB2B: comisionB2B,
-        proveedor: activeServiceType === ServiceType.TRASLADO ? transSupplier :
+        proveedor: activeServiceType === ServiceType.ALOJAMIENTO ? (detailedProperties.find(p => p.id === hotelId)?.nombre || hotelSearchQuery || activeRes?.hotelName) :
+                   activeServiceType === ServiceType.TRASLADO ? transSupplier :
                    activeServiceType === ServiceType.RENT_A_CAR ? carSupplier :
                    activeServiceType === ServiceType.SEGURO ? insSupplier :
                    activeServiceType === ServiceType.MANUAL ? manualSupplier :
@@ -1630,7 +1638,7 @@ export default function ReservasView({
                         <td className="px-2 py-2.5 text-zinc-500 font-bold whitespace-nowrap text-center text-[11px]">
                           {r.servicios?.length || 1}
                         </td>
-                        <td className="px-2 py-2.5 text-right font-bold text-zinc-950 whitespace-nowrap text-[11px]">${r.totalPrice.toLocaleString("es-ES")} USD</td>
+                        <td className="px-2 py-2.5 text-right font-bold text-zinc-950 whitespace-nowrap text-[11px]">{formatDualCurrency(r.totalPrice, jur, currentExchangeRate)}</td>
                         <td className="px-2 py-2.5 text-zinc-650 font-semibold truncate text-[11px]">{r.agenciaName || "Directo"}</td>
                         <td className="px-2 py-2.5 whitespace-nowrap text-center text-[11px]">
                           <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-bold uppercase border inline-flex items-center gap-1 truncate max-w-full ${getStatusBadge(r.status)}`}>
@@ -2203,27 +2211,27 @@ export default function ReservasView({
                   <div className="space-y-3 text-xs">
                     <div className="flex items-center justify-between py-2 border-b border-zinc-850">
                       <span className="font-semibold text-zinc-400 uppercase text-[9.5px] tracking-wider">Total Venta Final (PVP)</span>
-                      <span className="font-black text-lg text-white">${totalPvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                      <span className="font-black text-lg text-white">{formatDualCurrency(totalPvp, jur, currentExchangeRate)}</span>
                     </div>
 
                       <div className="flex items-center justify-between py-2 border-b border-zinc-850 text-amber-400 font-semibold">
                         <span>Comisión Retenida B2B</span>
-                        <span>-${totalComisionesB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                        <span>-{formatCurrency(totalComisionesB2B, "USD")}</span>
                       </div>
 
                       <div className="flex items-center justify-between py-2 border-b border-zinc-850">
                         <span className="text-zinc-450">Total a Cobrar B2B (Monto Facturado)</span>
-                        <span className="font-black text-base text-zinc-100">${totalVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                        <span className="font-black text-base text-zinc-100">{formatDualCurrency(totalVenta, jur, currentExchangeRate)}</span>
                       </div>
 
                       <div className="flex items-center justify-between py-2 border-b border-zinc-850">
                         <span className="text-zinc-400">Costo Neto Mayorista (a Pagar)</span>
-                        <span className="font-bold text-zinc-250">${totalNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                        <span className="font-bold text-zinc-250">{formatCurrency(totalNeto, "USD")}</span>
                       </div>
 
                       <div className="flex items-center justify-between py-2 border-b border-zinc-850">
                         <span className="text-zinc-400">Margen de Utilidad Propio</span>
-                        <span className="font-extrabold text-emerald-400">+${nuestraGanancia.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                        <span className="font-extrabold text-emerald-400">+{formatCurrency(nuestraGanancia, "USD")}</span>
                       </div>
 
                       <div className="flex items-center justify-between py-1 text-[9.5px] text-zinc-500 font-mono">
@@ -2533,16 +2541,16 @@ export default function ReservasView({
                                 <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-[10.5px]">
                                   <div className="text-center">
                                     <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Costo Neto</span>
-                                    <span className="text-zinc-800 font-black">${obl.netCost.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                    <span className="text-zinc-800 font-black">{formatCurrency(obl.netCost, obl.currency || "USD")}</span>
                                   </div>
                                   <div className="text-center">
                                     <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Abonado</span>
-                                    <span className="text-emerald-700 font-black">${obl.paidAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                    <span className="text-emerald-700 font-black">{formatCurrency(obl.paidAmount, obl.currency || "USD")}</span>
                                   </div>
                                   <div className="text-center">
                                     <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Pendiente</span>
                                     <span className={`font-black ${remaining > 0 ? "text-red-600" : remaining < 0 ? "text-emerald-700" : "text-zinc-400"}`}>
-                                      ${remaining.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                                      {remaining < 0 ? "-" : ""}{formatCurrency(Math.abs(remaining), obl.currency || "USD")}
                                     </span>
                                   </div>
                                 </div>
@@ -2570,16 +2578,16 @@ export default function ReservasView({
                           <div className="border-t border-zinc-200 pt-2 grid grid-cols-3 gap-2 text-center font-mono text-[10.5px]">
                             <div>
                               <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Total Neto</span>
-                              <span className="text-zinc-800 font-black">${totalNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-zinc-800 font-black">{formatCurrency(totalNeto, "USD")}</span>
                             </div>
                             <div>
                               <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Total Abonado</span>
-                              <span className="text-emerald-700 font-black">${totalAbonado.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-emerald-700 font-black">{formatCurrency(totalAbonado, "USD")}</span>
                             </div>
                             <div>
                               <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Total Pendiente</span>
                               <span className={`font-black ${totalPendiente > 0 ? "text-red-600" : totalPendiente < 0 ? "text-emerald-700" : "text-zinc-400"}`}>
-                                ${totalPendiente.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                                {totalPendiente < 0 ? "-" : ""}{formatCurrency(Math.abs(totalPendiente), "USD")}
                               </span>
                             </div>
                           </div>

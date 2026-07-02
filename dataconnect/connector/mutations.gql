@@ -132,7 +132,11 @@ mutation InsertClient(
   $moroso: Boolean!,
   $limiteCredito: Float,
   $diasCredito: Int,
-  $observaciones: String
+  $observaciones: String,
+  $isWithheldClient: Boolean,
+  $vatWithholdingPct: Float,
+  $incomeTaxWithholdingPct: Float,
+  $isInExemptZone: Boolean
 , $updatedAt: String) @auth(level: PUBLIC) {
   b2BClient_insert(data: {
     id: $id,
@@ -149,30 +153,56 @@ mutation InsertClient(
     moroso: $moroso,
     limiteCredito: $limiteCredito,
     diasCredito: $diasCredito,
-    observaciones: $observaciones
+    observaciones: $observaciones,
+    isWithheldClient: $isWithheldClient,
+    vatWithholdingPct: $vatWithholdingPct,
+    incomeTaxWithholdingPct: $incomeTaxWithholdingPct,
+    isInExemptZone: $isInExemptZone
   })
 }
 
 mutation InsertInvoice(
   $id: String!,
   $clientName: String!,
+  $clientId: String,
+  $reservationId: String,
   $date: String!,
   $dueDate: String!,
   $amount: Float!,
   $vatAmount: Float!,
   $type: String!,
-  $status: String!
+  $status: String!,
+  $taxableBase: Float,
+  $surchargeAmount: Float,
+  $vatWithheld: Float,
+  $incomeTaxWithheld: Float,
+  $exchangeRate: Float,
+  $localCurrencyAmount: Float,
+  $fiscalDocNumber: String,
+  $isExempt: Boolean,
+  $paymentMethod: String
 , $updatedAt: String) @auth(level: PUBLIC) {
   financialInvoice_insert(data: {
     id: $id,
     updatedAt: $updatedAt,
     clientName: $clientName,
+    clientId: $clientId,
+    reservationId: $reservationId,
     date: $date,
     dueDate: $dueDate,
     amount: $amount,
     vatAmount: $vatAmount,
     type: $type,
-    status: $status
+    status: $status,
+    taxableBase: $taxableBase,
+    surchargeAmount: $surchargeAmount,
+    vatWithheld: $vatWithheld,
+    incomeTaxWithheld: $incomeTaxWithheld,
+    exchangeRate: $exchangeRate,
+    localCurrencyAmount: $localCurrencyAmount,
+    fiscalDocNumber: $fiscalDocNumber,
+    isExempt: $isExempt,
+    paymentMethod: $paymentMethod
   })
 }
 
@@ -373,15 +403,32 @@ mutation UpdateInvoice(
   $amount: Float
   $vatAmount: Float
   $status: String
+  $taxableBase: Float
+  $surchargeAmount: Float
+  $vatWithheld: Float
+  $incomeTaxWithheld: Float
+  $exchangeRate: Float
+  $localCurrencyAmount: Float
+  $fiscalDocNumber: String
+  $isExempt: Boolean
+  $paymentMethod: String
 , $updatedAt: String) @auth(level: PUBLIC) {
   financialInvoice_update(
     id: $id
-    
     data: {
-    updatedAt: $updatedAt,
+      updatedAt: $updatedAt,
       amount: $amount
       vatAmount: $vatAmount
       status: $status
+      taxableBase: $taxableBase
+      surchargeAmount: $surchargeAmount
+      vatWithheld: $vatWithheld
+      incomeTaxWithheld: $incomeTaxWithheld
+      exchangeRate: $exchangeRate
+      localCurrencyAmount: $localCurrencyAmount
+      fiscalDocNumber: $fiscalDocNumber
+      isExempt: $isExempt
+      paymentMethod: $paymentMethod
     }
   )
 }
@@ -392,16 +439,23 @@ mutation UpdateClient(
   $saldoDeber: Float
   $status: String
   $moroso: Boolean
+  $isWithheldClient: Boolean
+  $vatWithholdingPct: Float
+  $incomeTaxWithholdingPct: Float
+  $isInExemptZone: Boolean
 , $updatedAt: String) @auth(level: PUBLIC) {
   b2BClient_update(
     id: $id
-    
     data: {
-    updatedAt: $updatedAt,
+      updatedAt: $updatedAt,
       saldoFavor: $saldoFavor
       saldoDeber: $saldoDeber
       status: $status
       moroso: $moroso
+      isWithheldClient: $isWithheldClient
+      vatWithholdingPct: $vatWithholdingPct
+      incomeTaxWithholdingPct: $incomeTaxWithholdingPct
+      isInExemptZone: $isInExemptZone
     }
   )
 }
@@ -758,4 +812,132 @@ mutation UpdateProveedor(
 
 mutation DeleteProveedor($id: String!) @auth(level: PUBLIC) {
   proveedor_delete(id: $id)
+}
+
+# ── Multi-country accounting module ──────────────────────────────────────────
+
+mutation UpsertTaxJurisdiction(
+  $id: String!
+  $country: String!
+  $taxName: String!
+  $taxRate: Float!
+  $reducedTaxRate: Float!
+  $taxIdLabel: String!
+  $fiscalDocLabel: String!
+  $localCurrency: String!
+  $exchangeRateLabel: String!
+  $hasSurcharge: Boolean!
+  $surchargeName: String
+  $surchargeRate: Float
+  $surchargePaymentMethods: String
+  $hasWithholding: Boolean!
+  $withholdingLabel: String
+  $vatWithholdingOptions: String
+  $incomeTaxWithholdingOptions: String
+  $incomeTaxWithholdingLabel: String
+  $hasExemptZone: Boolean!
+  $exemptZoneLabel: String
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  taxJurisdiction_upsert(data: {
+    id: $id
+    country: $country
+    taxName: $taxName
+    taxRate: $taxRate
+    reducedTaxRate: $reducedTaxRate
+    taxIdLabel: $taxIdLabel
+    fiscalDocLabel: $fiscalDocLabel
+    localCurrency: $localCurrency
+    exchangeRateLabel: $exchangeRateLabel
+    hasSurcharge: $hasSurcharge
+    surchargeName: $surchargeName
+    surchargeRate: $surchargeRate
+    surchargePaymentMethods: $surchargePaymentMethods
+    hasWithholding: $hasWithholding
+    withholdingLabel: $withholdingLabel
+    vatWithholdingOptions: $vatWithholdingOptions
+    incomeTaxWithholdingOptions: $incomeTaxWithholdingOptions
+    incomeTaxWithholdingLabel: $incomeTaxWithholdingLabel
+    hasExemptZone: $hasExemptZone
+    exemptZoneLabel: $exemptZoneLabel
+    updatedAt: $updatedAt
+  })
+}
+
+mutation InsertExchangeRate(
+  $id: String!
+  $date: String!
+  $fromCurrency: String!
+  $toCurrency: String!
+  $rate: Float!
+  $source: String!
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  exchangeRate_insert(data: {
+    id: $id
+    date: $date
+    fromCurrency: $fromCurrency
+    toCurrency: $toCurrency
+    rate: $rate
+    source: $source
+    updatedAt: $updatedAt
+  })
+}
+
+mutation InsertWithholdingCertificate(
+  $id: String!
+  $number: String!
+  $clientId: String!
+  $clientTaxId: String!
+  $clientName: String!
+  $type: String!
+  $percentage: Float!
+  $taxableBase: Float!
+  $amountWithheld: Float!
+  $date: String!
+  $period: String!
+  $invoiceId: String
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  withholdingCertificate_insert(data: {
+    id: $id
+    number: $number
+    clientId: $clientId
+    clientTaxId: $clientTaxId
+    clientName: $clientName
+    type: $type
+    percentage: $percentage
+    taxableBase: $taxableBase
+    amountWithheld: $amountWithheld
+    date: $date
+    period: $period
+    invoiceId: $invoiceId
+    updatedAt: $updatedAt
+  })
+}
+
+mutation DeleteWithholdingCertificate($id: String!) @auth(level: PUBLIC) {
+  withholdingCertificate_delete(id: $id)
+}
+
+mutation InsertJournalEntry(
+  $id: String!
+  $date: String!
+  $description: String!
+  $type: String!
+  $reference: String!
+  $exchangeRate: Float!
+  $lines: String!
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  journalEntry_insert(data: {
+    id: $id
+    date: $date
+    description: $description
+    type: $type
+    reference: $reference
+    exchangeRate: $exchangeRate
+    lines: $lines
+    updatedAt: $updatedAt
+  })
 }

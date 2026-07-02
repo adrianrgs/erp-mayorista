@@ -33,7 +33,7 @@ query ListClients @auth(level: PUBLIC) {
   b2BClients {
     id
     updatedAt
-nombre
+    nombre
     rif
     tipo
     status
@@ -46,6 +46,10 @@ nombre
     limiteCredito
     diasCredito
     observaciones
+    isWithheldClient
+    vatWithholdingPct
+    incomeTaxWithholdingPct
+    isInExemptZone
   }
 }
 
@@ -53,13 +57,24 @@ query ListInvoices @auth(level: PUBLIC) {
   financialInvoices {
     id
     updatedAt
-clientName
+    clientName
+    clientId
+    reservationId
     date
     dueDate
     amount
     vatAmount
     type
     status
+    taxableBase
+    surchargeAmount
+    vatWithheld
+    incomeTaxWithheld
+    exchangeRate
+    localCurrencyAmount
+    fiscalDocNumber
+    isExempt
+    paymentMethod
   }
 }
 
@@ -301,5 +316,76 @@ query ListProveedores @auth(level: PUBLIC) {
     datosBancarios
     status
     notas
+  }
+}
+
+# ── Multi-country accounting module ──────────────────────────────────────────
+
+query ListTaxJurisdictions @auth(level: PUBLIC) {
+  taxJurisdictions {
+    id
+    updatedAt
+    country
+    taxName
+    taxRate
+    reducedTaxRate
+    taxIdLabel
+    fiscalDocLabel
+    localCurrency
+    exchangeRateLabel
+    hasSurcharge
+    surchargeName
+    surchargeRate
+    surchargePaymentMethods
+    hasWithholding
+    withholdingLabel
+    vatWithholdingOptions
+    incomeTaxWithholdingOptions
+    incomeTaxWithholdingLabel
+    hasExemptZone
+    exemptZoneLabel
+  }
+}
+
+query ListExchangeRates @auth(level: PUBLIC) {
+  exchangeRates {
+    id
+    updatedAt
+    date
+    fromCurrency
+    toCurrency
+    rate
+    source
+  }
+}
+
+query ListWithholdingCertificates @auth(level: PUBLIC) {
+  withholdingCertificates {
+    id
+    updatedAt
+    number
+    clientId
+    clientTaxId
+    clientName
+    type
+    percentage
+    taxableBase
+    amountWithheld
+    date
+    period
+    invoiceId
+  }
+}
+
+query ListJournalEntries @auth(level: PUBLIC) {
+  journalEntries {
+    id
+    updatedAt
+    date
+    description
+    type
+    reference
+    exchangeRate
+    lines
   }
 }

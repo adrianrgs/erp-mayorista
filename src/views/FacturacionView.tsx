@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Reservation, FinancialInvoice, ServiceItem, B2BClient, ServiceType, PayableObligation, ProviderStatement, CompanyConfig } from "../types";
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
+import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile } from "../lib/taxEngine";
 import { formatGDSDate } from "../lib/parsers/pnrParser";
 import { 
   FileCheck, 
@@ -52,11 +53,13 @@ interface FacturacionViewProps {
   onBoletosChange?: React.Dispatch<React.SetStateAction<FlightTicket[]>>;
   onUpdateBoleto?: (b: FlightTicket) => void;
   companyConfig: CompanyConfig;
+  jurisdiction?: TaxJurisdiction;
+  currentExchangeRate?: number;
 }
 
-export default function FacturacionView({ 
-  reservations, 
-  invoices, 
+export default function FacturacionView({
+  reservations,
+  invoices,
   onUpdateReservation,
   onAddInvoice,
   clients,
@@ -69,9 +72,34 @@ export default function FacturacionView({
   boletos = [],
   onBoletosChange,
   onUpdateBoleto,
-  companyConfig
+  companyConfig,
+  jurisdiction,
+  currentExchangeRate = 1,
 }: FacturacionViewProps) {
   const { showAlert } = useDialog();
+
+  const activeJurisdiction = jurisdiction ?? DEFAULT_JURISDICTION;
+
+  const buildClientProfile = (client?: B2BClient): ClientTaxProfile => ({
+    isWithheldClient: client?.isWithheldClient ?? false,
+    vatWithholdingPct: client?.vatWithholdingPct ?? 0,
+    incomeTaxWithholdingPct: client?.incomeTaxWithholdingPct ?? 0,
+    isInExemptZone: client?.isInExemptZone ?? false,
+  });
+
+  const computeTax = (amount: number, res?: Reservation, client?: B2BClient, forceExempt?: boolean) => {
+    const profile = buildClientProfile(client);
+    if (forceExempt) profile.isInExemptZone = true;
+    return calculateTaxes(
+      amount,
+      res?.comprobanteMetodo ?? '',
+      activeJurisdiction,
+      profile,
+      currentExchangeRate,
+    );
+  };
+
+  const [overrideExempt, setOverrideExempt] = useState(false);
   const [activeTab, setActiveTab] = useState<"solicitudes" | "historial">("solicitudes");
   const [search, setSearch] = useState("");
   const [selectedResId, setSelectedResId] = useState<string | null>(null);
@@ -509,7 +537,7 @@ export default function FacturacionView({
     const hasBilledOrRequestedServices = services.some(s => s.statusFacturacion === "Solicitado" || s.statusFacturacion === "Facturado" || s.statusFacturacion === "Rechazado");
     
     const jointFlights = boletos.filter(b => b.expedienteId === r.id && b.facturarConjunto);
-    const hasBilledOrRequestedFlights = jointFlights.some(b => b.expedienteAereo && (b.expedienteAereo.status === "Solicitado" || b.expedienteAereo.status === "Facturado" || b.expedienteAereo.status === "PagadoAerolinea" || b.expedienteAereo.status === "Rechazado"));
+    const hasBilledOrRequestedFlights = jointFlights.some(b => b.expedienteAereo && (b.expedienteAereo.status === "Solicitado" || b.expedienteAereo.status === "Facturado" || b.expedienteAereo.status === "PagadoAerolinea"));
 
     return hasBilledOrRequestedServices || hasBilledOrRequestedFlights;
   });
@@ -585,15 +613,24 @@ export default function FacturacionView({
 
   const handleInvoiceVariation = async (variation: any) => {
     if (!activeRes) return;
+    const _varAgency = clients.find(c => c.nombre === activeRes.agenciaName);
+    const _varTax = computeTax(variation.amountSale, activeRes, _varAgency);
     const newInvoice: FinancialInvoice = {
       id: `SUP-${Math.floor(1000 + Math.random() * 9000)}`,
       clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Suplemento: ${variation.reason})`,
       date: new Date().toISOString().split("T")[0],
       dueDate: activeRes.checkIn,
       amount: variation.amountSale,
-      vatAmount: Math.round(variation.amountSale * 0.16),
+      vatAmount: _varTax.vatAmount,
+      taxableBase: _varTax.taxableBase,
+      surchargeAmount: _varTax.surchargeAmount,
+      vatWithheld: _varTax.vatWithheld,
+      incomeTaxWithheld: _varTax.incomeTaxWithheld,
+      exchangeRate: _varTax.exchangeRate,
+      localCurrencyAmount: _varTax.localCurrencyAmount,
+      paymentMethod: activeRes.comprobanteMetodo,
       type: "Cobro",
-      status: "Facturado"  // Must be "Facturado" to appear in Cuentas por Cobrar
+      status: "Facturado"
     };
 
     if (onAddInvoice) {
@@ -628,15 +665,21 @@ export default function FacturacionView({
 
   const handleCreditNoteVariation = async (variation: any) => {
     if (!activeRes) return;
+    const _cnAgency = clients.find(c => c.nombre === activeRes.agenciaName);
+    const _cnTax = computeTax(Math.abs(variation.amountSale), activeRes, _cnAgency);
     const creditNote: FinancialInvoice = {
       id: `NC-${Math.floor(8000 + Math.random() * 999)}`,
       clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Nota de Crédito: ${variation.reason})`,
       date: new Date().toISOString().split("T")[0],
       dueDate: activeRes.checkIn,
-      amount: variation.amountSale,  // already negative from reconciler
-      vatAmount: Math.round(variation.amountSale * 0.16),
+      amount: variation.amountSale,
+      vatAmount: variation.amountSale < 0 ? -_cnTax.vatAmount : _cnTax.vatAmount,
+      taxableBase: variation.amountSale < 0 ? -_cnTax.taxableBase : _cnTax.taxableBase,
+      exchangeRate: _cnTax.exchangeRate,
+      localCurrencyAmount: variation.amountSale < 0 ? -_cnTax.localCurrencyAmount : _cnTax.localCurrencyAmount,
+      paymentMethod: activeRes.comprobanteMetodo,
       type: "Cobro",
-      status: "Pagado"  // credit note auto-settles
+      status: "Pagado"
     };
 
     if (onAddInvoice) {
@@ -739,7 +782,10 @@ export default function FacturacionView({
     const defaultHotelProvider = matchedProp?.supplierName || activeRes.hotelName || "Proveedor General";
 
     const terrestrialByProvider = terrestrialServices.reduce((acc, s) => {
-      const providerName = s.proveedor || defaultHotelProvider;
+      // For accommodations: prefer s.proveedor (individual hotel) over the reservation-level hotelName
+      const providerName = s.tipo === ServiceType.ALOJAMIENTO
+        ? (s.proveedor || matchedProp?.supplierName || activeRes.hotelName || defaultHotelProvider)
+        : (s.proveedor || defaultHotelProvider);
       if (!acc[providerName]) acc[providerName] = [];
       acc[providerName].push(s);
       return acc;
@@ -748,12 +794,19 @@ export default function FacturacionView({
     for (const [providerName, services] of Object.entries(terrestrialByProvider)) {
       const netCost = services.reduce((sum, s) => sum + s.precioNeto, 0);
       if (netCost > 0) {
+        // Build a concise service detail: tipo + short description (no passenger names)
+        const serviceDetail = services.map(s => {
+          if (s.tipo === ServiceType.ALOJAMIENTO) {
+            return `Alojamiento ${providerName} — IN: ${activeRes.checkIn} / OUT: ${activeRes.checkOut} / ${activeRes.pax} pax`;
+          }
+          return `${s.tipo}: ${s.descripcion.split(" - ")[0].substring(0, 60)}`;
+        }).join(" | ");
         if (onAddPayableObligation) {
           const newObligation: PayableObligation = {
             id: `PAY-${Math.floor(5000 + Math.random() * 4999)}`,
             dueDate: activeRes.checkIn,
             providerName: providerName,
-            serviceDetail: services.map(s => s.descripcion).join(", "),
+            serviceDetail,
             locatorId: activeRes.id,
             netCost: netCost,
             paidAmount: 0.00,
@@ -862,38 +915,71 @@ export default function FacturacionView({
     if (onAddInvoice) {
       if (appliedSaldoFavor > 0 && remainingToPay > 0) {
         // Splitting into two invoices: one paid via credit, one for the remaining amount
+        const taxSaldo = computeTax(appliedSaldoFavor, activeRes, agencyRecord, overrideExempt);
         const invoicePaid: FinancialInvoice = {
           id: `FAC-${Math.floor(5200 + Math.random() * 800)}`,
           clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Facturación Aprobada - Cobro con Saldo a Favor)`,
+          clientId: agencyRecord?.id,
+          reservationId: activeRes.id,
           date: new Date().toISOString().split("T")[0],
           dueDate: activeRes.checkIn,
           amount: appliedSaldoFavor,
-          vatAmount: Math.round(appliedSaldoFavor * 0.16),
+          vatAmount: taxSaldo.vatAmount,
+          taxableBase: taxSaldo.taxableBase,
+          surchargeAmount: taxSaldo.surchargeAmount,
+          vatWithheld: taxSaldo.vatWithheld,
+          incomeTaxWithheld: taxSaldo.incomeTaxWithheld,
+          exchangeRate: taxSaldo.exchangeRate,
+          localCurrencyAmount: taxSaldo.localCurrencyAmount,
+          paymentMethod: activeRes.comprobanteMetodo,
+          isExempt: overrideExempt || agencyRecord?.isInExemptZone,
           type: "Cobro",
           status: "Pagado"
         };
         onAddInvoice(invoicePaid);
 
+        const taxRemaining = computeTax(remainingToPay, activeRes, agencyRecord, overrideExempt);
         const invoiceRemaining: FinancialInvoice = {
           id: `FAC-${Math.floor(5200 + Math.random() * 800)}`,
           clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Facturación Aprobada - Pago Restante)`,
+          clientId: agencyRecord?.id,
+          reservationId: activeRes.id,
           date: new Date().toISOString().split("T")[0],
           dueDate: activeRes.checkIn,
           amount: remainingToPay,
-          vatAmount: Math.round(remainingToPay * 0.16),
+          vatAmount: taxRemaining.vatAmount,
+          taxableBase: taxRemaining.taxableBase,
+          surchargeAmount: taxRemaining.surchargeAmount,
+          vatWithheld: taxRemaining.vatWithheld,
+          incomeTaxWithheld: taxRemaining.incomeTaxWithheld,
+          exchangeRate: taxRemaining.exchangeRate,
+          localCurrencyAmount: taxRemaining.localCurrencyAmount,
+          paymentMethod: activeRes.comprobanteMetodo,
+          isExempt: overrideExempt || agencyRecord?.isInExemptZone,
           type: "Cobro",
           status: invoiceStatus
         };
         onAddInvoice(invoiceRemaining);
       } else {
-        // Single invoice as before
+        // Single invoice
+        const taxMain = computeTax(pendingTotal, activeRes, agencyRecord, overrideExempt);
         const newInvoice: FinancialInvoice = {
           id: `FAC-${Math.floor(5200 + Math.random() * 800)}`,
           clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Facturación Serv. Terrestres${jointFlights.length > 0 ? ' y Aéreos' : ''} Aprobados)`,
+          clientId: agencyRecord?.id,
+          reservationId: activeRes.id,
           date: new Date().toISOString().split("T")[0],
           dueDate: activeRes.checkIn,
           amount: pendingTotal,
-          vatAmount: Math.round(pendingTotal * 0.16),
+          vatAmount: taxMain.vatAmount,
+          taxableBase: taxMain.taxableBase,
+          surchargeAmount: taxMain.surchargeAmount,
+          vatWithheld: taxMain.vatWithheld,
+          incomeTaxWithheld: taxMain.incomeTaxWithheld,
+          exchangeRate: taxMain.exchangeRate,
+          localCurrencyAmount: taxMain.localCurrencyAmount,
+          paymentMethod: activeRes.comprobanteMetodo,
+          isExempt: overrideExempt || agencyRecord?.isInExemptZone,
           type: "Cobro",
           status: appliedSaldoFavor > 0 ? "Pagado" : invoiceStatus
         };
@@ -961,6 +1047,7 @@ export default function FacturacionView({
 
     setStatusMessage(`✓ ¡Facturación aprobada con éxito (${modeMessage}) para el Expediente ${activeRes.id}! Se ha emitido la factura por $${pendingTotal.toLocaleString("es-ES")} USD.${overpaidText}`);
     setTimeout(() => setStatusMessage(""), 6000);
+    setOverrideExempt(false);
   };
 
   const handleRejectBilling = () => {
@@ -1098,13 +1185,21 @@ export default function FacturacionView({
 
     // Emit Credit Note in Financial Log for the total amount that was invoiced
     if (onAddInvoice && invoicedTotal > 0) {
+      const _cancelAgency = clients.find(c => c.nombre === activeRes.agenciaName);
+      const _cancelTax = computeTax(invoicedTotal, activeRes, _cancelAgency);
       const creditNote: FinancialInvoice = {
         id: `NC-${Math.floor(8000 + Math.random() * 999)}`,
         clientName: `Anulación: ${activeRes.holder} - Localizador ${activeRes.id}`,
+        clientId: _cancelAgency?.id,
+        reservationId: activeRes.id,
         date: new Date().toISOString().split("T")[0],
         dueDate: activeRes.checkIn,
         amount: -invoicedTotal,
-        vatAmount: -Math.round(invoicedTotal * 0.16),
+        vatAmount: -_cancelTax.vatAmount,
+        taxableBase: -_cancelTax.taxableBase,
+        exchangeRate: _cancelTax.exchangeRate,
+        localCurrencyAmount: -_cancelTax.localCurrencyAmount,
+        paymentMethod: activeRes.comprobanteMetodo,
         type: "Cobro",
         status: "Pagado"
       };
@@ -1866,9 +1961,24 @@ export default function FacturacionView({
                   {validationWarningElement}
                   {infoNoticeElement}
 
+                  {hasRequests && (
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none px-3 py-2 rounded border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={overrideExempt}
+                        onChange={e => setOverrideExempt(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 accent-zinc-800 cursor-pointer"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-zinc-800 block">Facturar sin {activeJurisdiction.taxName}</span>
+                        <span className="text-[10px] text-zinc-500">Cliente exento — no genera crédito fiscal</span>
+                      </div>
+                    </label>
+                  )}
+
                   {hasRequests ? (
                     <div className="grid grid-cols-2 gap-3">
-                      <button 
+                      <button
                         onClick={handleRejectBilling}
                         className="py-2.5 border border-zinc-250 hover:bg-zinc-100 text-red-700 bg-white text-[11px] font-black uppercase tracking-wider rounded flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all animate-fade-in"
                       >
@@ -2616,7 +2726,7 @@ export default function FacturacionView({
                     RIF: {clients.find(c => activeRes?.agenciaName && c.nombre.toLowerCase() === activeRes.agenciaName.toLowerCase())?.rif || "N/A"}
                   </p>
                   <p className="text-zinc-500 mt-0.5">
-                    Canal: {clients.find(c => activeRes?.agenciaName && c.nombre.toLowerCase() === activeRes.agenciaName.toLowerCase())?.canalComercial || "B2B Mayorista"}
+                    Canal: B2B Mayorista
                   </p>
                 </div>
                 <div>
@@ -2633,57 +2743,72 @@ export default function FacturacionView({
 
               {/* Invoice Items Table */}
               <div className="mb-6">
-                <table className="w-full text-left text-xs divide-y divide-zinc-200 border border-zinc-200">
-                  <thead>
-                    <tr className="bg-zinc-950 text-white font-bold uppercase tracking-wider text-[9px]">
-                      <th className="p-3">Concepto / Descripción</th>
-                      <th className="p-3 text-right w-24">Subtotal (USD)</th>
-                      <th className="p-3 text-right w-24">IVA 16% (USD)</th>
-                      <th className="p-3 text-right w-24">Total (USD)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-200 font-medium text-zinc-800">
-                    <tr>
-                      <td className="p-3.5">
-                        <p className="font-bold text-zinc-950 uppercase">
-                          {selectedInvoiceForModal.clientName.split("(")[1]?.replace(")", "") || "Facturación de Servicios Turísticos Receptivos"}
-                        </p>
-                        <p className="text-[10px] text-zinc-400 mt-1">
-                          Servicios asociados al expediente de reserva para el pasajero titular {activeRes?.holder || "registrado en sistema"}.
-                        </p>
-                      </td>
-                      <td className="p-3.5 text-right font-mono">
-                        ${(selectedInvoiceForModal.amount - selectedInvoiceForModal.vatAmount).toLocaleString("es-ES", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3.5 text-right font-mono text-zinc-650">
-                        ${selectedInvoiceForModal.vatAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-3.5 text-right font-mono font-bold text-zinc-950">
-                        ${selectedInvoiceForModal.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                {(() => {
+                  const inv = selectedInvoiceForModal;
+                  const isExemptInv = inv.isExempt || inv.vatAmount === 0;
+                  const taxLabel = isExemptInv
+                    ? `${activeJurisdiction.taxName} (Exento)`
+                    : `${activeJurisdiction.taxName} ${(activeJurisdiction.taxRate * 100).toFixed(0)}%`;
+                  const subtotal = isExemptInv ? inv.amount : (inv.taxableBase ?? inv.amount - inv.vatAmount);
+                  return (
+                    <table className="w-full text-left text-xs divide-y divide-zinc-200 border border-zinc-200">
+                      <thead>
+                        <tr className="bg-zinc-950 text-white font-bold uppercase tracking-wider text-[9px]">
+                          <th className="p-3">Concepto / Descripción</th>
+                          <th className="p-3 text-right w-24">Subtotal (USD)</th>
+                          <th className="p-3 text-right w-24">{taxLabel} (USD)</th>
+                          <th className="p-3 text-right w-24">Total (USD)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-200 font-medium text-zinc-800">
+                        <tr>
+                          <td className="p-3.5">
+                            <p className="font-bold text-zinc-950 uppercase">
+                              {inv.clientName.split("(")[1]?.replace(")", "") || "Facturación de Servicios Turísticos Receptivos"}
+                            </p>
+                            <p className="text-[10px] text-zinc-400 mt-1">
+                              Servicios asociados al expediente de reserva para el pasajero titular {activeRes?.holder || "registrado en sistema"}.
+                            </p>
+                            {isExemptInv && (
+                              <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded text-[9px] font-bold text-emerald-700 uppercase tracking-wide">
+                                Operación Exenta de {activeJurisdiction.taxName}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3.5 text-right font-mono">
+                            ${subtotal.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className={`p-3.5 text-right font-mono ${isExemptInv ? "text-emerald-700 font-bold" : "text-zinc-650"}`}>
+                            {isExemptInv ? "Exento" : `$${inv.vatAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}`}
+                          </td>
+                          <td className="p-3.5 text-right font-mono font-bold text-zinc-950">
+                            ${inv.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  );
+                })()}
               </div>
 
               {/* Booking Services Breakdown for customer context */}
-              {activeRes && activeRes.services && activeRes.services.length > 0 && (
+              {activeRes && activeRes.servicios && activeRes.servicios.length > 0 && (
                 <div className="mb-8 border border-zinc-200 rounded-lg p-4 bg-zinc-50/50">
                   <h4 className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-2.5">
                     Servicios Consolidados en el Expediente (RES-{(activeRes.id).substring(4)})
                   </h4>
                   <div className="divide-y divide-zinc-200/60 text-[10px] space-y-2">
-                    {activeRes.services.map((srv, idx) => (
+                    {activeRes.servicios.map((srv, idx) => (
                       <div key={srv.id || idx} className="pt-2 first:pt-0 flex justify-between items-start">
                         <div>
                           <span className="inline-block px-1.5 py-0.5 bg-zinc-200 text-zinc-800 font-bold rounded-sm uppercase tracking-wide text-[8px] mr-2">
                             {srv.tipo}
                           </span>
-                          <span className="font-bold text-zinc-900">{srv.proveedorNombre}</span>
+                          <span className="font-bold text-zinc-900">{srv.proveedor}</span>
                           <p className="text-zinc-500 mt-0.5">{srv.descripcion}</p>
                         </div>
                         <span className="font-mono text-zinc-800 font-bold">
-                          ${srv.precioB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                          ${srv.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
                         </span>
                       </div>
                     ))}

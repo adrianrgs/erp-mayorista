@@ -11,7 +11,8 @@ export enum ProjectView {
   SERVICIOS_VARIOS = "servicios_varios",
   BUSCADOR = "buscador",
   CONFIGURACION = "configuracion",
-  PROVEEDORES = "proveedores"
+  PROVEEDORES = "proveedores",
+  CONTABILIDAD = "contabilidad"
 }
 
 export interface CompanyConfig {
@@ -205,12 +206,24 @@ export interface FinancialInvoice {
   updatedAt?: string;
   id: string;
   clientName: string;
+  clientId?: string;
+  reservationId?: string;
   date: string;
   dueDate: string;
   amount: number;
   vatAmount: number;
   type: "Cobro" | "Pago Proveedor";
   status: "Facturado" | "Pagado" | "Vencido" | "Borrador";
+  // Fiscal fields (multi-country)
+  taxableBase?: number;
+  surchargeAmount?: number;
+  vatWithheld?: number;
+  incomeTaxWithheld?: number;
+  exchangeRate?: number;
+  localCurrencyAmount?: number;
+  fiscalDocNumber?: string;
+  isExempt?: boolean;
+  paymentMethod?: string;
 }
 
 export enum ClientType {
@@ -229,7 +242,7 @@ export interface B2BClient {
   updatedAt?: string;
   id: string;
   nombre: string;
-  rif: string; // ID Fiscal
+  rif: string; // Tax ID (RIF, NIT, RUC, etc. — label from jurisdiction)
   tipo: ClientType;
   status: ClientStatus;
   contactoNombre: string;
@@ -241,6 +254,11 @@ export interface B2BClient {
   limiteCredito?: number;
   diasCredito?: number;
   observaciones?: string;
+  // Fiscal profile (multi-country)
+  isWithheldClient?: boolean;
+  vatWithholdingPct?: number;
+  incomeTaxWithholdingPct?: number;
+  isInExemptZone?: boolean;
 }
 
 export enum ServiceType {
@@ -345,6 +363,11 @@ export interface PayableObligation {
   attachedFile?: string;
   isFrozen?: boolean;
   payments?: SupplierPaymentRecord[];
+  // Campos fiscales de proveedor
+  isExempt?: boolean;       // proveedor exento de IVA → no genera retención
+  vatAmount?: number;       // IVA en la factura del proveedor
+  vatWithheldPct?: number;  // % de retención aplicado
+  vatWithheld?: number;     // monto retenido (a pagar a autoridad fiscal)
 }
 
 export interface ProviderStatement {
@@ -380,5 +403,51 @@ export interface B2BWalletTransaction {
   notes: string;
   createdAt: string;
   bankReference?: string;
+}
+
+// ─── MÓDULO CONTABILIDAD Y FISCAL (MULTI-PAÍS) ───────────────────────────────
+
+export interface ExchangeRate {
+  updatedAt?: string;
+  id: string;
+  date: string;           // YYYY-MM-DD
+  fromCurrency: string;   // "USD"
+  toCurrency: string;     // "VES" | "COP" | "PEN" | ...
+  rate: number;
+  source: string;         // "BCV" | "TRM" | "SBS" | "Manual"
+}
+
+export interface WithholdingCertificate {
+  updatedAt?: string;
+  id: string;
+  number: string;         // certificate number from client
+  clientId: string;
+  clientTaxId: string;    // RIF / NIT / RUC per jurisdiction
+  clientName: string;
+  type: "VAT" | "INCOME_TAX";
+  percentage: number;
+  taxableBase: number;
+  amountWithheld: number;
+  date: string;           // YYYY-MM-DD
+  period: string;         // MM-YYYY
+  invoiceId?: string;
+}
+
+export interface JournalEntryLine {
+  account: string;   // "1101"
+  name: string;      // "Bank / Cash"
+  debit: number;
+  credit: number;
+}
+
+export interface JournalEntry {
+  updatedAt?: string;
+  id: string;
+  date: string;
+  description: string;
+  type: "DEPOSIT" | "INCOME_RECOGNITION" | "SUPPLIER_PAYMENT" | "WITHHOLDING";
+  reference: string;  // invoice or reservation ID
+  exchangeRate: number;
+  lines: JournalEntryLine[];
 }
 

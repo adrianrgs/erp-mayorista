@@ -1,6 +1,7 @@
 import { FlightTicket } from "./types/aereos";
 import React, { useState } from "react";
-import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, OperationalTransfer, mapToOperationalTransfer, mapToTransferService, FinancialInvoice, B2BClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement, PaymentVoucher, CompanyConfig } from "./types";
+import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, OperationalTransfer, mapToOperationalTransfer, mapToTransferService, FinancialInvoice, B2BClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement, PaymentVoucher, CompanyConfig, ExchangeRate, WithholdingCertificate, JournalEntry } from "./types";
+import { TaxJurisdiction, DEFAULT_JURISDICTION } from "./lib/taxEngine";
 import { Property, RoomType, RatePlan, StopSale, ExtraService, ServiceRate, Proveedor } from "./types/producto";
 
 import {
@@ -21,7 +22,10 @@ import {
   updateInvoice, updateClient,
   listPayableObligations, insertPayableObligation, updatePayableObligation, deletePayableObligation,
   listProviderStatements, insertProviderStatement, deleteProviderStatement,
-  listProveedores, insertProveedor, updateProveedor
+  listProveedores, insertProveedor, updateProveedor,
+  listTaxJurisdictions, listExchangeRates, listWithholdingCertificates, listJournalEntries,
+  upsertTaxJurisdiction, insertExchangeRate, insertWithholdingCertificate,
+  deleteWithholdingCertificate, insertJournalEntry,
 } from "./lib/dataconnect-shim";
 import { isAuthenticated, logout } from "./lib/api";
 import LoginScreen from "./components/LoginScreen";
@@ -58,6 +62,7 @@ import { reconcileDossierUpdate } from "./lib/financialReconciler";
 import ServiciosView from "./views/ServiciosView";
 import BuscadorGlobalView from "./views/BuscadorGlobalView";
 import ProveedoresView from "./views/ProveedoresView";
+import ContabilidadView from "./views/ContabilidadView";
 import { ChevronDown, Search, Box, Activity, Receipt, CreditCard, ArrowDownRight, Briefcase } from "lucide-react";
 
 
@@ -103,6 +108,85 @@ export default function App() {
   const [invoices, setInvoices] = useState<FinancialInvoice[]>(initialInvoices);
   const [clients, setClients] = useState<B2BClient[]>(initialClients);
   const [exchangeRates, setExchangeRates] = useState({ usdToEur: 0.92, usdToVes: 45.50 });
+
+  // Accounting & Fiscal module state
+  const [jurisdiction, setJurisdiction] = useState<TaxJurisdiction>(() => {
+    const saved = localStorage.getItem("tax_jurisdiction");
+    if (saved) { try { return JSON.parse(saved); } catch (e) {} }
+    return DEFAULT_JURISDICTION;
+  });
+  const [fiscalExchangeRates, setFiscalExchangeRates] = useState<ExchangeRate[]>(() => {
+    const saved = localStorage.getItem("fiscal_exchange_rates");
+    if (saved) { try { return JSON.parse(saved); } catch (e) {} }
+    return [];
+  });
+  const [withholdingCertificates, setWithholdingCertificates] = useState<WithholdingCertificate[]>(() => {
+    const saved = localStorage.getItem("withholding_certificates");
+    if (saved) { try { return JSON.parse(saved); } catch (e) {} }
+    return [];
+  });
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>(() => {
+    const saved = localStorage.getItem("journal_entries");
+    if (saved) { try { return JSON.parse(saved); } catch (e) {} }
+    return [];
+  });
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayExchangeRate = fiscalExchangeRates.find(
+    r => r.date === todayStr && r.toCurrency === jurisdiction.localCurrency
+  )?.rate;
+
+  const handleSaveJurisdiction = async (j: TaxJurisdiction) => {
+    setJurisdiction(j);
+    localStorage.setItem("tax_jurisdiction", JSON.stringify(j));
+    try {
+      await upsertTaxJurisdiction(dataConnect, {
+        ...j,
+        surchargePaymentMethods: JSON.stringify(j.surchargePaymentMethods ?? []),
+        vatWithholdingOptions: JSON.stringify(j.vatWithholdingOptions ?? []),
+        incomeTaxWithholdingOptions: JSON.stringify(j.incomeTaxWithholdingOptions ?? []),
+      });
+    } catch (e) { console.error("Error persisting jurisdiction", e); }
+  };
+
+  const handleAddExchangeRate = async (r: ExchangeRate) => {
+    setFiscalExchangeRates(prev => {
+      const filtered = prev.filter(x => !(x.date === r.date && x.toCurrency === r.toCurrency));
+      const next = [r, ...filtered];
+      localStorage.setItem("fiscal_exchange_rates", JSON.stringify(next));
+      return next;
+    });
+    try { await insertExchangeRate(dataConnect, r); } catch (e) {}
+  };
+
+  const handleAddWithholdingCertificate = async (cert: WithholdingCertificate) => {
+    setWithholdingCertificates(prev => {
+      const next = [cert, ...prev];
+      localStorage.setItem("withholding_certificates", JSON.stringify(next));
+      return next;
+    });
+    try { await insertWithholdingCertificate(dataConnect, cert); } catch (e) {}
+  };
+
+  const handleDeleteWithholdingCertificate = async (id: string) => {
+    setWithholdingCertificates(prev => {
+      const next = prev.filter(c => c.id !== id);
+      localStorage.setItem("withholding_certificates", JSON.stringify(next));
+      return next;
+    });
+    try { await deleteWithholdingCertificate(dataConnect, { id }); } catch (e) {}
+  };
+
+  const handleAddJournalEntry = async (entry: JournalEntry) => {
+    setJournalEntries(prev => {
+      const next = [entry, ...prev];
+      localStorage.setItem("journal_entries", JSON.stringify(next));
+      return next;
+    });
+    try {
+      await insertJournalEntry(dataConnect, { ...entry, lines: JSON.stringify(entry.lines) });
+    } catch (e) {}
+  };
 
   const [companyConfig, setCompanyConfig] = useState<CompanyConfig>(() => {
     const saved = localStorage.getItem("company_config");
@@ -293,6 +377,43 @@ export default function App() {
         if (stm.data.providerStatements.length > 0) setProviderStatements(stm.data.providerStatements);
         const provs = await listProveedores(dataConnect);
         if (provs.data.proveedores.length > 0) setProveedores(provs.data.proveedores);
+        // Fiscal data — each in its own try so DB failures don't block localStorage state
+        try {
+          const jur = await listTaxJurisdictions();
+          if (jur.data.taxJurisdictions.length > 0) {
+            const j: any = jur.data.taxJurisdictions[0];
+            if (typeof j.surchargePaymentMethods === 'string') j.surchargePaymentMethods = JSON.parse(j.surchargePaymentMethods);
+            if (typeof j.vatWithholdingOptions === 'string') j.vatWithholdingOptions = JSON.parse(j.vatWithholdingOptions);
+            if (typeof j.incomeTaxWithholdingOptions === 'string') j.incomeTaxWithholdingOptions = JSON.parse(j.incomeTaxWithholdingOptions);
+            setJurisdiction(j);
+            localStorage.setItem("tax_jurisdiction", JSON.stringify(j));
+          }
+        } catch (e) {}
+        try {
+          const er = await listExchangeRates();
+          if (er.data.exchangeRates.length > 0) {
+            setFiscalExchangeRates(er.data.exchangeRates);
+            localStorage.setItem("fiscal_exchange_rates", JSON.stringify(er.data.exchangeRates));
+          }
+        } catch (e) {}
+        try {
+          const wh = await listWithholdingCertificates();
+          if (wh.data.withholdingCertificates.length > 0) {
+            setWithholdingCertificates(wh.data.withholdingCertificates);
+            localStorage.setItem("withholding_certificates", JSON.stringify(wh.data.withholdingCertificates));
+          }
+        } catch (e) {}
+        try {
+          const je = await listJournalEntries();
+          if (je.data.journalEntries.length > 0) {
+            const entries = je.data.journalEntries.map((e: any) => ({
+              ...e,
+              lines: typeof e.lines === 'string' ? JSON.parse(e.lines) : e.lines,
+            }));
+            setJournalEntries(entries);
+            localStorage.setItem("journal_entries", JSON.stringify(entries));
+          }
+        } catch (e) {}
       } catch (err) {
         console.error("Failed to load Firebase data", err);
       }
@@ -1195,6 +1316,10 @@ export default function App() {
                   <ArrowDownRight className="w-4 h-4 flex-shrink-0" />
                   <span className="text-xs font-semibold">Cuentas por Pagar</span>
                 </button>
+                <button id="nav-contabilidad" onClick={() => setCurrentSection(ProjectView.CONTABILIDAD)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.CONTABILIDAD ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
+                  <ReceiptText className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-xs font-semibold">Contabilidad / Fiscal</span>
+                </button>
               </div>
             )}
           </div>
@@ -1305,8 +1430,8 @@ onDeleteStopSale={handleDeleteStopSale}
                     />
                   )}
                   {currentSection === ProjectView.RESERVAS && (
-                    <ReservasView 
-                      reservations={reservations} 
+                    <ReservasView
+                      reservations={reservations}
                       properties={properties}
                       clients={clients}
                       onAddReservation={handleAddReservation}
@@ -1324,11 +1449,13 @@ onDeleteStopSale={handleDeleteStopSale}
                       extraServices={extraServices}
                       serviceRates={serviceRates}
                       companyConfig={companyConfig}
+                      jurisdiction={jurisdiction}
+                      currentExchangeRate={todayExchangeRate}
                     />
                   )}
                   {currentSection === ProjectView.FACTURACION && (
-                     <FacturacionView 
-                       reservations={reservations} 
+                     <FacturacionView
+                       reservations={reservations}
                        invoices={invoices}
                        onUpdateReservation={handleUpdateReservation}
                        onAddInvoice={handleAddInvoice}
@@ -1343,6 +1470,8 @@ onDeleteStopSale={handleDeleteStopSale}
                        onBoletosChange={setBoletos}
                        onUpdateBoleto={handleUpdateBoleto}
                        companyConfig={companyConfig}
+                       jurisdiction={jurisdiction}
+                       currentExchangeRate={todayExchangeRate}
                      />
                    )}
                 {currentSection === ProjectView.VUELOS && (
@@ -1354,6 +1483,8 @@ onDeleteStopSale={handleDeleteStopSale}
                     onDeleteBoleto={handleDeleteBoleto}
                     clients={clients}
                     companyConfig={companyConfig}
+                    jurisdiction={jurisdiction}
+                    currentExchangeRate={todayExchangeRate}
                   />
                 )}
 
@@ -1396,9 +1527,9 @@ onDeleteStopSale={handleDeleteStopSale}
                   />
                 )}
                 {currentSection === ProjectView.COBRANZAS && (
-                  <CobranzasView 
-                    clients={clients} 
-                    onUpdateClient={handleUpdateClient} 
+                  <CobranzasView
+                    clients={clients}
+                    onUpdateClient={handleUpdateClient}
                     invoices={invoices}
                     onUpdateInvoice={handleUpdateInvoice}
                     reservations={reservations}
@@ -1407,14 +1538,33 @@ onDeleteStopSale={handleDeleteStopSale}
                     onAddVoucher={handleAddVoucher}
                     onUpdateVoucher={handleUpdateVoucher}
                     companyConfig={companyConfig}
+                    jurisdiction={jurisdiction}
+                    withholdingCertificates={withholdingCertificates}
+                    onAddWithholdingCertificate={handleAddWithholdingCertificate}
+                    onDeleteWithholdingCertificate={handleDeleteWithholdingCertificate}
+                  />
+                )}
+                {currentSection === ProjectView.CONTABILIDAD && (
+                  <ContabilidadView
+                    jurisdiction={jurisdiction}
+                    onSaveJurisdiction={handleSaveJurisdiction}
+                    exchangeRates={fiscalExchangeRates}
+                    onAddExchangeRate={handleAddExchangeRate}
+                    withholdingCertificates={withholdingCertificates}
+                    journalEntries={journalEntries}
+                    invoices={invoices}
+                    payableObligations={payableObligations}
                   />
                 )}
                 {currentSection === ProjectView.CUENTAS_PAGAR && (
-                  <CuentasPorPagarView 
-                    obligations={payableObligations} 
-                    onUpdateObligation={handleUpdateObligation} 
+                  <CuentasPorPagarView
+                    obligations={payableObligations}
+                    onUpdateObligation={handleUpdateObligation}
+                    onAddObligation={handleAddPayableObligation}
                     statements={providerStatements}
                     onAddStatement={handleAddStatement}
+                    jurisdiction={jurisdiction}
+                    currentExchangeRate={todayExchangeRate}
                   />
                 )}
                 {currentSection === ProjectView.CONFIGURACION && (

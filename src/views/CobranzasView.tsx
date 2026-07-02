@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Reservation, FinancialInvoice, B2BClient, PaymentVoucher, CompanyConfig } from "../types";
+import { Reservation, FinancialInvoice, B2BClient, PaymentVoucher, CompanyConfig, WithholdingCertificate } from "../types";
+import { TaxJurisdiction } from "../lib/taxEngine";
 import {
   Users,
   Search,
@@ -28,7 +29,9 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Eye,
-  Banknote
+  Banknote,
+  Scale,
+  Save
 } from "lucide-react";
 
 interface CobranzasViewProps {
@@ -42,19 +45,27 @@ interface CobranzasViewProps {
   onAddVoucher: (newVoucher: PaymentVoucher) => void;
   onUpdateVoucher: (updated: PaymentVoucher) => void;
   companyConfig: CompanyConfig;
+  jurisdiction?: TaxJurisdiction;
+  withholdingCertificates?: WithholdingCertificate[];
+  onAddWithholdingCertificate?: (cert: WithholdingCertificate) => void;
+  onDeleteWithholdingCertificate?: (id: string) => void;
 }
 
-export default function CobranzasView({ 
-  clients, 
-  onUpdateClient, 
-  invoices, 
-  onUpdateInvoice, 
+export default function CobranzasView({
+  clients,
+  onUpdateClient,
+  invoices,
+  onUpdateInvoice,
   reservations,
   onAddInvoice,
   vouchers,
   onAddVoucher,
   onUpdateVoucher,
-  companyConfig
+  companyConfig,
+  jurisdiction,
+  withholdingCertificates = [],
+  onAddWithholdingCertificate,
+  onDeleteWithholdingCertificate,
 }: CobranzasViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [invoiceSearchQuery, setInvoiceSearchQuery] = useState("");
@@ -63,7 +74,28 @@ export default function CobranzasView({
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<FinancialInvoice | null>(null);
   
   // Tab states for the client details card
-  const [activeTab, setActiveTab] = useState<"facturas" | "comprobantes">("facturas");
+  const [activeTab, setActiveTab] = useState<"facturas" | "comprobantes" | "retenciones">("facturas");
+
+  // Fiscal profile editing
+  const [editingFiscalProfile, setEditingFiscalProfile] = useState(false);
+  const [fiscalProfileForm, setFiscalProfileForm] = useState({
+    isWithheldClient: false,
+    vatWithholdingPct: 0,
+    incomeTaxWithholdingPct: 0,
+    isInExemptZone: false,
+  });
+
+  // Withholding certificate registration
+  const [withholdingForm, setWithholdingForm] = useState({
+    number: '',
+    type: 'VAT' as 'VAT' | 'INCOME_TAX',
+    percentage: 0,
+    taxableBase: 0,
+    amountWithheld: 0,
+    date: new Date().toISOString().slice(0, 10),
+    invoiceId: '',
+  });
+  const [showWithholdingForm, setShowWithholdingForm] = useState(false);
   
   // Notification state
   const [statusMessage, setStatusMessage] = useState("");
@@ -290,6 +322,11 @@ export default function CobranzasView({
       };
       onAddInvoice(paymentReceipt);
     }
+
+    const targetInvoiceForMsg = paymentForm.invoiceId ? invoices.find(inv => inv.id === paymentForm.invoiceId) : undefined;
+    const alreadyPaidForMsg = targetInvoiceForMsg ? vouchers.filter(v => v.invoiceId === paymentForm.invoiceId && v.status === "Verificado").reduce((sum, v) => sum + v.amount, 0) : 0;
+    const isPartialPayment = !!targetInvoiceForMsg && (alreadyPaidForMsg + amountPaid) < targetInvoiceForMsg.amount;
+    const remainingAmount = isPartialPayment ? targetInvoiceForMsg!.amount - alreadyPaidForMsg - amountPaid : 0;
 
     setShowPaymentModal(false);
     if (isPartialPayment) {
@@ -572,6 +609,146 @@ export default function CobranzasView({
                 )}
               </div>
 
+              {/* Fiscal Profile Card */}
+              {(jurisdiction?.hasWithholding || jurisdiction?.hasExemptZone) && (
+                <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-xs">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="flex items-center gap-2">
+                      <Scale className="w-4 h-4 text-indigo-600" />
+                      <span className="text-xs font-black uppercase tracking-wider text-zinc-800">Perfil Fiscal</span>
+                    </div>
+                    {!editingFiscalProfile ? (
+                      <button
+                        onClick={() => {
+                          setFiscalProfileForm({
+                            isWithheldClient: activeClient.isWithheldClient ?? false,
+                            vatWithholdingPct: activeClient.vatWithholdingPct ?? 0,
+                            incomeTaxWithholdingPct: activeClient.incomeTaxWithholdingPct ?? 0,
+                            isInExemptZone: activeClient.isInExemptZone ?? false,
+                          });
+                          setEditingFiscalProfile(true);
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[9px] font-bold uppercase border border-indigo-200"
+                      >
+                        <Edit2 className="w-3 h-3" /> Editar
+                      </button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            onUpdateClient({ ...activeClient, ...fiscalProfileForm });
+                            setEditingFiscalProfile(false);
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] font-bold uppercase"
+                        >
+                          <Save className="w-3 h-3" /> Guardar
+                        </button>
+                        <button
+                          onClick={() => setEditingFiscalProfile(false)}
+                          className="px-2.5 py-1 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded text-[9px] font-bold uppercase"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {editingFiscalProfile ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {jurisdiction?.hasWithholding && (
+                        <>
+                          <label className="flex items-center gap-2 col-span-2 text-xs font-semibold text-zinc-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={fiscalProfileForm.isWithheldClient}
+                              onChange={e => setFiscalProfileForm(f => ({ ...f, isWithheldClient: e.target.checked }))}
+                              className="rounded border-zinc-300 text-indigo-600"
+                            />
+                            {jurisdiction.withholdingLabel ?? 'Agente de Retención'}
+                          </label>
+                          {fiscalProfileForm.isWithheldClient && (
+                            <>
+                              <div>
+                                <label className="text-[9px] font-bold uppercase text-zinc-500 block mb-1">
+                                  % Ret. {jurisdiction.taxName}
+                                </label>
+                                <select
+                                  value={fiscalProfileForm.vatWithholdingPct}
+                                  onChange={e => setFiscalProfileForm(f => ({ ...f, vatWithholdingPct: Number(e.target.value) }))}
+                                  className="w-full text-xs border border-zinc-200 rounded px-2 py-1.5"
+                                >
+                                  {(jurisdiction.vatWithholdingOptions ?? [0]).map(o => (
+                                    <option key={o} value={o}>{o}%</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-[9px] font-bold uppercase text-zinc-500 block mb-1">
+                                  % Ret. {jurisdiction.incomeTaxWithholdingLabel ?? 'Renta'}
+                                </label>
+                                <select
+                                  value={fiscalProfileForm.incomeTaxWithholdingPct}
+                                  onChange={e => setFiscalProfileForm(f => ({ ...f, incomeTaxWithholdingPct: Number(e.target.value) }))}
+                                  className="w-full text-xs border border-zinc-200 rounded px-2 py-1.5"
+                                >
+                                  {(jurisdiction.incomeTaxWithholdingOptions ?? [0]).map(o => (
+                                    <option key={o} value={o}>{o}%</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
+                      {jurisdiction?.hasExemptZone && (
+                        <label className="flex items-center gap-2 col-span-2 text-xs font-semibold text-zinc-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={fiscalProfileForm.isInExemptZone}
+                            onChange={e => setFiscalProfileForm(f => ({ ...f, isInExemptZone: e.target.checked }))}
+                            className="rounded border-zinc-300 text-indigo-600"
+                          />
+                          Cliente en {jurisdiction.exemptZoneLabel ?? 'Zona Exenta'} ({jurisdiction.taxName} = {(jurisdiction.reducedTaxRate * 100).toFixed(0)}%)
+                        </label>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      {jurisdiction?.hasWithholding && (
+                        <div className={`p-2.5 rounded-md border ${activeClient.isWithheldClient ? 'bg-amber-50 border-amber-200' : 'bg-zinc-50 border-zinc-200'}`}>
+                          <span className="text-[9px] font-bold uppercase text-zinc-500 block">
+                            {jurisdiction.withholdingLabel ?? 'Agente de Retención'}
+                          </span>
+                          <span className={`font-black text-sm mt-0.5 block ${activeClient.isWithheldClient ? 'text-amber-700' : 'text-zinc-400'}`}>
+                            {activeClient.isWithheldClient ? 'Sí' : 'No'}
+                          </span>
+                        </div>
+                      )}
+                      {activeClient.isWithheldClient && jurisdiction?.hasWithholding && (
+                        <>
+                          <div className="p-2.5 rounded-md border bg-amber-50 border-amber-200">
+                            <span className="text-[9px] font-bold uppercase text-zinc-500 block">% Ret. {jurisdiction.taxName}</span>
+                            <span className="font-black text-sm mt-0.5 block text-amber-700">{activeClient.vatWithholdingPct ?? 0}%</span>
+                          </div>
+                          <div className="p-2.5 rounded-md border bg-amber-50 border-amber-200">
+                            <span className="text-[9px] font-bold uppercase text-zinc-500 block">% Ret. {jurisdiction.incomeTaxWithholdingLabel ?? 'Renta'}</span>
+                            <span className="font-black text-sm mt-0.5 block text-amber-700">{activeClient.incomeTaxWithholdingPct ?? 0}%</span>
+                          </div>
+                        </>
+                      )}
+                      {jurisdiction?.hasExemptZone && (
+                        <div className={`p-2.5 rounded-md border ${activeClient.isInExemptZone ? 'bg-emerald-50 border-emerald-200' : 'bg-zinc-50 border-zinc-200'}`}>
+                          <span className="text-[9px] font-bold uppercase text-zinc-500 block">{jurisdiction.exemptZoneLabel ?? 'Zona Exenta'}</span>
+                          <span className={`font-black text-sm mt-0.5 block ${activeClient.isInExemptZone ? 'text-emerald-700' : 'text-zinc-400'}`}>
+                            {activeClient.isInExemptZone ? `${jurisdiction.taxName} 0%` : 'No aplica'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Tabs for managing invoices and checking vouchers */}
               <div className="bg-white border border-zinc-200 rounded-lg shadow-xs overflow-hidden">
                 {/* Tabs selection */}
@@ -579,18 +756,18 @@ export default function CobranzasView({
                   <button
                     onClick={() => setActiveTab("facturas")}
                     className={`px-5 py-3.5 border-r border-zinc-200 transition-all cursor-pointer flex items-center gap-1.5 ${
-                      activeTab === "facturas" 
-                        ? "bg-white text-zinc-950 border-b-2 border-b-zinc-950 font-black" 
+                      activeTab === "facturas"
+                        ? "bg-white text-zinc-950 border-b-2 border-b-zinc-950 font-black"
                         : "text-zinc-450 hover:text-zinc-805"
                     }`}
                   >
                     <FileText className="w-4 h-4" /> Facturas Pendientes
                   </button>
-                   <button
+                  <button
                     onClick={() => setActiveTab("comprobantes")}
                     className={`px-5 py-3.5 border-r border-zinc-200 transition-all cursor-pointer flex items-center gap-1.5 ${
-                      activeTab === "comprobantes" 
-                        ? "bg-white text-zinc-955 border-b-2 border-b-zinc-955 font-black" 
+                      activeTab === "comprobantes"
+                        ? "bg-white text-zinc-955 border-b-2 border-b-zinc-955 font-black"
                         : "text-zinc-450 hover:text-zinc-805"
                     }`}
                   >
@@ -601,11 +778,206 @@ export default function CobranzasView({
                       </span>
                     )}
                   </button>
+                  {jurisdiction?.hasWithholding && (
+                    <button
+                      onClick={() => setActiveTab("retenciones")}
+                      className={`px-5 py-3.5 border-r border-zinc-200 transition-all cursor-pointer flex items-center gap-1.5 ${
+                        activeTab === "retenciones"
+                          ? "bg-white text-indigo-700 border-b-2 border-b-indigo-600 font-black"
+                          : "text-zinc-450 hover:text-zinc-805"
+                      }`}
+                    >
+                      <Scale className="w-4 h-4" /> Retenciones
+                    </button>
+                  )}
                 </div>
 
                 {/* Tab content */}
                 <div className="p-5">
-                  {activeTab === "facturas" ? (
+                  {activeTab === "retenciones" ? (
+                    <div className="space-y-4">
+                      {/* Register new withholding certificate */}
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-black uppercase tracking-wider text-zinc-700">
+                          Comprobantes de Retención — {activeClient.nombre}
+                        </span>
+                        <button
+                          onClick={() => setShowWithholdingForm(v => !v)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] font-bold uppercase"
+                        >
+                          <Plus className="w-3 h-3" /> Registrar
+                        </button>
+                      </div>
+
+                      {showWithholdingForm && (
+                        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 space-y-3">
+                          <p className="text-[10px] font-black uppercase text-indigo-700">Nuevo Comprobante</p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-zinc-500 block mb-1">N° Comprobante</label>
+                              <input
+                                type="text"
+                                value={withholdingForm.number}
+                                onChange={e => setWithholdingForm(f => ({ ...f, number: e.target.value }))}
+                                className="w-full text-xs border border-zinc-200 rounded px-2 py-1.5"
+                                placeholder="0000-001234"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-zinc-500 block mb-1">Tipo</label>
+                              <select
+                                value={withholdingForm.type}
+                                onChange={e => setWithholdingForm(f => ({ ...f, type: e.target.value as 'VAT' | 'INCOME_TAX' }))}
+                                className="w-full text-xs border border-zinc-200 rounded px-2 py-1.5"
+                              >
+                                <option value="VAT">Retención {jurisdiction?.taxName ?? 'IVA'}</option>
+                                <option value="INCOME_TAX">Retención {jurisdiction?.incomeTaxWithholdingLabel ?? 'Renta'}</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-zinc-500 block mb-1">% Retención</label>
+                              <input
+                                type="number"
+                                value={withholdingForm.percentage}
+                                onChange={e => setWithholdingForm(f => ({ ...f, percentage: Number(e.target.value) }))}
+                                className="w-full text-xs border border-zinc-200 rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-zinc-500 block mb-1">Base Imponible (USD)</label>
+                              <input
+                                type="number"
+                                value={withholdingForm.taxableBase}
+                                onChange={e => setWithholdingForm(f => ({ ...f, taxableBase: Number(e.target.value) }))}
+                                className="w-full text-xs border border-zinc-200 rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-zinc-500 block mb-1">Monto Retenido (USD)</label>
+                              <input
+                                type="number"
+                                value={withholdingForm.amountWithheld}
+                                onChange={e => setWithholdingForm(f => ({ ...f, amountWithheld: Number(e.target.value) }))}
+                                className="w-full text-xs border border-zinc-200 rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] font-bold uppercase text-zinc-500 block mb-1">Fecha</label>
+                              <input
+                                type="date"
+                                value={withholdingForm.date}
+                                onChange={e => setWithholdingForm(f => ({ ...f, date: e.target.value }))}
+                                className="w-full text-xs border border-zinc-200 rounded px-2 py-1.5"
+                              />
+                            </div>
+                            <div className="col-span-2 sm:col-span-1">
+                              <label className="text-[9px] font-bold uppercase text-zinc-500 block mb-1">N° Factura Aplicada (opcional)</label>
+                              <input
+                                type="text"
+                                value={withholdingForm.invoiceId}
+                                onChange={e => setWithholdingForm(f => ({ ...f, invoiceId: e.target.value }))}
+                                className="w-full text-xs border border-zinc-200 rounded px-2 py-1.5"
+                                placeholder="FAC-1234"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={() => {
+                                if (!withholdingForm.number || withholdingForm.amountWithheld <= 0) return;
+                                const period = `${withholdingForm.date.slice(5, 7)}-${withholdingForm.date.slice(0, 4)}`;
+                                const cert: WithholdingCertificate = {
+                                  id: `WH-${Date.now()}`,
+                                  number: withholdingForm.number,
+                                  clientId: activeClient.id,
+                                  clientTaxId: activeClient.rif,
+                                  clientName: activeClient.nombre,
+                                  type: withholdingForm.type,
+                                  percentage: withholdingForm.percentage,
+                                  taxableBase: withholdingForm.taxableBase,
+                                  amountWithheld: withholdingForm.amountWithheld,
+                                  date: withholdingForm.date,
+                                  period,
+                                  invoiceId: withholdingForm.invoiceId || undefined,
+                                  updatedAt: new Date().toISOString(),
+                                };
+                                onAddWithholdingCertificate?.(cert);
+                                setShowWithholdingForm(false);
+                                setWithholdingForm({ number: '', type: 'VAT', percentage: 0, taxableBase: 0, amountWithheld: 0, date: new Date().toISOString().slice(0, 10), invoiceId: '' });
+                              }}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9px] font-bold uppercase"
+                            >
+                              Guardar Comprobante
+                            </button>
+                            <button
+                              onClick={() => setShowWithholdingForm(false)}
+                              className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded text-[9px] font-bold uppercase"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* List of withholding certificates for this client */}
+                      {(() => {
+                        const clientCerts = withholdingCertificates.filter(c => c.clientId === activeClient.id);
+                        if (clientCerts.length === 0) {
+                          return (
+                            <div className="text-center py-8 text-zinc-400 text-xs">
+                              No hay comprobantes de retención registrados para este cliente.
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs divide-y divide-zinc-100">
+                              <thead>
+                                <tr className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">
+                                  <th className="pb-2 pr-3">N° Comprobante</th>
+                                  <th className="pb-2 pr-3">Fecha</th>
+                                  <th className="pb-2 pr-3">Tipo</th>
+                                  <th className="pb-2 pr-3">%</th>
+                                  <th className="pb-2 pr-3 text-right">Base</th>
+                                  <th className="pb-2 pr-3 text-right">Retenido</th>
+                                  <th className="pb-2">Factura</th>
+                                  <th className="pb-2"></th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-zinc-50">
+                                {clientCerts.map(c => (
+                                  <tr key={c.id} className="hover:bg-zinc-50">
+                                    <td className="py-2 pr-3 font-mono font-bold text-indigo-700">{c.number}</td>
+                                    <td className="py-2 pr-3 text-zinc-600">{c.date}</td>
+                                    <td className="py-2 pr-3">
+                                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${c.type === 'VAT' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                                        {c.type === 'VAT' ? jurisdiction?.taxName ?? 'IVA' : jurisdiction?.incomeTaxWithholdingLabel ?? 'Renta'}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 pr-3 font-mono">{c.percentage}%</td>
+                                    <td className="py-2 pr-3 text-right font-mono">${c.taxableBase.toFixed(2)}</td>
+                                    <td className="py-2 pr-3 text-right font-mono text-red-650 font-bold">${c.amountWithheld.toFixed(2)}</td>
+                                    <td className="py-2 text-zinc-500">{c.invoiceId || '—'}</td>
+                                    <td className="py-2">
+                                      {onDeleteWithholdingCertificate && (
+                                        <button
+                                          onClick={() => onDeleteWithholdingCertificate(c.id)}
+                                          className="p-1 text-zinc-400 hover:text-red-500 rounded"
+                                          title="Eliminar"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : activeTab === "facturas" ? (
                     (() => {
                       // Find active unpaid invoices for this client
                       // Matches the client's name or reservation holder that contains client Name as agencyName

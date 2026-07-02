@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import type { FlightLeg, B2BClient, CompanyConfig } from "../types";
 import type { FlightTicket, Passenger, FlightSegment } from "../types/aereos";
+import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
 import { parseGDS, buildRoute, formatGDSDate, SAMPLE_GDS_TEXT } from "../lib/parsers/pnrParser";
 import { useDialog } from "../components/ui/DialogProvider";
 
@@ -83,6 +84,8 @@ interface VuelosViewProps {
   onDeleteBoleto: (id: string) => void;
   clients?: B2BClient[];
   companyConfig: CompanyConfig;
+  jurisdiction?: TaxJurisdiction;
+  currentExchangeRate?: number;
 }
 
 type SubView = "listado" | "nuevo" | "expediente";
@@ -112,7 +115,8 @@ function Badge({
 
 // ─── VISTA PRINCIPAL ──────────────────────────────────────────────────────────
 
-export default function VuelosView({ flights: _flights, boletos, onAddBoleto, onUpdateBoleto, onDeleteBoleto, clients = [], companyConfig }: VuelosViewProps) {
+export default function VuelosView({ flights: _flights, boletos, onAddBoleto, onUpdateBoleto, onDeleteBoleto, clients = [], companyConfig, jurisdiction, currentExchangeRate }: VuelosViewProps) {
+  const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const [subView, setSubView] = useState<SubView>("listado");
   const [search, setSearch] = useState("");
   const [selectedBoletoId, setSelectedBoletoId] = useState<string | null>(null);
@@ -143,6 +147,8 @@ export default function VuelosView({ flights: _flights, boletos, onAddBoleto, on
           }}
           onEliminar={(id) => onDeleteBoleto(id)}
           onShowVoucher={handleOpenVoucher}
+          jurisdiction={jur}
+          currentExchangeRate={currentExchangeRate}
         />
       ) : subView === "nuevo" ? (
         <NuevoBoletoView
@@ -161,14 +167,17 @@ export default function VuelosView({ flights: _flights, boletos, onAddBoleto, on
             onUpdateBoleto(updated);
           }}
           onShowVoucher={handleOpenVoucher}
+          jurisdiction={jur}
+          currentExchangeRate={currentExchangeRate}
         />
       )}
 
       {/* MODAL DE VOUCHER DE VUELO */}
       {showVoucherModal && activeVoucherBoleto && (
-        <FlightVoucherModal 
-          boleto={activeVoucherBoleto} 
-          onClose={() => setShowVoucherModal(false)} 
+        <FlightVoucherModal
+          boleto={activeVoucherBoleto}
+          onClose={() => setShowVoucherModal(false)}
+          companyConfig={companyConfig}
         />
       )}
     </div>
@@ -188,6 +197,8 @@ function ListadoView({
   onToggleVinculo,
   onEliminar,
   onShowVoucher,
+  jurisdiction,
+  currentExchangeRate,
 }: {
   boletos: FlightTicket[];
   search: string;
@@ -197,7 +208,10 @@ function ListadoView({
   onToggleVinculo: (id: string) => void;
   onEliminar: (id: string) => void;
   onShowVoucher: (boleto: FlightTicket) => void;
+  jurisdiction?: TaxJurisdiction;
+  currentExchangeRate?: number;
 }) {
+  const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const [activeTab, setActiveTab] = useState<"Activos" | "Anulados">("Activos");
 
   const filtered = boletos.filter((b) => {
@@ -358,7 +372,7 @@ function ListadoView({
                 {/* Precio venta */}
                 <div className="col-span-1">
                   <span className="text-xs font-bold text-zinc-900">
-                    ${(boleto.precioVenta || 0).toLocaleString("es-VE")}
+                    {formatDualCurrency(boleto.precioVenta || 0, jur, currentExchangeRate)}
                   </span>
                 </div>
 
@@ -1333,13 +1347,18 @@ function ExpedienteAereoView({
   onBack,
   onUpdateBoleto,
   onShowVoucher,
+  jurisdiction,
+  currentExchangeRate,
 }: {
   boleto: FlightTicket;
   clients: B2BClient[];
   onBack: () => void;
   onUpdateBoleto: (boleto: FlightTicket) => void;
   onShowVoucher: (boleto: FlightTicket) => void;
+  jurisdiction?: TaxJurisdiction;
+  currentExchangeRate?: number;
 }) {
+  const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const { showAlert, showConfirm } = useDialog();
   // Inicializamos el expediente aéreo si no existe
   const [expediente, setExpediente] = useState(
@@ -1537,32 +1556,32 @@ function ExpedienteAereoView({
               <div className="pt-4 border-t border-zinc-200 space-y-1.5">
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Costo Neto</span>
-                  <span className="text-xs font-bold text-zinc-700">${boleto.costoNeto.toLocaleString()}</span>
+                  <span className="text-xs font-bold text-zinc-700">{formatCurrency(boleto.costoNeto, "USD")}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Precio Venta (PVP)</span>
-                  <span className="text-xs font-bold text-zinc-700">${(boleto.precioPvp || boleto.precioVenta).toLocaleString()}</span>
+                  <span className="text-xs font-bold text-zinc-700">{formatCurrency(boleto.precioPvp || boleto.precioVenta, "USD")}</span>
                 </div>
                 {boleto.comisionB2B !== undefined && boleto.comisionB2B > 0 && (
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Comisión B2B</span>
-                    <span className="text-xs font-bold text-amber-600">-{boleto.comisionB2B}% (${((boleto.precioPvp || 0) - boleto.precioVenta).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+                    <span className="text-xs font-bold text-amber-600">-{boleto.comisionB2B}% ({formatCurrency((boleto.precioPvp || 0) - boleto.precioVenta, "USD")})</span>
                   </div>
                 )}
                 {boleto.comisionMayorista !== undefined && boleto.comisionMayorista > 0 && (
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Comisión Foratour</span>
-                    <span className="text-xs font-bold text-amber-600">-{boleto.comisionMayorista}% (${(boleto.precioVenta - boleto.costoNeto).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+                    <span className="text-xs font-bold text-amber-600">-{boleto.comisionMayorista}% ({formatCurrency(boleto.precioVenta - boleto.costoNeto, "USD")})</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center pt-1 border-t border-zinc-100">
                   <span className="text-[10px] text-zinc-800 font-bold uppercase tracking-wider">Neto B2B a Cobrar</span>
-                  <span className="text-sm font-black text-zinc-900">${boleto.precioVenta.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-sm font-black text-zinc-900">{formatDualCurrency(boleto.precioVenta, jur, currentExchangeRate)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Ganancia Foratour</span>
                   <span className="text-xs font-bold text-emerald-600">
-                    +${(boleto.precioVenta - boleto.costoNeto).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    +{formatCurrency(boleto.precioVenta - boleto.costoNeto, "USD")}
                   </span>
                 </div>
               </div>
@@ -1927,10 +1946,12 @@ function EmptyState({ onNuevo }: { onNuevo: () => void }) {
 // ─── MODAL VOUCHER AÉREO ────────────────────────────────────────────────────────
 function FlightVoucherModal({
   boleto,
-  onClose
+  onClose,
+  companyConfig
 }: {
   boleto: FlightTicket;
   onClose: () => void;
+  companyConfig: CompanyConfig;
 }) {
   return (
     <>

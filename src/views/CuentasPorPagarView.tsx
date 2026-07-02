@@ -1,37 +1,46 @@
 import React, { useState, useMemo } from "react";
 import { PayableObligation, ProviderStatement } from "../types";
-import { 
-  TrendingDown, 
-  Clock, 
-  CheckCircle2, 
-  Search, 
-  Filter, 
-  DollarSign, 
-  X, 
-  ChevronRight, 
-  FileText, 
-  BookOpen, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
+import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
+import {
+  TrendingDown,
+  Clock,
+  CheckCircle2,
+  Search,
+  Filter,
+  DollarSign,
+  X,
+  ChevronRight,
+  FileText,
+  BookOpen,
+  ArrowUpRight,
+  ArrowDownLeft,
   AlertTriangle,
   UploadCloud,
-  Check
+  Check,
+  Plus
 } from "lucide-react";
 import { useDialog } from "../components/ui/DialogProvider";
 
 interface CuentasPorPagarViewProps {
   obligations: PayableObligation[];
   onUpdateObligation: (updated: PayableObligation) => void;
+  onAddObligation?: (o: PayableObligation) => void;
   statements: ProviderStatement[];
   onAddStatement: (newDoc: ProviderStatement) => void;
+  jurisdiction?: TaxJurisdiction;
+  currentExchangeRate?: number;
 }
 
-export default function CuentasPorPagarView({ 
-  obligations, 
+export default function CuentasPorPagarView({
+  obligations,
   onUpdateObligation,
+  onAddObligation,
   statements,
-  onAddStatement
+  onAddStatement,
+  jurisdiction,
+  currentExchangeRate,
 }: CuentasPorPagarViewProps) {
+  const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const { showAlert } = useDialog();
   // Navigation inside view: "obligaciones" (Bandeja) or "proveedores" (Estados de Cuenta)
   const [activeTab, setActiveTab] = useState<"obligaciones" | "proveedores" | "pagadas">("obligaciones");
@@ -55,6 +64,60 @@ export default function CuentasPorPagarView({
     notes: "",
     attachedFile: ""
   });
+
+  // Nueva obligación manual
+  const [showNewObligationForm, setShowNewObligationForm] = useState(false);
+  const [newObligationForm, setNewObligationForm] = useState({
+    providerName: "",
+    serviceDetail: "",
+    locatorId: "",
+    dueDate: new Date().toISOString().slice(0, 10),
+    date: new Date().toISOString().slice(0, 10),
+    netCost: "",
+    currency: "USD",
+    paymentMethod: "Transferencia Bancaria",
+    notes: "",
+    isExempt: false,
+    vatWithheldPct: "",
+  });
+
+  const handleSubmitNewObligation = () => {
+    const cost = parseFloat(newObligationForm.netCost);
+    if (!newObligationForm.providerName.trim() || !newObligationForm.serviceDetail.trim() || isNaN(cost) || cost <= 0) {
+      alert("Complete proveedor, concepto y monto válido.");
+      return;
+    }
+    if (!onAddObligation) return;
+
+    // Compute fiscal fields
+    const vatRate = (!newObligationForm.isExempt && jur.taxRate > 0) ? jur.taxRate : 0;
+    const vatAmt = vatRate > 0 ? parseFloat((cost * vatRate).toFixed(2)) : undefined;
+    const withholdPct = (!newObligationForm.isExempt && jur.hasWithholding && newObligationForm.vatWithheldPct)
+      ? parseFloat(newObligationForm.vatWithheldPct) : 0;
+    const vatWithheld = (vatAmt && withholdPct > 0) ? parseFloat((vatAmt * withholdPct / 100).toFixed(2)) : undefined;
+
+    const newObl: PayableObligation = {
+      id: `OBL-M-${Math.floor(10000 + Math.random() * 90000)}`,
+      dueDate: newObligationForm.dueDate,
+      date: newObligationForm.date,
+      providerName: newObligationForm.providerName.trim(),
+      serviceDetail: newObligationForm.serviceDetail.trim(),
+      locatorId: newObligationForm.locatorId.trim() || "-",
+      netCost: cost,
+      paidAmount: 0,
+      status: "Pendiente",
+      paymentMethod: newObligationForm.paymentMethod,
+      currency: newObligationForm.currency,
+      notes: newObligationForm.notes.trim() || undefined,
+      isExempt: newObligationForm.isExempt || undefined,
+      vatAmount: vatAmt,
+      vatWithheldPct: withholdPct || undefined,
+      vatWithheld,
+    };
+    onAddObligation(newObl);
+    setShowNewObligationForm(false);
+    setNewObligationForm({ providerName: "", serviceDetail: "", locatorId: "", dueDate: new Date().toISOString().slice(0, 10), date: new Date().toISOString().slice(0, 10), netCost: "", currency: "USD", paymentMethod: "Transferencia Bancaria", notes: "", isExempt: false, vatWithheldPct: "" });
+  };
 
   // Frozen obligation resolution modal
   const [resolveObligation, setResolveObligation] = useState<PayableObligation | null>(null);
@@ -188,14 +251,16 @@ export default function CuentasPorPagarView({
   }, [activeProviderStatements]);
 
   // ─── HANDLERS ──────────────────────────────────────────────────────────────
+  const calcTotalToPay = (ob: PayableObligation) =>
+    ob.netCost + (ob.vatAmount ?? 0) - (ob.vatWithheld ?? 0);
+
   const handleOpenPaymentDrawer = (obligation: PayableObligation) => {
     setActiveObligationForPayment(obligation);
-    // Auto-fill form with remaining unpaid net cost
-    const remaining = obligation.netCost - obligation.paidAmount;
+    const remaining = calcTotalToPay(obligation) - obligation.paidAmount;
     setPaymentForm({
       method: "Transferencia Bancaria",
       currency: obligation.currency || "USD",
-      amount: remaining.toFixed(2),
+      amount: Math.max(0, remaining).toFixed(2),
       reference: "",
       notes: "",
       attachedFile: ""
@@ -207,7 +272,8 @@ export default function CuentasPorPagarView({
     if (!activeObligationForPayment) return;
 
     const payVal = parseFloat(paymentForm.amount) || 0;
-    const remaining = activeObligationForPayment.netCost - activeObligationForPayment.paidAmount;
+    const totalToPay = calcTotalToPay(activeObligationForPayment);
+    const remaining = totalToPay - activeObligationForPayment.paidAmount;
 
     if (payVal <= 0) {
       showAlert({ title: "Monto inválido", message: "Por favor, ingrese un monto de liquidación válido.", type: "warning" });
@@ -215,13 +281,13 @@ export default function CuentasPorPagarView({
     }
 
     if (payVal > remaining + 0.01) {
-      showAlert({ title: "Monto excedido", message: `Monto excedido. El saldo pendiente de esta obligación es $${remaining.toFixed(2)} USD.`, type: "danger" });
+      showAlert({ title: "Monto excedido", message: `Monto excedido. El saldo pendiente de esta obligación es ${formatCurrency(remaining, activeObligationForPayment.currency || "USD")}.`, type: "danger" });
       return;
     }
 
     const nextPaid = activeObligationForPayment.paidAmount + payVal;
     let nextStatus: PayableObligation["status"] = "Pagado Parcial";
-    if (Math.abs(activeObligationForPayment.netCost - nextPaid) < 0.05) {
+    if (Math.abs(totalToPay - nextPaid) < 0.05) {
       nextStatus = "Pagado Total";
     }
 
@@ -254,7 +320,8 @@ export default function CuentasPorPagarView({
     if (nextStatus === "Pagado Total") {
       triggerNotification(`✓ ¡Pago total registrado con éxito! Obligación ${updated.id} saldada por completo.`);
     } else {
-      triggerNotification(`✓ Pago parcial de $${payVal.toLocaleString("es-ES")} USD registrado. Saldo restante: $${(updated.netCost - updated.paidAmount).toLocaleString("es-ES")} USD.`);
+      const saldoRestante = calcTotalToPay(updated) - updated.paidAmount;
+      triggerNotification(`✓ Pago parcial de ${formatCurrency(payVal, updated.currency || "USD")} registrado. Saldo restante: ${formatCurrency(Math.max(0, saldoRestante), updated.currency || "USD")}.`);
     }
   };
 
@@ -283,7 +350,16 @@ export default function CuentasPorPagarView({
         </div>
 
         {/* View Selection Buttons */}
-        <div className="bg-zinc-100 p-1 rounded-md flex items-center border border-zinc-200 self-start lg:self-auto">
+        <div className="flex items-center gap-3 self-start lg:self-auto flex-wrap">
+        {onAddObligation && (
+          <button
+            onClick={() => setShowNewObligationForm(true)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-zinc-900 text-white rounded text-xs font-bold hover:bg-zinc-700 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Nueva Obligación
+          </button>
+        )}
+        <div className="bg-zinc-100 p-1 rounded-md flex items-center border border-zinc-200">
           <button
             onClick={() => setActiveTab("obligaciones")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-bold transition-all cursor-pointer ${
@@ -310,14 +386,15 @@ export default function CuentasPorPagarView({
           <button
             onClick={() => setActiveTab("proveedores")}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "proveedores" 
-                ? "bg-zinc-950 text-white" 
+              activeTab === "proveedores"
+                ? "bg-zinc-950 text-white"
                 : "text-zinc-500 hover:text-zinc-800"
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
             Estados de Cuenta
           </button>
+        </div>
         </div>
       </div>
 
@@ -328,7 +405,7 @@ export default function CuentasPorPagarView({
         <div className="bg-white p-5 rounded border border-zinc-200 flex items-center justify-between shadow-3xs">
           <div className="space-y-1.5">
             <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400 block">Deuda Total Activa</span>
-            <h3 className="font-extrabold text-2xl text-zinc-900 mt-1">${activeDebt.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</h3>
+            <h3 className="font-extrabold text-2xl text-zinc-900 mt-1">{formatDualCurrency(activeDebt, jur, currentExchangeRate)}</h3>
             <span className="text-[10px] text-red-600 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded font-bold inline-flex items-center gap-1">
               <AlertTriangle className="w-3 h-3 text-red-500" /> Costos netos acumulados
             </span>
@@ -342,7 +419,7 @@ export default function CuentasPorPagarView({
         <div className="bg-white p-5 rounded border border-zinc-200 flex items-center justify-between shadow-3xs">
           <div className="space-y-1.5">
             <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400 block">Vencimientos de la Semana</span>
-            <h3 className="font-extrabold text-2xl text-zinc-900 mt-1">${weeklyDue.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</h3>
+            <h3 className="font-extrabold text-2xl text-zinc-900 mt-1">{formatDualCurrency(weeklyDue, jur, currentExchangeRate)}</h3>
             <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded font-bold inline-flex items-center gap-1">
               <Clock className="w-3 h-3 text-amber-600" /> Próximos 7 días
             </span>
@@ -356,7 +433,7 @@ export default function CuentasPorPagarView({
         <div className="bg-white p-5 rounded border border-zinc-200 flex items-center justify-between shadow-3xs">
           <div className="space-y-1.5">
             <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400 block">Pagos Emitidos este Mes</span>
-            <h3 className="font-extrabold text-2xl text-zinc-900 mt-1">${processedPayments.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</h3>
+            <h3 className="font-extrabold text-2xl text-zinc-900 mt-1">{formatDualCurrency(processedPayments, jur, currentExchangeRate)}</h3>
             <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-250 px-2.5 py-0.5 rounded font-bold inline-flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3 text-emerald-650" /> Egresos conciliados
             </span>
@@ -446,6 +523,19 @@ export default function CuentasPorPagarView({
                           <td className="p-4 text-zinc-500 max-w-[220px]">
                             <div>
                               <p className={`font-semibold ${(ob.isFrozen || ob.status === "Congelado") ? "text-zinc-400 line-through" : "text-zinc-800"}`}>{ob.serviceDetail}</p>
+                              {ob.isExempt && (
+                                <span className="inline-flex items-center gap-1 mt-1 text-[8.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border bg-green-50 text-green-700 border-green-200">
+                                  Exento {jur.taxName}
+                                </span>
+                              )}
+                              {!ob.isExempt && ob.vatAmount != null && ob.vatAmount > 0 && (
+                                <div className="mt-1 text-[9px] font-mono text-zinc-500 space-y-0.5">
+                                  <span className="block">{jur.taxName}: {formatCurrency(ob.vatAmount, ob.currency || "USD")}</span>
+                                  {ob.vatWithheld != null && ob.vatWithheld > 0 && (
+                                    <span className="block text-red-600">Ret. {ob.vatWithheldPct}%: -{formatCurrency(ob.vatWithheld, ob.currency || "USD")}</span>
+                                  )}
+                                </div>
+                              )}
                               {(ob.isFrozen || ob.status === "Congelado") && (
                                 <div className="mt-2 bg-amber-50 border border-amber-250 rounded p-2 text-left space-y-1">
                                   <p className="text-[10px] text-amber-800 font-bold leading-tight flex items-center gap-1">
@@ -467,13 +557,13 @@ export default function CuentasPorPagarView({
                             </div>
                           </td>
                           <td className="p-4 text-right font-bold text-zinc-900">
-                            ${ob.netCost.toLocaleString("es-ES", { minimumFractionDigits: 2 })} {ob.currency || "USD"}
+                            {formatCurrency(ob.netCost, ob.currency || "USD")}
                           </td>
                           <td className="p-4 text-right font-bold text-emerald-700">
-                            ${ob.paidAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                            {formatCurrency(ob.paidAmount, ob.currency || "USD")}
                           </td>
                           <td className={`p-4 text-right font-black font-mono ${remaining > 0 ? "text-red-650" : remaining < 0 ? "text-emerald-700" : "text-zinc-400"}`}>
-                            ${remaining.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                            {remaining < 0 ? "-" : ""}{formatCurrency(Math.abs(remaining), ob.currency || "USD")}
                           </td>
                           <td className="p-4 text-center font-mono text-[10.5px] text-zinc-650">
                             {formatDate(ob.dueDate)}
@@ -603,27 +693,27 @@ export default function CuentasPorPagarView({
                 <div className="bg-zinc-50 p-3.5 rounded-md border border-zinc-200 text-left">
                   <span className="text-[9px] text-zinc-450 uppercase font-bold tracking-wider block">Total Facturas Recibidas</span>
                   <p className="font-black text-zinc-900 text-base mt-1 font-mono">
-                    ${activeProviderStatements
-                      .filter(s => s.type === "Factura Recibida")
-                      .reduce((sum, s) => sum + s.amount, 0)
-                      .toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                    {formatDualCurrency(
+                      activeProviderStatements.filter(s => s.type === "Factura Recibida").reduce((sum, s) => sum + s.amount, 0),
+                      jur, currentExchangeRate
+                    )}
                   </p>
                 </div>
-                
+
                 <div className="bg-zinc-50 p-3.5 rounded-md border border-zinc-200 text-left">
                   <span className="text-[9px] text-zinc-450 uppercase font-bold tracking-wider block">Total Pagos Emitidos</span>
                   <p className="font-bold text-emerald-700 text-base mt-1 font-mono">
-                    -${activeProviderStatements
-                      .filter(s => s.type === "Pago Emitido")
-                      .reduce((sum, s) => sum + s.amount, 0)
-                      .toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                    -{formatDualCurrency(
+                      activeProviderStatements.filter(s => s.type === "Pago Emitido").reduce((sum, s) => sum + s.amount, 0),
+                      jur, currentExchangeRate
+                    )}
                   </p>
                 </div>
 
                 <div className="bg-zinc-50 p-3.5 rounded-md border border-zinc-200 text-left">
                   <span className="text-[9px] text-zinc-450 uppercase font-bold tracking-wider block">Balance Neto Pendiente</span>
                   <p className={`font-black text-base mt-1 font-mono ${providerBalance > 0 ? "text-red-650" : "text-emerald-700"}`}>
-                    ${providerBalance.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                    {formatDualCurrency(providerBalance, jur, currentExchangeRate)}
                   </p>
                 </div>
               </div>
@@ -731,23 +821,52 @@ export default function CuentasPorPagarView({
                   <span className="font-mono">{activeObligationForPayment.locatorId}</span>
                 </div>
                 <p className="text-zinc-650 font-semibold">{activeObligationForPayment.serviceDetail}</p>
-                <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
-                  <div>Costo Neto: <span className="font-bold text-zinc-900">${activeObligationForPayment.netCost.toFixed(2)}</span></div>
-                  <div>Abonado: <span className="font-bold text-emerald-700">${activeObligationForPayment.paidAmount.toFixed(2)}</span></div>
+                {activeObligationForPayment.isExempt && (
+                  <span className="inline-flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border bg-green-50 text-green-700 border-green-200">
+                    Exento {jur.taxName}
+                  </span>
+                )}
+                <div className="pt-1 font-mono space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Costo base:</span>
+                    <span className="font-bold text-zinc-900">{formatCurrency(activeObligationForPayment.netCost, activeObligationForPayment.currency || "USD")}</span>
+                  </div>
+                  {activeObligationForPayment.vatAmount != null && activeObligationForPayment.vatAmount > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">{jur.taxName}:</span>
+                      <span className="font-bold text-zinc-700">+{formatCurrency(activeObligationForPayment.vatAmount, activeObligationForPayment.currency || "USD")}</span>
+                    </div>
+                  )}
+                  {activeObligationForPayment.vatWithheld != null && activeObligationForPayment.vatWithheld > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">Retención {activeObligationForPayment.vatWithheldPct}%:</span>
+                      <span className="font-bold text-red-600">-{formatCurrency(activeObligationForPayment.vatWithheld, activeObligationForPayment.currency || "USD")}</span>
+                    </div>
+                  )}
+                  {(activeObligationForPayment.vatAmount ?? 0) > 0 && (
+                    <div className="flex justify-between border-t border-zinc-100 pt-1">
+                      <span className="text-zinc-600 font-semibold">Total a pagar:</span>
+                      <span className="font-bold text-zinc-900">{formatCurrency(calcTotalToPay(activeObligationForPayment), activeObligationForPayment.currency || "USD")}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Ya abonado:</span>
+                    <span className="font-bold text-emerald-700">{formatCurrency(activeObligationForPayment.paidAmount, activeObligationForPayment.currency || "USD")}</span>
+                  </div>
                 </div>
               </div>
 
               <div className="flex justify-between items-center bg-red-50 border border-red-200 text-red-750 px-3.5 py-2.5 rounded">
-                <span className="text-[10px] font-bold uppercase tracking-wider">Saldo Neto Pendiente</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider">Saldo Pendiente</span>
                 <span className="text-sm font-black font-mono">
-                  ${(activeObligationForPayment.netCost - activeObligationForPayment.paidAmount).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                  {formatCurrency(Math.max(0, calcTotalToPay(activeObligationForPayment) - activeObligationForPayment.paidAmount), activeObligationForPayment.currency || "USD")}
                 </span>
               </div>
             </div>
 
             {/* Payment Registration Form */}
             <form onSubmit={handleRegisterPaymentSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
-              
+
               {/* Method */}
               <div className="space-y-1 text-left">
                 <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Método de Egreso</label>
@@ -762,6 +881,118 @@ export default function CuentasPorPagarView({
                   <option value="Cheque Corporativo">Cheque Corporativo</option>
                 </select>
               </div>
+
+              {/* ── Sección fiscal ── */}
+              {jur.taxRate > 0 && (
+                <div className="border border-zinc-200 rounded-lg p-3 space-y-3 bg-zinc-50 text-left">
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Tratamiento Fiscal del Proveedor</span>
+
+                  {/* Checkbox exento */}
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={activeObligationForPayment.isExempt ?? false}
+                      onChange={e => {
+                        const isExempt = e.target.checked;
+                        const vatAmount = isExempt
+                          ? undefined
+                          : parseFloat((activeObligationForPayment.netCost * jur.taxRate).toFixed(2));
+                        const updated: PayableObligation = {
+                          ...activeObligationForPayment,
+                          isExempt: isExempt || undefined,
+                          vatAmount,
+                          vatWithheldPct: isExempt ? undefined : activeObligationForPayment.vatWithheldPct,
+                          vatWithheld: isExempt ? undefined : activeObligationForPayment.vatWithheld,
+                        };
+                        setActiveObligationForPayment(updated);
+                        setPaymentForm(prev => ({
+                          ...prev,
+                          amount: Math.max(0, calcTotalToPay(updated) - updated.paidAmount).toFixed(2),
+                        }));
+                      }}
+                      className="w-4 h-4 rounded border-gray-300 accent-zinc-800 cursor-pointer"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-zinc-800 block">Exento de {jur.taxName}</span>
+                      <span className="text-[10px] text-zinc-500">No aplica retención fiscal</span>
+                    </div>
+                  </label>
+
+                  {/* Campos IVA cuando no es exento */}
+                  {!activeObligationForPayment.isExempt && (() => {
+                    const vatAmt = activeObligationForPayment.vatAmount
+                      ?? parseFloat((activeObligationForPayment.netCost * jur.taxRate).toFixed(2));
+                    const pct = activeObligationForPayment.vatWithheldPct ?? 0;
+                    const withheld = parseFloat((vatAmt * pct / 100).toFixed(2));
+                    const cur = activeObligationForPayment.currency || "USD";
+                    return (
+                      <div className="space-y-3 pt-2 border-t border-zinc-200">
+                        {jur.hasWithholding && (
+                          <div>
+                            <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                              % Retención {jur.taxName}
+                            </label>
+                            <select
+                              value={pct > 0 ? String(pct) : ""}
+                              onChange={e => {
+                                const newPct = parseFloat(e.target.value) || 0;
+                                const computedVat = parseFloat((activeObligationForPayment.netCost * jur.taxRate).toFixed(2));
+                                const newVatAmt = activeObligationForPayment.vatAmount ?? computedVat;
+                                const newWithheld = parseFloat((newVatAmt * newPct / 100).toFixed(2));
+                                const updated: PayableObligation = {
+                                  ...activeObligationForPayment,
+                                  vatAmount: newVatAmt,
+                                  vatWithheldPct: newPct || undefined,
+                                  vatWithheld: newWithheld || undefined,
+                                };
+                                setActiveObligationForPayment(updated);
+                                setPaymentForm(prev => ({
+                                  ...prev,
+                                  amount: Math.max(0, calcTotalToPay(updated) - updated.paidAmount).toFixed(2),
+                                }));
+                              }}
+                              className="w-full text-xs border border-zinc-200 rounded px-3 py-2 bg-white focus:outline-none"
+                            >
+                              <option value="">Sin retención</option>
+                              {(jur.vatWithholdingOptions ?? []).map(opt => (
+                                <option key={opt} value={String(opt)}>{opt}%</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {/* Resumen fiscal */}
+                        <div className="bg-white border border-zinc-200 rounded p-2.5 text-[10.5px] font-mono space-y-1">
+                          <div className="flex justify-between text-zinc-600">
+                            <span>Costo base:</span>
+                            <span>{formatCurrency(activeObligationForPayment.netCost, cur)}</span>
+                          </div>
+                          <div className="flex justify-between text-zinc-600">
+                            <span>{jur.taxName} ({(jur.taxRate * 100).toFixed(0)}%):</span>
+                            <span>+{formatCurrency(vatAmt, cur)}</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-zinc-800 border-t border-zinc-100 pt-1">
+                            <span>Total Factura:</span>
+                            <span>{formatCurrency(activeObligationForPayment.netCost + vatAmt, cur)}</span>
+                          </div>
+                          {withheld > 0 && (
+                            <>
+                              <div className="flex justify-between text-red-600">
+                                <span>Retención {pct}%:</span>
+                                <span>-{formatCurrency(withheld, cur)}</span>
+                              </div>
+                              <div className="flex justify-between font-black text-zinc-900 border-t border-zinc-100 pt-1">
+                                <span>A Pagar al Proveedor:</span>
+                                <span>{formatCurrency(activeObligationForPayment.netCost + vatAmt - withheld, cur)}</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Currency & Amount row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
@@ -984,6 +1215,227 @@ export default function CuentasPorPagarView({
           </div>
         );
       })()}
+
+      {/* ── MODAL: NUEVA OBLIGACIÓN MANUAL ─────────────────────────────── */}
+      {showNewObligationForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl border border-zinc-200 shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100">
+              <div>
+                <h3 className="text-sm font-black text-zinc-900 uppercase tracking-wide">Nueva Obligación</h3>
+                <p className="text-[10px] text-zinc-400 mt-0.5">Registra una factura de proveedor o gasto a pagar</p>
+              </div>
+              <button onClick={() => setShowNewObligationForm(false)} className="p-1.5 rounded hover:bg-zinc-100">
+                <X className="w-4 h-4 text-zinc-500" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">Proveedor *</label>
+                  <input
+                    type="text"
+                    value={newObligationForm.providerName}
+                    onChange={e => setNewObligationForm(p => ({ ...p, providerName: e.target.value }))}
+                    placeholder="Nombre del proveedor"
+                    className="w-full text-xs border border-zinc-200 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">Concepto / Descripción *</label>
+                  <input
+                    type="text"
+                    value={newObligationForm.serviceDetail}
+                    onChange={e => setNewObligationForm(p => ({ ...p, serviceDetail: e.target.value }))}
+                    placeholder="Ej: Alquiler oficina Enero, Factura #001234"
+                    className="w-full text-xs border border-zinc-200 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">Fecha Factura</label>
+                  <input
+                    type="date"
+                    value={newObligationForm.date}
+                    onChange={e => setNewObligationForm(p => ({ ...p, date: e.target.value }))}
+                    className="w-full text-xs border border-zinc-200 rounded px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">Fecha Vencimiento</label>
+                  <input
+                    type="date"
+                    value={newObligationForm.dueDate}
+                    onChange={e => setNewObligationForm(p => ({ ...p, dueDate: e.target.value }))}
+                    className="w-full text-xs border border-zinc-200 rounded px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">Monto Neto *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newObligationForm.netCost}
+                    onChange={e => setNewObligationForm(p => ({ ...p, netCost: e.target.value }))}
+                    placeholder="0.00"
+                    className="w-full text-xs border border-zinc-200 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">Moneda</label>
+                  <select
+                    value={newObligationForm.currency}
+                    onChange={e => setNewObligationForm(p => ({ ...p, currency: e.target.value }))}
+                    className="w-full text-xs border border-zinc-200 rounded px-3 py-2"
+                  >
+                    <option>USD</option>
+                    <option>EUR</option>
+                    <option>VES</option>
+                    <option>COP</option>
+                    <option>MXN</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">Método de Pago</label>
+                  <select
+                    value={newObligationForm.paymentMethod}
+                    onChange={e => setNewObligationForm(p => ({ ...p, paymentMethod: e.target.value }))}
+                    className="w-full text-xs border border-zinc-200 rounded px-3 py-2"
+                  >
+                    <option>Transferencia Bancaria</option>
+                    <option>Zelle</option>
+                    <option>Efectivo USD</option>
+                    <option>Pago Móvil</option>
+                    <option>Tarjeta de Crédito</option>
+                    <option>Cheque</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">Referencia / Localizador</label>
+                  <input
+                    type="text"
+                    value={newObligationForm.locatorId}
+                    onChange={e => setNewObligationForm(p => ({ ...p, locatorId: e.target.value }))}
+                    placeholder="Nº factura, referencia..."
+                    className="w-full text-xs border border-zinc-200 rounded px-3 py-2"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">Notas</label>
+                  <input
+                    type="text"
+                    value={newObligationForm.notes}
+                    onChange={e => setNewObligationForm(p => ({ ...p, notes: e.target.value }))}
+                    placeholder="Notas internas opcionales"
+                    className="w-full text-xs border border-zinc-200 rounded px-3 py-2"
+                  />
+                </div>
+
+                {/* ── Sección fiscal IVA proveedor ──────────────────────────── */}
+                {jur.taxRate > 0 && (
+                  <div className="col-span-2 border border-zinc-200 rounded-lg p-3 space-y-3 bg-zinc-50">
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={newObligationForm.isExempt}
+                        onChange={e => setNewObligationForm(p => ({ ...p, isExempt: e.target.checked }))}
+                        className="w-4 h-4 rounded border-gray-300 accent-zinc-800 cursor-pointer"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-zinc-800 block">Proveedor exento de {jur.taxName}</span>
+                        <span className="text-[10px] text-zinc-500">No genera retención fiscal</span>
+                      </div>
+                    </label>
+
+                    {!newObligationForm.isExempt && (() => {
+                      const base = parseFloat(newObligationForm.netCost || "0");
+                      const vat = parseFloat((base * jur.taxRate).toFixed(2));
+                      const total = base + vat;
+                      const pct = parseFloat(newObligationForm.vatWithheldPct) || 0;
+                      const withheld = parseFloat((vat * pct / 100).toFixed(2));
+                      const toPay = total - withheld;
+                      return (
+                        <>
+                          <div className={`grid gap-3 pt-2 border-t border-zinc-200 ${jur.hasWithholding ? "grid-cols-2" : "grid-cols-1"}`}>
+                            <div>
+                              <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">
+                                {jur.taxName} ({(jur.taxRate * 100).toFixed(0)}%)
+                              </label>
+                              <div className="text-xs font-mono font-bold text-zinc-700 bg-white border border-zinc-200 rounded px-3 py-2">
+                                {base > 0 ? formatCurrency(vat, newObligationForm.currency) : "—"}
+                              </div>
+                            </div>
+                            {jur.hasWithholding && (
+                              <div>
+                                <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">
+                                  % Retención {jur.taxName}
+                                </label>
+                                <select
+                                  value={newObligationForm.vatWithheldPct}
+                                  onChange={e => setNewObligationForm(p => ({ ...p, vatWithheldPct: e.target.value }))}
+                                  className="w-full text-xs border border-zinc-200 rounded px-3 py-2 bg-white"
+                                >
+                                  <option value="">Sin retención</option>
+                                  {(jur.vatWithholdingOptions ?? []).map(opt => (
+                                    <option key={opt} value={String(opt)}>{opt}%</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+
+                          {base > 0 && (
+                            <div className="bg-white border border-zinc-200 rounded p-2.5 text-[10.5px] font-mono space-y-1">
+                              <div className="flex justify-between text-zinc-600">
+                                <span>Subtotal:</span>
+                                <span>{formatCurrency(base, newObligationForm.currency)}</span>
+                              </div>
+                              <div className="flex justify-between text-zinc-600">
+                                <span>{jur.taxName} ({(jur.taxRate * 100).toFixed(0)}%):</span>
+                                <span>+{formatCurrency(vat, newObligationForm.currency)}</span>
+                              </div>
+                              <div className="flex justify-between font-bold text-zinc-800 border-t border-zinc-100 pt-1">
+                                <span>Total Factura Proveedor:</span>
+                                <span>{formatCurrency(total, newObligationForm.currency)}</span>
+                              </div>
+                              {withheld > 0 && (
+                                <>
+                                  <div className="flex justify-between text-red-600">
+                                    <span>Retención {pct}%:</span>
+                                    <span>-{formatCurrency(withheld, newObligationForm.currency)}</span>
+                                  </div>
+                                  <div className="flex justify-between font-black text-zinc-900 border-t border-zinc-100 pt-1">
+                                    <span>A Pagar al Proveedor:</span>
+                                    <span>{formatCurrency(toPay, newObligationForm.currency)}</span>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-zinc-100">
+              <button
+                onClick={() => setShowNewObligationForm(false)}
+                className="px-4 py-2 border border-zinc-200 text-zinc-600 rounded text-xs font-bold uppercase tracking-wider hover:bg-zinc-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSubmitNewObligation}
+                className="flex items-center gap-1.5 px-5 py-2 bg-zinc-900 text-white rounded text-xs font-bold uppercase tracking-wider hover:bg-zinc-700"
+              >
+                <Plus className="w-3.5 h-3.5" /> Registrar Obligación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

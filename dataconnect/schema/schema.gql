@@ -139,6 +139,18 @@ type FinancialInvoice @table {
   vatAmount: Float!
   type: String!
   status: String!
+  # Fiscal fields (multi-country)
+  taxableBase: Float
+  surchargeAmount: Float
+  vatWithheld: Float
+  incomeTaxWithheld: Float
+  exchangeRate: Float
+  localCurrencyAmount: Float
+  fiscalDocNumber: String
+  isExempt: Boolean
+  paymentMethod: String
+  clientId: String
+  reservationId: String
   updatedAt: String
 }
 
@@ -157,6 +169,11 @@ type B2BClient @table {
   limiteCredito: Float
   diasCredito: Int
   observaciones: String
+  # Fiscal profile (multi-country)
+  isWithheldClient: Boolean
+  vatWithholdingPct: Float
+  incomeTaxWithholdingPct: Float
+  isInExemptZone: Boolean
   # Legacy columns to prevent deploy destructive block
   balance: Float
   tier: String
@@ -303,5 +320,68 @@ type Proveedor @table {
   datosBancarios: String!
   status: String!
   notas: String
+  updatedAt: String
+}
+
+# ── Multi-country accounting module ──────────────────────────────────────────
+
+type TaxJurisdiction @table {
+  id: String! @col(dataType: "varchar(50)")
+  country: String!
+  taxName: String!
+  taxRate: Float!
+  reducedTaxRate: Float!
+  taxIdLabel: String!
+  fiscalDocLabel: String!
+  localCurrency: String!
+  exchangeRateLabel: String!
+  hasSurcharge: Boolean!
+  surchargeName: String
+  surchargeRate: Float
+  surchargePaymentMethods: String
+  hasWithholding: Boolean!
+  withholdingLabel: String
+  vatWithholdingOptions: String
+  incomeTaxWithholdingOptions: String
+  incomeTaxWithholdingLabel: String
+  hasExemptZone: Boolean!
+  exemptZoneLabel: String
+  updatedAt: String
+}
+
+type ExchangeRate @table {
+  id: String! @col(dataType: "varchar(50)")
+  date: String!
+  fromCurrency: String!
+  toCurrency: String!
+  rate: Float!
+  source: String!
+  updatedAt: String
+}
+
+type WithholdingCertificate @table {
+  id: String! @col(dataType: "varchar(50)")
+  number: String!
+  clientId: String!
+  clientTaxId: String!
+  clientName: String!
+  type: String!
+  percentage: Float!
+  taxableBase: Float!
+  amountWithheld: Float!
+  date: String!
+  period: String!
+  invoiceId: String
+  updatedAt: String
+}
+
+type JournalEntry @table {
+  id: String! @col(dataType: "varchar(50)")
+  date: String!
+  description: String!
+  type: String!
+  reference: String!
+  exchangeRate: Float!
+  lines: String!
   updatedAt: String
 }
