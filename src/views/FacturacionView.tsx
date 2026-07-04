@@ -769,9 +769,11 @@ export default function FacturacionView({
           expedienteAereo: { ...boleto.expedienteAereo, status: "Facturado" }
         });
       }
-    } else {
-      onUpdateReservation(updatedRes);
     }
+    // Siempre persistir el estado "Facturado" de los servicios en la reserva misma
+    // (antes se omitía para boletos GDS, dejando el expediente sin marcar y con
+    // riesgo de reaprobación/duplicación de obligaciones si se reabría en Facturación).
+    onUpdateReservation(updatedRes);
 
     // SIDE-EFFECT: Auto-generate Payable Obligation & Provider Statement (Libro Mayor)
     const terrestrialServices = pendingServices.filter(s => s.tipo !== ServiceType.AEREO);
@@ -803,7 +805,7 @@ export default function FacturacionView({
         }).join(" | ");
         if (onAddPayableObligation) {
           const newObligation: PayableObligation = {
-            id: `PAY-${Math.floor(5000 + Math.random() * 4999)}`,
+            id: `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             dueDate: activeRes.checkIn,
             providerName: providerName,
             serviceDetail,
@@ -819,7 +821,7 @@ export default function FacturacionView({
 
         if (onAddProviderStatement) {
           const newStatement: ProviderStatement = {
-            id: `DOC-FAC-${Math.floor(3000 + Math.random() * 6999)}`,
+            id: `DOC-FAC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             providerName: providerName,
             date: new Date().toISOString().split("T")[0],
             type: "Factura Recibida",
@@ -840,7 +842,7 @@ export default function FacturacionView({
         
         if (onAddPayableObligation) {
           const newObligation: PayableObligation = {
-            id: `PAY-${Math.floor(5000 + Math.random() * 4999)}`,
+            id: `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             dueDate: activeRes.checkIn,
             providerName: flightProvider,
             serviceDetail: s.descripcion,
@@ -856,7 +858,7 @@ export default function FacturacionView({
 
         if (onAddProviderStatement) {
           const newStatement: ProviderStatement = {
-            id: `DOC-FAC-${Math.floor(3000 + Math.random() * 6999)}`,
+            id: `DOC-FAC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             providerName: flightProvider,
             date: new Date().toISOString().split("T")[0],
             type: "Factura Recibida",
@@ -879,7 +881,7 @@ export default function FacturacionView({
         
         if (onAddPayableObligation) {
           const newObligation: PayableObligation = {
-            id: `PAY-${Math.floor(5000 + Math.random() * 4999)}`,
+            id: `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             dueDate: activeRes.checkIn,
             providerName: flightProvider,
             serviceDetail: `Boleto Aéreo PNR: ${vuelo.pnr} (Ruta: ${origin}-${dest})`,
@@ -895,7 +897,7 @@ export default function FacturacionView({
 
         if (onAddProviderStatement) {
           const newStatement: ProviderStatement = {
-            id: `DOC-FAC-${Math.floor(3000 + Math.random() * 6999)}`,
+            id: `DOC-FAC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             providerName: flightProvider,
             date: new Date().toISOString().split("T")[0],
             type: "Factura Recibida",

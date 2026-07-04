@@ -72,10 +72,7 @@ export class ReservationsService {
       ]);
 
       const clients = clientsData.b2BClients || [];
-      const obligations = (obligationsData.payableObligations || []).map((o) => ({
-        ...o,
-        payments: parseJsonField(o.payments, []),
-      }));
+      const obligations = obligationsData.payableObligations || [];
 
       const oldRes = {
         ...dto.previousState,

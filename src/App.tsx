@@ -279,6 +279,7 @@ export default function App() {
       });
     } catch (e) {
       console.error("Failed to update obligation", e);
+      alert(`Error al actualizar la cuenta por pagar: ${(e as any)?.message || e}`);
     }
   };
 
@@ -305,6 +306,7 @@ export default function App() {
       });
     } catch (e) {
       console.error("Failed to insert obligation", e);
+      alert(`Error al guardar la cuenta por pagar al proveedor: ${(e as any)?.message || e}. La obligación no quedó registrada, por favor reintente.`);
     }
   };
 
@@ -324,6 +326,7 @@ export default function App() {
       });
     } catch (e) {
       console.error("Failed to insert statement", e);
+      alert(`Error al guardar el estado de cuenta del proveedor: ${(e as any)?.message || e}. Por favor reintente.`);
     }
   };
 

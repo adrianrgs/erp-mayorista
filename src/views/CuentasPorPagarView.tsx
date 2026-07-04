@@ -193,11 +193,13 @@ export default function CuentasPorPagarView({
       .reduce((sum, o) => sum + (o.netCost - o.paidAmount), 0);
   }, [obligations]);
 
-  // Weekly Due (Vencimientos de la semana): obligations with status 'Pendiente' or 'Pagado Parcial' that are due within 7 days.
-  // We simulate "next 7 days" by comparing if the dueDate is before or equal to "2026-06-28" (assuming today is 2026-06-21)
+  // Weekly Due (Vencimientos de la semana): obligations with status 'Pendiente' or 'Pagado Parcial' that are due within the next 7 days (or already overdue).
   const weeklyDue = useMemo(() => {
+    const weekFromNow = new Date();
+    weekFromNow.setDate(weekFromNow.getDate() + 7);
+    const weekFromNowStr = weekFromNow.toISOString().split("T")[0];
     return obligations
-      .filter(o => o.status !== "Pagado Total" && o.dueDate <= "2026-06-28")
+      .filter(o => o.status !== "Pagado Total" && o.dueDate <= weekFromNowStr)
       .reduce((sum, o) => sum + (o.netCost - o.paidAmount), 0);
   }, [obligations]);
 

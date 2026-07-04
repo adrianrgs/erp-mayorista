@@ -209,13 +209,6 @@ export interface FleetDriver {
   observaciones?: string;
 }
 
-export interface SupplierPaymentRecord {
-  paymentId: string;
-  amount: number;
-  date: string;
-  bankReference: string;
-}
-
 export interface PayableObligation {
   updatedAt?: string;
   id: string;
@@ -233,7 +226,6 @@ export interface PayableObligation {
   currency?: string;
   attachedFile?: string;
   isFrozen?: boolean;
-  payments?: SupplierPaymentRecord[];
 }
 
 export interface ProviderStatement {

@@ -47,16 +47,12 @@ export class FinancesService {
 
   async findAllObligations() {
     const data = await this.dc.executeQuery<{ payableObligations: any[] }>('ListPayableObligations');
-    return (data.payableObligations || []).map((o) => ({
-      ...o,
-      payments: parseJsonField(o.payments, []),
-    }));
+    return data.payableObligations || [];
   }
 
   async createObligation(dto: any) {
     await this.dc.executeMutation('InsertPayableObligation', {
       ...dto,
-      payments: JSON.stringify(dto.payments || []),
       updatedAt: new Date().toISOString(),
     });
     return { success: true, id: dto.id };
@@ -65,7 +61,6 @@ export class FinancesService {
   async updateObligation(id: string, dto: any) {
     await this.dc.executeMutation('UpdatePayableObligation', {
       id, ...dto,
-      ...(dto.payments && { payments: JSON.stringify(dto.payments) }),
       updatedAt: new Date().toISOString(),
     });
     return { success: true };
@@ -76,6 +71,15 @@ export class FinancesService {
   async findAllStatements() {
     const data = await this.dc.executeQuery<{ providerStatements: any[] }>('ListProviderStatements');
     return data.providerStatements || [];
+  }
+
+  async createStatement(dto: any) {
+    const { id, providerName, date, type, amount, reference, status } = dto;
+    await this.dc.executeMutation('InsertProviderStatement', {
+      id, providerName, date, type, amount, reference, status,
+      updatedAt: new Date().toISOString(),
+    });
+    return { success: true, id };
   }
 
   // ── Tax Jurisdiction ──────────────────────────────────────────────────────

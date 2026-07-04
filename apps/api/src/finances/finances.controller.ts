@@ -41,6 +41,9 @@ export class FinancesController {
   @Get('statements')
   findAllStatements() { return this.service.findAllStatements(); }
 
+  @Post('statements')
+  createStatement(@Body() dto: any) { return this.service.createStatement(dto); }
+
   // ── Tax Jurisdiction (multi-country config) ───────────────────────────────
   @Get('jurisdiction')
   getJurisdiction() { return this.service.getJurisdiction(); }

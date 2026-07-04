@@ -348,13 +348,6 @@ export interface FleetDriver {
 
 // ─── MÓDULO CUENTAS POR PAGAR (TESORERÍA) ────────────────────────────────────
 
-export interface SupplierPaymentRecord {
-  paymentId: string;
-  amount: number;
-  date: string;
-  bankReference: string;
-}
-
 export interface PayableObligation {
   updatedAt?: string;
   id: string;
@@ -372,7 +365,6 @@ export interface PayableObligation {
   currency?: string;
   attachedFile?: string;
   isFrozen?: boolean;
-  payments?: SupplierPaymentRecord[];
   // Campos fiscales de proveedor
   isExempt?: boolean;       // proveedor exento de IVA → no genera retención
   vatAmount?: number;       // IVA en la factura del proveedor
