@@ -215,9 +215,10 @@ export function reconcileDossierUpdate(
             amountSale: deltaSale,
             reason: `Modificación tarifa: ${sNew.descripcion}`,
             date: new Date().toISOString().split("T")[0],
-            // Suplementos quedan en "Borrador" — invisibles para Facturación hasta que el
+            // Tanto suplementos como créditos por modificación de tarifa quedan en "Borrador" —
+            // invisibles para Facturación (y sin impacto en el saldo del cliente) hasta que el
             // operador de Reservas los envíe explícitamente con "Enviar a Facturación".
-            status: varType === "Suplemento" ? "Borrador" : undefined
+            status: "Borrador"
           };
           newVariations.push(variation);
           currentVariations.push(variation);

@@ -464,9 +464,9 @@ export default function ReservasView({
     const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
     const unsentServices = services.filter(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === "Rechazado" || s.statusFacturacion === undefined);
     const unsentFlights = jointFlights.filter(b => !b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined);
-    const unsentSupplements = (activeRes.variaciones || []).filter(v => v.type === "Suplemento" && v.status === "Borrador" && !v.invoiceId);
+    const unsentAdjustments = (activeRes.variaciones || []).filter(v => (v.type === "Suplemento" || v.type === "Credito") && v.status === "Borrador" && !v.invoiceId);
     const pendingTotal = unsentServices.reduce((sum, s) => sum + s.precioVenta, 0) + unsentFlights.reduce((sum, b) => sum + b.precioVenta, 0)
-      + unsentSupplements.reduce((sum, v) => sum + v.amountSale, 0);
+      + unsentAdjustments.reduce((sum, v) => sum + v.amountSale, 0);
     setBillingMonto(pendingTotal.toString());
     setBillingModalError("");
     setShowSendBillingModal(true);
@@ -489,7 +489,7 @@ export default function ReservasView({
     });
 
     const updatedVariations = (activeRes.variaciones || []).map(v => {
-      if (v.type === "Suplemento" && v.status === "Borrador" && !v.invoiceId) {
+      if ((v.type === "Suplemento" || v.type === "Credito") && v.status === "Borrador" && !v.invoiceId) {
         return { ...v, status: "Solicitado" as const };
       }
       return v;
@@ -1970,17 +1970,30 @@ export default function ReservasView({
           </div>
           )}
 
-          <Tabs
-            tabs={[
-              { key: "resumen", label: "Resumen" },
-              { key: "datosGenerales", label: "Datos Generales" },
-              { key: "pasajeros", label: "Pasajeros", badge: effectivePasajeros.length },
-              { key: "servicios", label: "Servicios", badge: cartServices.length },
-              { key: "administracion", label: "Administración" },
-            ]}
-            active={activeExpedienteTab}
-            onChange={(k) => setActiveExpedienteTab(k as ExpedienteTab)}
-          />
+          {(() => {
+            // Cuenta lo mismo que ya muestra "Pendientes de Enviar" en Administración: servicios/vuelos
+            // sin enviar a Facturación y ajustes (Suplemento/Crédito) todavía en Borrador — así el
+            // operador ve de un vistazo, desde el propio tab, que hay algo que requiere atención.
+            const pendingAdminCount = activeRes ? (
+              (activeRes.servicios || []).filter(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === "Rechazado" || s.statusFacturacion === undefined).length +
+              boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto && (!b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined)).length +
+              (activeRes.variaciones || []).filter(v => (v.type === "Suplemento" || v.type === "Credito") && v.status === "Borrador" && !v.invoiceId).length
+            ) : 0;
+
+            return (
+              <Tabs
+                tabs={[
+                  { key: "resumen", label: "Resumen" },
+                  { key: "datosGenerales", label: "Datos Generales" },
+                  { key: "pasajeros", label: "Pasajeros", badge: effectivePasajeros.length },
+                  { key: "servicios", label: "Servicios", badge: cartServices.length },
+                  { key: "administracion", label: "Administración", badge: pendingAdminCount > 0 ? pendingAdminCount : undefined, badgeVariant: "alert" },
+                ]}
+                active={activeExpedienteTab}
+                onChange={(k) => setActiveExpedienteTab(k as ExpedienteTab)}
+              />
+            );
+          })()}
           </div>
 
           {activeExpedienteTab === "resumen" && !activeRes && (
@@ -2509,8 +2522,8 @@ export default function ReservasView({
                       const services = activeRes.servicios || [];
                       const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
                       
-                      const unsentSupplements = (activeRes.variaciones || []).filter(v => v.type === "Suplemento" && v.status === "Borrador" && !v.invoiceId);
-                      const sentSupplements = (activeRes.variaciones || []).filter(v => v.type === "Suplemento" && v.status === "Solicitado" && !v.invoiceId);
+                      const unsentAdjustments = (activeRes.variaciones || []).filter(v => (v.type === "Suplemento" || v.type === "Credito") && v.status === "Borrador" && !v.invoiceId);
+                      const sentAdjustments = (activeRes.variaciones || []).filter(v => (v.type === "Suplemento" || v.type === "Credito") && v.status === "Solicitado" && !v.invoiceId);
 
                       const billedCount = services.filter(s => s.statusFacturacion === "Facturado").length +
                                          jointFlights.filter(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea").length;
@@ -2519,7 +2532,7 @@ export default function ReservasView({
 
                       const hasPending = services.some(s => s.statusFacturacion !== "Facturado") ||
                                          jointFlights.some(b => b.expedienteAereo?.status !== "Facturado" && b.expedienteAereo?.status !== "PagadoAerolinea") ||
-                                         unsentSupplements.length > 0 || sentSupplements.length > 0;
+                                         unsentAdjustments.length > 0 || sentAdjustments.length > 0;
 
                       return (
                         <div className="space-y-3 text-xs font-semibold">
@@ -2533,10 +2546,10 @@ export default function ReservasView({
                           {(() => {
                             const hasBorradorOrRechazado = services.some(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === "Rechazado" || s.statusFacturacion === undefined) ||
                                                            jointFlights.some(b => !b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined) ||
-                                                           unsentSupplements.length > 0;
+                                                           unsentAdjustments.length > 0;
                             const hasSolicitado = services.some(s => s.statusFacturacion === "Solicitado") ||
                                                   jointFlights.some(b => b.expedienteAereo?.status === "Solicitado") ||
-                                                  sentSupplements.length > 0;
+                                                  sentAdjustments.length > 0;
 
                             const billedServices = services.filter(s => s.statusFacturacion === "Facturado");
                             const billedFlights = jointFlights.filter(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea");
@@ -2547,7 +2560,7 @@ export default function ReservasView({
                             const unsentServices = services.filter(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === "Rechazado" || s.statusFacturacion === undefined);
                             const unsentFlights = jointFlights.filter(b => !b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined);
                             const pendingTotal = unsentServices.reduce((sum, s) => sum + s.precioVenta, 0) + unsentFlights.reduce((sum, b) => sum + b.precioVenta, 0)
-                              + unsentSupplements.reduce((sum, v) => sum + v.amountSale, 0);
+                              + unsentAdjustments.reduce((sum, v) => sum + v.amountSale, 0);
 
                             return (
                               <div className="space-y-3 text-xs font-semibold">
@@ -2559,13 +2572,13 @@ export default function ReservasView({
                                   {hasSolicitado && (
                                     <div className="flex justify-between text-[11px] text-zinc-655">
                                       <span>En Revisión Facturación:</span>
-                                      <span className="text-blue-700 font-extrabold">{pendingServices.length + pendingFlights.length + sentSupplements.length}</span>
+                                      <span className="text-blue-700 font-extrabold">{pendingServices.length + pendingFlights.length + sentAdjustments.length}</span>
                                     </div>
                                   )}
                                   {hasBorradorOrRechazado && (
                                     <div className="flex justify-between text-[11px] text-zinc-655">
                                       <span>Pendientes de Enviar:</span>
-                                      <span className="text-amber-700 font-extrabold">{unsentServices.length + unsentFlights.length + unsentSupplements.length} (${pendingTotal} USD)</span>
+                                      <span className="text-amber-700 font-extrabold">{unsentServices.length + unsentFlights.length + unsentAdjustments.length} (${pendingTotal} USD)</span>
                                     </div>
                                   )}
                                 </div>

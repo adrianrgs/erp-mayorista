@@ -659,9 +659,13 @@ export default function App() {
       // The reconciler cannot compute the correct split between debt clearance and overpayment
       // refund without invoice/voucher data, so we handle it here.
       // Supplements are handled exclusively by FacturacionView ("Facturar Suplemento" button).
-      if (result.newVariations.some(v => v.type === "Credito")) {
+      // Credits still in "Borrador" (price-modification-sourced, pending manual send from Reservas
+      // Administración) are excluded here too — their balance impact is deferred to FacturacionView
+      // ("Emitir Nota de Crédito") once approved. Cancellation/annulment credits have no status
+      // field and keep applying immediately, as before.
+      if (result.newVariations.some(v => v.type === "Credito" && v.status !== "Borrador")) {
         const totalCredit = result.newVariations
-          .filter(v => v.type === "Credito")
+          .filter(v => v.type === "Credito" && v.status !== "Borrador")
           .reduce((sum, v) => sum + Math.abs(v.amountSale), 0);
 
         const agencyName = finalRes.agenciaName;
@@ -1482,6 +1486,7 @@ onDeleteStopSale={handleDeleteStopSale}
                        invoices={invoices}
                        onUpdateReservation={handleUpdateReservation}
                        onAddInvoice={handleAddInvoice}
+                       onUpdateInvoice={handleUpdateInvoice}
                        clients={clients}
                        roomTypes={roomTypes}
                        ratePlans={ratePlans}
@@ -1491,6 +1496,7 @@ onDeleteStopSale={handleDeleteStopSale}
                        onAddPayableObligation={handleAddPayableObligation}
                        providerStatements={providerStatements}
                        onAddProviderStatement={handleAddStatement}
+                       vouchers={vouchers}
                        boletos={boletos}
                        onBoletosChange={setBoletos}
                        onUpdateBoleto={handleUpdateBoleto}

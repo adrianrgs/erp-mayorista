@@ -4,6 +4,8 @@ export interface TabItem {
   key: string;
   label: string;
   badge?: number | string;
+  /** "alert" renders the badge as an attention-grabbing amber pulse instead of a neutral count. */
+  badgeVariant?: "default" | "alert";
   disabled?: boolean;
 }
 
@@ -30,9 +32,16 @@ export const Tabs: React.FC<TabsProps> = ({ tabs, active, onChange }) => {
         >
           {t.label}
           {t.badge !== undefined && (
-            <span className={`ml-1.5 px-1.5 py-0.25 rounded-full text-[9px] ${active === t.key ? "bg-zinc-900 text-white" : "bg-zinc-200 text-zinc-600"}`}>
-              {t.badge}
-            </span>
+            t.badgeVariant === "alert" ? (
+              <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.25 rounded-full text-[9px] bg-amber-100 text-amber-800 border border-amber-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                {t.badge}
+              </span>
+            ) : (
+              <span className={`ml-1.5 px-1.5 py-0.25 rounded-full text-[9px] ${active === t.key ? "bg-zinc-900 text-white" : "bg-zinc-200 text-zinc-600"}`}>
+                {t.badge}
+              </span>
+            )
           )}
         </button>
       ))}

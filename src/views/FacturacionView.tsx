@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Reservation, FinancialInvoice, ServiceItem, B2BClient, ServiceType, PayableObligation, ProviderStatement, CompanyConfig } from "../types";
+import { Reservation, FinancialInvoice, ServiceItem, B2BClient, ServiceType, PayableObligation, ProviderStatement, CompanyConfig, PaymentVoucher } from "../types";
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
 import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile } from "../lib/taxEngine";
@@ -43,6 +43,7 @@ interface FacturacionViewProps {
   invoices: FinancialInvoice[];
   onUpdateReservation: (updated: Reservation) => void;
   onAddInvoice?: (newInv: FinancialInvoice) => void;
+  onUpdateInvoice?: (updated: FinancialInvoice) => void;
   clients: B2BClient[];
   roomTypes: RoomType[];
   ratePlans: RatePlan[];
@@ -52,6 +53,7 @@ interface FacturacionViewProps {
   onAddPayableObligation?: (obligation: PayableObligation) => void;
   providerStatements?: ProviderStatement[];
   onAddProviderStatement?: (statement: ProviderStatement) => void;
+  vouchers?: PaymentVoucher[];
   boletos?: FlightTicket[];
   onBoletosChange?: React.Dispatch<React.SetStateAction<FlightTicket[]>>;
   onUpdateBoleto?: (b: FlightTicket) => void;
@@ -65,6 +67,7 @@ export default function FacturacionView({
   invoices,
   onUpdateReservation,
   onAddInvoice,
+  onUpdateInvoice,
   clients,
   roomTypes,
   ratePlans,
@@ -74,6 +77,7 @@ export default function FacturacionView({
   onAddPayableObligation,
   providerStatements = [],
   onAddProviderStatement,
+  vouchers = [],
   boletos = [],
   onBoletosChange,
   onUpdateBoleto,
@@ -691,8 +695,70 @@ export default function FacturacionView({
       onAddInvoice(creditNote);
     }
 
-    // Client balance was already updated by the financial reconciler when the reservation was modified.
-    // Do NOT update balances here — that would double-count the credit.
+    // Price-modification-sourced credits (reducing units/nights on an already-billed service) are
+    // gated behind "Enviar a Facturación" from Reservas — their balance impact was NOT applied when
+    // the reservation was saved (see App.tsx, "Apply credit variation balance impact"), so it's
+    // applied here instead, now that Facturación is formally approving the credit. Cancellation/
+    // annulment-sourced credits already had their balance impact applied immediately at save time —
+    // skip here to avoid double-counting (they have no "Modificación tarifa:" reason prefix).
+    if (variation.reason?.startsWith("Modificación tarifa:") && _cnAgency && onUpdateClient) {
+      const creditAmount = Math.abs(variation.amountSale);
+      const isCreditClient = _cnAgency.tipo === "A Crédito" || activeRes.facturacionTipo === "Crédito";
+
+      const relatedInvoices = invoices.filter(inv =>
+        inv.clientName?.includes(activeRes.id) &&
+        inv.status !== "Borrador" &&
+        (inv.id?.startsWith("FAC-") || inv.id?.startsWith("SUP-"))
+      );
+      const totalInvoiced = relatedInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+      const totalPaid = relatedInvoices.reduce((sum, inv) =>
+        sum + vouchers.filter(v => v.invoiceId === inv.id && v.status === "Verificado").reduce((s, v) => s + v.amount, 0), 0);
+      const invoiceRemaining = Math.max(0, totalInvoiced - totalPaid);
+      const newTotalDue = activeRes.totalPrice;
+
+      let newSaldoDeber = _cnAgency.saldoDeber;
+      let newSaldoFavor = _cnAgency.saldoFavor;
+
+      if (isCreditClient) {
+        if (totalPaid >= newTotalDue) {
+          // Client already paid more than what's now owed — clear the remaining debt and
+          // credit the excess to saldoFavor instead of silently discarding it.
+          const excess = totalPaid - newTotalDue;
+          newSaldoDeber = Math.max(0, newSaldoDeber - invoiceRemaining);
+          if (excess > 0) newSaldoFavor += excess;
+        } else {
+          newSaldoDeber = Math.max(0, newSaldoDeber - creditAmount);
+        }
+      } else {
+        const excess = Math.max(0, totalPaid - newTotalDue);
+        if (excess > 0) newSaldoFavor += excess;
+      }
+
+      if (newSaldoDeber !== _cnAgency.saldoDeber || newSaldoFavor !== _cnAgency.saldoFavor) {
+        onUpdateClient({ ..._cnAgency, saldoDeber: newSaldoDeber, saldoFavor: newSaldoFavor });
+      }
+
+      // The client's aggregate saldoDeber above is now correct, but the original invoice record
+      // itself (what "Facturas Pendientes" in Cuentas por Cobrar actually reads) still shows its
+      // pre-credit amount as outstanding. Reduce it by the credit and mark it "Pagado" once what's
+      // already been paid covers the new (lower) amount, so both views stay consistent.
+      if (onUpdateInvoice) {
+        const targetInvoice = relatedInvoices
+          .filter(inv => inv.id?.startsWith("FAC-"))
+          .sort((a, b) => a.date.localeCompare(b.date))[0];
+        if (targetInvoice) {
+          const paidOnTarget = vouchers
+            .filter(v => v.invoiceId === targetInvoice.id && v.status === "Verificado")
+            .reduce((s, v) => s + v.amount, 0);
+          const newAmount = Math.max(0, targetInvoice.amount - creditAmount);
+          onUpdateInvoice({
+            ...targetInvoice,
+            amount: newAmount,
+            status: paidOnTarget >= newAmount ? "Pagado" : targetInvoice.status
+          });
+        }
+      }
+    }
 
     const updatedVariations = (activeRes.variaciones || []).map((v: any) => {
       if (v.id === variation.id) {
@@ -1383,7 +1449,7 @@ export default function FacturacionView({
                       const hasBilled = billedCount > 0;
                       const draftCount = services.filter(s => s.statusFacturacion === "Borrador").length;
                       const pendingVariationSupplements = (r.variaciones || []).filter((v: any) => v.type === "Suplemento" && v.status === "Solicitado" && !v.invoiceId).length;
-                      const pendingVariationCredits = (r.variaciones || []).filter((v: any) => v.type === "Credito" && !v.invoiceId).length;
+                      const pendingVariationCredits = (r.variaciones || []).filter((v: any) => v.type === "Credito" && v.status !== "Borrador" && !v.invoiceId).length;
                       const hasPendingSupplement = hasBilled && (draftCount > 0 || pendingVariationSupplements > 0);
                       const hasPendingCreditNote = hasBilled && pendingVariationCredits > 0;
                       const isCancellationRequest = r.status === "Cancelada" && (
@@ -1721,15 +1787,17 @@ export default function FacturacionView({
             </div>
 
             {/* Panel de Ajustes y Modificaciones Pendientes de Facturar */}
-            {/* Los suplementos ("Suplemento") en status "Borrador" todavía no fueron enviados por el
-                operador de Reservas ("Enviar a Facturación") — permanecen ocultos aquí hasta entonces. */}
-            {(activeRes.variaciones || []).some((v: any) => !v.invoiceId && (v.type !== "Suplemento" || v.status === "Solicitado")) && (
+            {/* Los suplementos y créditos por modificación de tarifa en status "Borrador" todavía no
+                fueron enviados por el operador de Reservas ("Enviar a Facturación") — permanecen
+                ocultos aquí hasta entonces. Créditos por cancelación/anulación nunca tienen status,
+                así que siguen visibles de inmediato como antes. */}
+            {(activeRes.variaciones || []).some((v: any) => !v.invoiceId && v.status !== "Borrador") && (
               <div className="space-y-3 mt-4">
                 <h5 className="text-[10px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-1.5">
                   ⚠️ Ajustes y Modificaciones Pendientes de Facturación
                 </h5>
                 <div className="divide-y divide-zinc-150 border border-amber-200 rounded overflow-hidden bg-amber-50/10">
-                  {(activeRes.variaciones || []).filter((v: any) => !v.invoiceId && (v.type !== "Suplemento" || v.status === "Solicitado")).map((v: any) => {
+                  {(activeRes.variaciones || []).filter((v: any) => !v.invoiceId && v.status !== "Borrador").map((v: any) => {
                     const isPositive = v.amountSale > 0;
                     return (
                       <div key={v.id} className="p-3 bg-white space-y-1.5">
