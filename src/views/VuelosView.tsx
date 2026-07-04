@@ -608,6 +608,8 @@ function NuevoBoletoView({
     setGuardando(true);
     setTimeout(() => {
       const nuevoBoleto: FlightTicket = {
+        // Final sequential id assigned by handleAddBoleto in App.tsx, which has visibility over
+        // all existing boletos; this placeholder is only used transiently before that override.
         id: `BOL-${Date.now()}`,
         pnr,
         pasajeros,

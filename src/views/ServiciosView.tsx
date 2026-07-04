@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ExtraService, ServiceRate, ServiceCategory, PricingModel, Proveedor } from "../types/producto";
+import { nextSequentialId } from "../lib/idGenerator";
 import { Search, Plus, MapPin, Edit3, Trash2, Tag, Compass, X, Save } from "lucide-react";
 
 interface ServiciosViewProps {
@@ -67,7 +68,7 @@ export default function ServiciosView({
 
   const handleSaveService = () => {
     if (activeServiceId === "new") {
-      const newSrv = { ...serviceForm, id: `srv-${Date.now()}` } as ExtraService;
+      const newSrv = { ...serviceForm, id: nextSequentialId("srv", extraServices.map(s => s.id)) } as ExtraService;
       onAddExtraService(newSrv);
       setActiveServiceId(newSrv.id);
     } else {
@@ -80,7 +81,7 @@ export default function ServiciosView({
 
   const handleSaveRate = () => {
     if (!activeServiceId || activeServiceId === "new") return;
-    const newRate = { ...rateForm, id: `rate-${Date.now()}`, extraServiceId: activeServiceId } as ServiceRate;
+    const newRate = { ...rateForm, id: nextSequentialId("rate", serviceRates.map(r => r.id)), extraServiceId: activeServiceId } as ServiceRate;
     onAddServiceRate(newRate);
     setRateForm({ pricingModel: PricingModel.POR_PERSONA }); // reset
   };

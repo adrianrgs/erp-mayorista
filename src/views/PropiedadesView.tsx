@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { HotelProperty } from "../types";
+import { nextSequentialId } from "../lib/idGenerator";
 import {
   RegimenAlimentacion,
   PropertyStatus,
@@ -461,7 +462,7 @@ export default function PropiedadesView({
 
     // Auto-create standard room type for convenience
     const defaultRoom: RoomType = {
-      id: `room-${Math.floor(100 + Math.random() * 900)}`,
+      id: nextSequentialId("room", roomTypes.map(rt => rt.id)),
       property_id: generatorId,
       nombre: "Habitación Doble Estándar",
       regimenAlimentacion: RegimenAlimentacion.DESAYUNO,
@@ -502,7 +503,7 @@ export default function PropiedadesView({
     }
 
     const newStop: StopSale = {
-      id: `stop-${Math.floor(100 + Math.random() * 900)}`,
+      id: nextSequentialId("stop", stopSales.map(s => s.id)),
       property_id: activePropertyId,
       fechaInicio: newStopSaleForm.fechaInicio,
       fechaFin: newStopSaleForm.fechaFin,
@@ -558,7 +559,7 @@ export default function PropiedadesView({
     }
 
     const newRoom: RoomType = {
-      id: `room-${Math.floor(100 + Math.random() * 900)}`,
+      id: nextSequentialId("room", roomTypes.map(rt => rt.id)),
       property_id: activePropertyId,
       nombre: finalName,
       regimenAlimentacion: newRoomForm.regimenAlimentacion,
@@ -602,10 +603,13 @@ export default function PropiedadesView({
       setEditingPlanGroup(null);
     }
 
+    const newRateIds: string[] = ratePlans.map(r => r.id);
     const newRates: RatePlan[] = roomEntries.map(([roomId, val]) => {
       const pricing = val as { tarifaBase: string, tarifaExtraAdulto: string, tarifaExtraNino: string };
+      const rateId = nextSequentialId("rate", newRateIds);
+      newRateIds.push(rateId);
       return {
-        id: `rate-${Math.floor(100 + Math.random() * 9000)}`,
+        id: rateId,
         property_id: activePropertyId,
         roomType_id: roomId,
         nombrePromocion: planName,

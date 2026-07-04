@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { B2BClient, ClientType, ClientStatus, FinancialInvoice, Reservation, ServiceType } from "../types";
 import { FlightTicket } from "../types/aereos";
 import { RoomType, RatePlan, TipoCobro, Property } from "../types/producto";
+import { nextSequentialId } from "../lib/idGenerator";
 import { 
   Users, 
   Search, 
@@ -307,7 +308,7 @@ export default function ClientesView({
     }
 
     const newClient: B2BClient = {
-      id: `CLI-${Math.floor(100 + Math.random() * 900)}`,
+      id: nextSequentialId("CLI", clients.map(c => c.id)),
       nombre: newClientForm.nombre,
       rif: newClientForm.rif,
       tipo: newClientForm.tipo,

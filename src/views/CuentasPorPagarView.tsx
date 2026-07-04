@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { PayableObligation, ProviderStatement } from "../types";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
+import { nextSequentialId } from "../lib/idGenerator";
 import {
   TrendingDown,
   Clock,
@@ -97,7 +98,7 @@ export default function CuentasPorPagarView({
     const vatWithheld = (vatAmt && withholdPct > 0) ? parseFloat((vatAmt * withholdPct / 100).toFixed(2)) : undefined;
 
     const newObl: PayableObligation = {
-      id: `OBL-M-${Math.floor(10000 + Math.random() * 90000)}`,
+      id: nextSequentialId("OBL-M", obligations.map(o => o.id)),
       dueDate: newObligationForm.dueDate,
       date: newObligationForm.date,
       providerName: newObligationForm.providerName.trim(),
@@ -307,7 +308,7 @@ export default function CuentasPorPagarView({
 
     // 2. Add Transaction to Provider Statement (Libro Mayor)
     const newDoc: ProviderStatement = {
-      id: `DOC-PAG-${Math.floor(2000 + Math.random() * 8000)}`,
+      id: nextSequentialId("DOC-PAG", statements.map(s => s.id)),
       providerName: activeObligationForPayment.providerName,
       date: new Date().toISOString().split("T")[0],
       type: "Pago Emitido",

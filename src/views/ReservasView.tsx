@@ -47,6 +47,7 @@ import {
 import { FinancialInvoice, PayableObligation, PaymentVoucher } from "../types";
 import { useDialog } from "../components/ui/DialogProvider";
 import { reconcileDossierUpdate } from "../lib/financialReconciler";
+import { nextSequentialId } from "../lib/idGenerator";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
 import { getStatusBadge, formatDate } from "../components/reservas/reservasFormat";
 
@@ -588,7 +589,7 @@ export default function ReservasView({
 
   // Init cart and navigate to Level 3
   const handleStartNewExpediente = () => {
-    setCartId(`RES-${Math.floor(1000 + Math.random() * 9000)}`);
+    setCartId(nextSequentialId("RES", reservations.map(r => r.id)));
     setCartHolder("");
     setCartCheckIn("");
     setCartCheckOut("");
@@ -1039,7 +1040,7 @@ export default function ReservasView({
       setEditingServiceId(null);
     } else {
       const newService: ServiceItem = {
-        id: `SRV-${Math.floor(1000 + Math.random() * 9000)}-${Math.random().toString(36).substring(2, 5)}`,
+        id: nextSequentialId("SRV", [...reservations.flatMap(r => r.servicios?.map(s => s.id) || []), ...cartServices.map(s => s.id)]),
         tipo: activeServiceType,
         descripcion: desc,
         precioNeto: nPrice,
@@ -1109,7 +1110,7 @@ export default function ReservasView({
       const sanitizedServices = res.servicios.map(s => {
         let sid = s.id;
         if (!sid || seenIds.has(sid)) {
-          sid = `SRV-${Math.floor(1000 + Math.random() * 9000)}-${Math.random().toString(36).substring(2, 5)}`;
+          sid = nextSequentialId("SRV", [...reservations.flatMap(r => r.servicios?.map(sv => sv.id) || []), ...seenIds]);
         }
         seenIds.add(sid);
         return { ...s, id: sid };
@@ -1118,7 +1119,7 @@ export default function ReservasView({
     } else {
       // Legacy reservation service mapping
       const legacyService: ServiceItem = {
-        id: `SRV-${Math.floor(100 + Math.random() * 900)}`,
+        id: nextSequentialId("SRV", reservations.flatMap(r => r.servicios?.map(s => s.id) || [])),
         tipo: ServiceType.ALOJAMIENTO,
         descripcion: `Hotel: ${res.hotelName} - 7 noches - ${res.pax} Pax - IN: ${formatDate(res.checkIn)} / OUT: ${formatDate(res.checkOut)}`,
         precioNeto: res.netPrice,

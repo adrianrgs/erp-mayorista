@@ -58,6 +58,7 @@ import CobranzasView from "./views/CobranzasView";
 import CuentasPorPagarView from "./views/CuentasPorPagarView";
 import ConfiguracionView from "./views/ConfiguracionView";
 import { reconcileDossierUpdate } from "./lib/financialReconciler";
+import { nextSequentialId } from "./lib/idGenerator";
 
 import ServiciosView from "./views/ServiciosView";
 import BuscadorGlobalView from "./views/BuscadorGlobalView";
@@ -502,7 +503,7 @@ export default function App() {
           : "Aeropuerto Internacional Local";
 
         const newTrans: TransferService = {
-          id: `TR-${Date.now()}-${Math.floor(Math.random() * 100)}`,
+          id: nextSequentialId("TR", transfers.map(t => t.id)),
           leadPassenger: newRes.holder,
           paxCount: Number(tDet.transPax || newRes.pax),
           pickupLocation: tDet.transPickup || defaultAirport,
@@ -525,7 +526,7 @@ export default function App() {
         // Si es ida y vuelta, generar también el traslado de retorno
         if (tDet.transTripType === "round-trip" && tDet.transReturnDate) {
           const returnTrans: TransferService = {
-            id: `TR-${Date.now() + 1}-${Math.floor(Math.random() * 100)}`,
+            id: nextSequentialId("TR", [...transfers.map(t => t.id), newTrans.id]),
             leadPassenger: newRes.holder,
             paxCount: Number(tDet.transPax || newRes.pax),
             pickupLocation: tDet.transReturnDropoff || tDet.transDropoff || newRes.hotelName,
@@ -670,11 +671,15 @@ export default function App() {
           const isCreditClient =
             clientObj.tipo === "A Crédito" || (finalRes as any).facturacionTipo === "Crédito";
 
-          // Invoices linked to this reservation (FAC- prefix = original billing invoice)
+          // Invoices linked to this reservation. FAC- (original billing) and SUP- (suplementos
+          // facturados vía "Facturar Suplemento") both represent real charges to the client — NC-
+          // (credit notes) and ABO- (wallet transfers) are excluded. Status must NOT be restricted to
+          // "Facturado": once the client pays, the invoice flips to "Pagado" and would otherwise drop
+          // out of this list right when it matters most (that's exactly when totalPaid needs counting).
           const relatedInvoices = invoices.filter(inv =>
             inv.clientName?.includes(finalRes.id) &&
-            inv.status === "Facturado" &&
-            inv.id?.startsWith("FAC-")
+            inv.status !== "Borrador" &&
+            (inv.id?.startsWith("FAC-") || inv.id?.startsWith("SUP-"))
           );
 
           const totalInvoiced = relatedInvoices.reduce((sum, inv) => sum + inv.amount, 0);
@@ -969,8 +974,9 @@ export default function App() {
   // --- FLIGHT TICKETS (Boletos) ---
   const handleAddBoleto = async (newBol: FlightTicket) => {
     try {
-      setBoletos(prev => [...prev, newBol]);
-      await insertFlightTicket(dataConnect, { ...newBol });
+      const finalBol = { ...newBol, id: nextSequentialId("BOL", boletos.map(b => b.id)) };
+      setBoletos(prev => [...prev, finalBol]);
+      await insertFlightTicket(dataConnect, { ...finalBol });
     } catch (e) {}
   };
   const handleUpdateBoleto = async (updated: FlightTicket) => {
@@ -1481,7 +1487,9 @@ onDeleteStopSale={handleDeleteStopSale}
                        ratePlans={ratePlans}
                        detailedProperties={detailedProperties}
                        onUpdateClient={handleUpdateClient}
+                       payableObligations={payableObligations}
                        onAddPayableObligation={handleAddPayableObligation}
+                       providerStatements={providerStatements}
                        onAddProviderStatement={handleAddStatement}
                        boletos={boletos}
                        onBoletosChange={setBoletos}
@@ -1550,6 +1558,7 @@ onDeleteStopSale={handleDeleteStopSale}
                     invoices={invoices}
                     onUpdateInvoice={handleUpdateInvoice}
                     reservations={reservations}
+                    boletos={boletos}
                     onAddInvoice={handleAddInvoice}
                     vouchers={vouchers}
                     onAddVoucher={handleAddVoucher}

@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Reservation, FinancialInvoice, B2BClient, PaymentVoucher, CompanyConfig, WithholdingCertificate } from "../types";
+import type { FlightTicket } from "../types/aereos";
 import { TaxJurisdiction } from "../lib/taxEngine";
+import { nextSequentialId } from "../lib/idGenerator";
 import {
   Users,
   Search,
@@ -40,6 +42,7 @@ interface CobranzasViewProps {
   invoices: FinancialInvoice[];
   onUpdateInvoice: (updated: FinancialInvoice) => void;
   reservations: Reservation[];
+  boletos?: FlightTicket[];
   onAddInvoice?: (newInv: FinancialInvoice) => void;
   vouchers: PaymentVoucher[];
   onAddVoucher: (newVoucher: PaymentVoucher) => void;
@@ -57,6 +60,7 @@ export default function CobranzasView({
   invoices,
   onUpdateInvoice,
   reservations,
+  boletos = [],
   onAddInvoice,
   vouchers,
   onAddVoucher,
@@ -244,24 +248,29 @@ export default function CobranzasView({
     }
 
     // 1. Mark target invoice as "Pagado" if the sum of verified vouchers (including this payment) is >= its total amount
-    if (paymentForm.invoiceId) {
-      const targetInvoice = invoices.find(inv => inv.id === paymentForm.invoiceId);
-      if (targetInvoice) {
-        const alreadyPaid = vouchers
-          .filter(v => v.invoiceId === paymentForm.invoiceId && v.status === "Verificado")
-          .reduce((sum, v) => sum + v.amount, 0);
-        const totalPaid = alreadyPaid + amountPaid;
+    const targetInvoice = paymentForm.invoiceId ? invoices.find(inv => inv.id === paymentForm.invoiceId) : undefined;
+    const alreadyPaidOnInvoice = targetInvoice
+      ? vouchers.filter(v => v.invoiceId === paymentForm.invoiceId && v.status === "Verificado").reduce((sum, v) => sum + v.amount, 0)
+      : 0;
 
-        if (totalPaid >= targetInvoice.amount) {
-          onUpdateInvoice({
-            ...targetInvoice,
-            status: "Pagado" as const
-          });
-        }
+    if (targetInvoice) {
+      const totalPaid = alreadyPaidOnInvoice + amountPaid;
+      if (totalPaid >= targetInvoice.amount) {
+        onUpdateInvoice({
+          ...targetInvoice,
+          status: "Pagado" as const
+        });
       }
     }
 
-    // 2. Adjust client balances
+    // 2. Adjust client balances. The overpayment/saldoFavor threshold must be based on what's
+    // actually owed on the TARGETED invoice (if any) — not the client's aggregate saldoDeber,
+    // which can be larger due to other unrelated pending invoices and would otherwise absorb a
+    // genuine overpayment on this invoice without ever crediting the excess to saldoFavor.
+    const amountOwed = targetInvoice ? Math.max(0, targetInvoice.amount - alreadyPaidOnInvoice) : activeClient.saldoDeber;
+    const excess = Math.max(0, amountPaid - amountOwed);
+    const debtPortion = amountPaid - excess;
+
     let nextSaldoFavor = activeClient.saldoFavor;
     let nextSaldoDeber = activeClient.saldoDeber;
 
@@ -270,15 +279,12 @@ export default function CobranzasView({
         alert("El saldo a favor disponible es insuficiente para realizar este pago.");
         return;
       }
-      nextSaldoFavor = Number((activeClient.saldoFavor - amountPaid).toFixed(2));
-      nextSaldoDeber = Math.max(0, activeClient.saldoDeber - amountPaid);
+      nextSaldoFavor = Number((activeClient.saldoFavor - amountPaid + excess).toFixed(2));
+      nextSaldoDeber = Math.max(0, activeClient.saldoDeber - debtPortion);
     } else {
-      nextSaldoDeber = Math.max(0, activeClient.saldoDeber - amountPaid);
-      // Surplus goes to saldoFavor
-      if (amountPaid > activeClient.saldoDeber) {
-        const excess = amountPaid - activeClient.saldoDeber;
+      nextSaldoDeber = Math.max(0, activeClient.saldoDeber - debtPortion);
+      if (excess > 0) {
         nextSaldoFavor += excess;
-        nextSaldoDeber = 0;
       }
     }
 
@@ -289,7 +295,7 @@ export default function CobranzasView({
     });
 
     // 3. Register a new verified PaymentVoucher
-    const newVouId = `VOU-${Math.floor(304 + Math.random() * 200)}`;
+    const newVouId = nextSequentialId("VOU", vouchers.map(v => v.id));
     const newVoucher: PaymentVoucher = {
       id: newVouId,
       clientId: activeClient.id,
@@ -311,7 +317,7 @@ export default function CobranzasView({
     // 4. Create financial collection record invoice (ABO- / FAC- Recibo)
     if (onAddInvoice) {
       const paymentReceipt: FinancialInvoice = {
-        id: `FAC-${Math.floor(5400 + Math.random() * 599)}`,
+        id: nextSequentialId("FAC", invoices.map(i => i.id)),
         clientName: `Recibo de Cobro: ${activeClient.nombre} - Factura Ref ${paymentForm.invoiceId || "General"}`,
         date: paymentForm.date,
         dueDate: paymentForm.date,
@@ -347,7 +353,7 @@ export default function CobranzasView({
 
     if (onAddInvoice) {
       onAddInvoice({
-        id: `RET-${Math.floor(1000 + Math.random() * 9000)}`,
+        id: nextSequentialId("RET", invoices.map(i => i.id)),
         clientName: `Retiro Saldo a Favor: ${activeClient.nombre} — Ref. ${withdrawForm.reference || "S/N"}`,
         date: new Date().toISOString().split("T")[0],
         dueDate: new Date().toISOString().split("T")[0],
@@ -887,7 +893,7 @@ export default function CobranzasView({
                                 if (!withholdingForm.number || withholdingForm.amountWithheld <= 0) return;
                                 const period = `${withholdingForm.date.slice(5, 7)}-${withholdingForm.date.slice(0, 4)}`;
                                 const cert: WithholdingCertificate = {
-                                  id: `WH-${Date.now()}`,
+                                  id: nextSequentialId("WH", withholdingCertificates.map(c => c.id)),
                                   number: withholdingForm.number,
                                   clientId: activeClient.id,
                                   clientTaxId: activeClient.rif,
@@ -1560,7 +1566,13 @@ export default function CobranzasView({
                         <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex justify-between items-center">
                           <div>
                             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Valor Total del Expediente</p>
-                            <p className="text-lg font-black text-blue-900">${modalReservation.totalPrice.toLocaleString('es-ES', { minimumFractionDigits: 2 })} USD</p>
+                            <p className="text-lg font-black text-blue-900">
+                              ${(modalReservation.totalPrice + boletos
+                                .filter(b => b.expedienteId === modalReservation.id && b.facturarConjunto &&
+                                  (b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea"))
+                                .reduce((sum, b) => sum + b.precioVenta, 0)
+                              ).toLocaleString('es-ES', { minimumFractionDigits: 2 })} USD
+                            </p>
                           </div>
                           <div className="text-right">
                             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Estado de la Reserva</p>

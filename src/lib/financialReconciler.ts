@@ -1,4 +1,5 @@
 import { Reservation, ServiceItem, B2BClient, PayableObligation, FinancialVariation, B2BWalletTransaction } from "../types";
+import { nextSequentialId } from "./idGenerator";
 
 export interface ReconciliationResult {
   updatedRes: Reservation;
@@ -36,8 +37,13 @@ export function reconcileDossierUpdate(
   // Initialize variation array on newRes if not present
   const currentVariations = [...(oldRes.variaciones || [])];
 
-  // Utility to generate unique ID
-  const genId = (prefix: string) => `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+  // Utility to generate unique ID. VAR- variations are numbered sequentially within this
+  // reservation's own variaciones list (currentVariations already grows as they're created below).
+  // TX-WLT has no persisted collection to check against, so it keeps the old random form.
+  const genId = (prefix: string) =>
+    prefix.startsWith("VAR-")
+      ? nextSequentialId(prefix, currentVariations.map(v => v.id))
+      : `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
 
   // HELPER: Register a credit event for logging only.
   // The actual saldoDeber / saldoFavor adjustment is computed in App.tsx where invoice and

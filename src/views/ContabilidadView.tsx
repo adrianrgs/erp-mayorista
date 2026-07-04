@@ -21,6 +21,7 @@ import {
   JURISDICTION_PRESETS,
   DEFAULT_JURISDICTION,
 } from "../lib/taxEngine";
+import { nextSequentialId } from "../lib/idGenerator";
 import {
   ExchangeRate,
   WithholdingCertificate,
@@ -376,7 +377,7 @@ export default function ContabilidadView({
                     onClick={() => {
                       if (!rateForm.rate) return;
                       const newRate: ExchangeRate = {
-                        id: `ER-${Date.now()}`,
+                        id: nextSequentialId("ER", exchangeRates.map(r => r.id)),
                         date: rateForm.date,
                         fromCurrency: "USD",
                         toCurrency: jurisdiction.localCurrency,

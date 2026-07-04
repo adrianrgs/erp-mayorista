@@ -3,6 +3,7 @@ import { Reservation, FinancialInvoice, ServiceItem, B2BClient, ServiceType, Pay
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
 import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile } from "../lib/taxEngine";
+import { nextSequentialId } from "../lib/idGenerator";
 import { formatGDSDate } from "../lib/parsers/pnrParser";
 import { 
   FileCheck, 
@@ -47,7 +48,9 @@ interface FacturacionViewProps {
   ratePlans: RatePlan[];
   detailedProperties: Property[];
   onUpdateClient?: (updated: B2BClient) => void;
+  payableObligations?: PayableObligation[];
   onAddPayableObligation?: (obligation: PayableObligation) => void;
+  providerStatements?: ProviderStatement[];
   onAddProviderStatement?: (statement: ProviderStatement) => void;
   boletos?: FlightTicket[];
   onBoletosChange?: React.Dispatch<React.SetStateAction<FlightTicket[]>>;
@@ -67,7 +70,9 @@ export default function FacturacionView({
   ratePlans,
   detailedProperties,
   onUpdateClient,
+  payableObligations = [],
   onAddPayableObligation,
+  providerStatements = [],
   onAddProviderStatement,
   boletos = [],
   onBoletosChange,
@@ -616,7 +621,7 @@ export default function FacturacionView({
     const _varAgency = clients.find(c => c.nombre === activeRes.agenciaName);
     const _varTax = computeTax(variation.amountSale, activeRes, _varAgency);
     const newInvoice: FinancialInvoice = {
-      id: `SUP-${Math.floor(1000 + Math.random() * 9000)}`,
+      id: nextSequentialId("SUP", invoices.map(i => i.id)),
       clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Suplemento: ${variation.reason})`,
       date: new Date().toISOString().split("T")[0],
       dueDate: activeRes.checkIn,
@@ -668,7 +673,7 @@ export default function FacturacionView({
     const _cnAgency = clients.find(c => c.nombre === activeRes.agenciaName);
     const _cnTax = computeTax(Math.abs(variation.amountSale), activeRes, _cnAgency);
     const creditNote: FinancialInvoice = {
-      id: `NC-${Math.floor(8000 + Math.random() * 999)}`,
+      id: nextSequentialId("NC", invoices.map(i => i.id)),
       clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Nota de Crédito: ${variation.reason})`,
       date: new Date().toISOString().split("T")[0],
       dueDate: activeRes.checkIn,
@@ -776,6 +781,10 @@ export default function FacturacionView({
     onUpdateReservation(updatedRes);
 
     // SIDE-EFFECT: Auto-generate Payable Obligation & Provider Statement (Libro Mayor)
+    // Track IDs assigned within this same call so multiple obligations/statements created in the
+    // loops below (one per provider/service) get distinct sequential IDs instead of colliding.
+    const newPayIds: string[] = payableObligations.map(o => o.id);
+    const newDocFacIds: string[] = providerStatements.map(s => s.id);
     const terrestrialServices = pendingServices.filter(s => s.tipo !== ServiceType.AEREO);
     const flightServices = pendingServices.filter(s => s.tipo === ServiceType.AEREO);
     
@@ -804,8 +813,10 @@ export default function FacturacionView({
           return `${s.tipo}: ${s.descripcion.split(" - ")[0].substring(0, 60)}`;
         }).join(" | ");
         if (onAddPayableObligation) {
+          const payId = nextSequentialId("PAY", newPayIds);
+          newPayIds.push(payId);
           const newObligation: PayableObligation = {
-            id: `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: payId,
             dueDate: activeRes.checkIn,
             providerName: providerName,
             serviceDetail,
@@ -820,8 +831,10 @@ export default function FacturacionView({
         }
 
         if (onAddProviderStatement) {
+          const docFacId = nextSequentialId("DOC-FAC", newDocFacIds);
+          newDocFacIds.push(docFacId);
           const newStatement: ProviderStatement = {
-            id: `DOC-FAC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: docFacId,
             providerName: providerName,
             date: new Date().toISOString().split("T")[0],
             type: "Factura Recibida",
@@ -841,8 +854,10 @@ export default function FacturacionView({
         const flightProvider = boleto?.aerolineaValidadora || "Boleto Aéreo GDS";
         
         if (onAddPayableObligation) {
+          const payId = nextSequentialId("PAY", newPayIds);
+          newPayIds.push(payId);
           const newObligation: PayableObligation = {
-            id: `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: payId,
             dueDate: activeRes.checkIn,
             providerName: flightProvider,
             serviceDetail: s.descripcion,
@@ -857,8 +872,10 @@ export default function FacturacionView({
         }
 
         if (onAddProviderStatement) {
+          const docFacId = nextSequentialId("DOC-FAC", newDocFacIds);
+          newDocFacIds.push(docFacId);
           const newStatement: ProviderStatement = {
-            id: `DOC-FAC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: docFacId,
             providerName: flightProvider,
             date: new Date().toISOString().split("T")[0],
             type: "Factura Recibida",
@@ -880,8 +897,10 @@ export default function FacturacionView({
         const dest = vuelo.segmentos && vuelo.segmentos.length > 0 ? vuelo.segmentos[vuelo.segmentos.length-1].destino : "";
         
         if (onAddPayableObligation) {
+          const payId = nextSequentialId("PAY", newPayIds);
+          newPayIds.push(payId);
           const newObligation: PayableObligation = {
-            id: `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: payId,
             dueDate: activeRes.checkIn,
             providerName: flightProvider,
             serviceDetail: `Boleto Aéreo PNR: ${vuelo.pnr} (Ruta: ${origin}-${dest})`,
@@ -896,8 +915,10 @@ export default function FacturacionView({
         }
 
         if (onAddProviderStatement) {
+          const docFacId = nextSequentialId("DOC-FAC", newDocFacIds);
+          newDocFacIds.push(docFacId);
           const newStatement: ProviderStatement = {
-            id: `DOC-FAC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            id: docFacId,
             providerName: flightProvider,
             date: new Date().toISOString().split("T")[0],
             type: "Factura Recibida",
@@ -914,12 +935,16 @@ export default function FacturacionView({
     const receiptAmount = activeRes.comprobanteMonto || 0;
     const excess = (!isCredit && receiptAmount > remainingToPay) ? (receiptAmount - remainingToPay) : 0;
 
+    const newFacIds: string[] = invoices.map(i => i.id);
+
     if (onAddInvoice) {
       if (appliedSaldoFavor > 0 && remainingToPay > 0) {
         // Splitting into two invoices: one paid via credit, one for the remaining amount
         const taxSaldo = computeTax(appliedSaldoFavor, activeRes, agencyRecord, overrideExempt);
+        const invoicePaidId = nextSequentialId("FAC", newFacIds);
+        newFacIds.push(invoicePaidId);
         const invoicePaid: FinancialInvoice = {
-          id: `FAC-${Math.floor(5200 + Math.random() * 800)}`,
+          id: invoicePaidId,
           clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Facturación Aprobada - Cobro con Saldo a Favor)`,
           clientId: agencyRecord?.id,
           reservationId: activeRes.id,
@@ -941,8 +966,10 @@ export default function FacturacionView({
         onAddInvoice(invoicePaid);
 
         const taxRemaining = computeTax(remainingToPay, activeRes, agencyRecord, overrideExempt);
+        const invoiceRemainingId = nextSequentialId("FAC", newFacIds);
+        newFacIds.push(invoiceRemainingId);
         const invoiceRemaining: FinancialInvoice = {
-          id: `FAC-${Math.floor(5200 + Math.random() * 800)}`,
+          id: invoiceRemainingId,
           clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Facturación Aprobada - Pago Restante)`,
           clientId: agencyRecord?.id,
           reservationId: activeRes.id,
@@ -965,8 +992,10 @@ export default function FacturacionView({
       } else {
         // Single invoice
         const taxMain = computeTax(pendingTotal, activeRes, agencyRecord, overrideExempt);
+        const newInvoiceId = nextSequentialId("FAC", newFacIds);
+        newFacIds.push(newInvoiceId);
         const newInvoice: FinancialInvoice = {
-          id: `FAC-${Math.floor(5200 + Math.random() * 800)}`,
+          id: newInvoiceId,
           clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Facturación Serv. Terrestres${jointFlights.length > 0 ? ' y Aéreos' : ''} Aprobados)`,
           clientId: agencyRecord?.id,
           reservationId: activeRes.id,
@@ -990,7 +1019,7 @@ export default function FacturacionView({
 
       if (excess > 0) {
         const excessInvoice: FinancialInvoice = {
-          id: `ABO-${Math.floor(7000 + Math.random() * 999)}`,
+          id: nextSequentialId("ABO", invoices.map(i => i.id)),
           clientName: `Excedente de Pago (Abono a Saldo a Favor): ${activeRes.holder} - Localizador ${activeRes.id}`,
           date: new Date().toISOString().split("T")[0],
           dueDate: activeRes.checkIn,
@@ -1190,7 +1219,7 @@ export default function FacturacionView({
       const _cancelAgency = clients.find(c => c.nombre === activeRes.agenciaName);
       const _cancelTax = computeTax(invoicedTotal, activeRes, _cancelAgency);
       const creditNote: FinancialInvoice = {
-        id: `NC-${Math.floor(8000 + Math.random() * 999)}`,
+        id: nextSequentialId("NC", invoices.map(i => i.id)),
         clientName: `Anulación: ${activeRes.holder} - Localizador ${activeRes.id}`,
         clientId: _cancelAgency?.id,
         reservationId: activeRes.id,

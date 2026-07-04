@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Proveedor, TipoProveedor } from "../types/producto";
+import { nextSequentialId } from "../lib/idGenerator";
 import { Search, Plus, Edit3, X, Save, Phone, Mail, MapPin, Tag, DollarSign, Briefcase, Building2 } from "lucide-react";
 
 interface ProveedoresViewProps {
@@ -64,7 +65,7 @@ export default function ProveedoresView({ proveedores, onAddProveedor, onUpdateP
 
   const handleSave = () => {
     if (activeId === "new") {
-      const newP = { ...form, id: `prov-${Date.now()}` } as Proveedor;
+      const newP = { ...form, id: nextSequentialId("prov", proveedores.map(p => p.id)) } as Proveedor;
       onAddProveedor(newP);
       setActiveId(newP.id);
     } else {
