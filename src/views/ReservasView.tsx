@@ -2325,72 +2325,6 @@ export default function ReservasView({
                 })()}
               </div>
 
-              {/* Resumen de Salud Financiera (Widget de Conciliación) */}
-              <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
-                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2 flex items-center gap-1.5 text-zinc-650">
-                  🛡️ Estado de Caja y Saldos
-                </h4>
-                {(() => {
-                  const resInvoices = invoices.filter(inv => inv.clientName.includes(`Localizador ${activeRes.id}`) && inv.type === "Cobro");
-                  // Only FAC- invoices represent cash collected; NC- (credits) and ABO- (wallet transfers) are excluded
-                  const paidInvoicesTotal = resInvoices
-                    .filter(inv => inv.status === "Pagado" && inv.id.startsWith("FAC-"))
-                    .reduce((sum, inv) => sum + inv.amount, 0);
-                  const unpaidFacIds = resInvoices.filter(inv => inv.status !== "Pagado" && inv.id.startsWith("FAC-")).map(inv => inv.id);
-                  // Vouchers on unpaid FAC invoices count as partial collections
-                  const partialVerifiedVouchers = (vouchers || []).filter(v =>
-                    v.status === "Verificado" &&
-                    (v.locatorId === activeRes.id || (v.invoiceId && unpaidFacIds.includes(v.invoiceId)))
-                  );
-                  const totalCobrado = Math.max(0, paidInvoicesTotal + partialVerifiedVouchers.reduce((sum, v) => sum + v.amount, 0));
-                  const adjustments = (activeRes.variaciones || []).reduce((sum, v) => sum + v.amountSale, 0);
-                  const originalPrice = activeRes.totalPrice - adjustments;
-                  const pctCobrado = activeRes.totalPrice > 0 ? Math.min(100, Math.round((totalCobrado / activeRes.totalPrice) * 100)) : 0;
-
-                  return (
-                    <div className="space-y-3.5">
-                      {/* KPIs */}
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-left">
-                          <span className="text-[9px] uppercase font-bold text-zinc-450 block">Precio Original</span>
-                          <span className="font-mono text-zinc-700 font-bold block mt-0.5">${originalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-left">
-                          <span className="text-[9px] uppercase font-bold text-zinc-455 block">Ajustes (Modif.)</span>
-                          <span className={`font-mono font-bold block mt-0.5 ${adjustments >= 0 ? "text-amber-600" : "text-emerald-700"}`}>
-                            {adjustments >= 0 ? "+" : ""}${adjustments.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Bar indicator */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center text-[10px] font-bold text-zinc-650">
-                          <span>Total Cobrado (${totalCobrado.toFixed(2)})</span>
-                          <span>{pctCobrado}%</span>
-                        </div>
-                        <div className="w-full bg-zinc-100 h-2.5 rounded-full overflow-hidden border border-zinc-200">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              pctCobrado === 100 ? "bg-emerald-650" : "bg-amber-500"
-                            }`}
-                            style={{ width: `${pctCobrado}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Pending to collect */}
-                      <div className="flex justify-between items-center bg-zinc-50 border border-zinc-150 rounded p-2.5">
-                        <span className="text-[10px] font-bold text-zinc-500">Saldo Pendiente de Cobro:</span>
-                        <span className={`font-mono font-black text-sm ${pctCobrado === 100 ? "text-emerald-700" : "text-red-650 animate-pulse"}`}>
-                          ${Math.max(0, activeRes.totalPrice - totalCobrado).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-
               {/* Historial de Variaciones y Ajustes como Línea de Tiempo */}
               {activeRes.variaciones && activeRes.variaciones.length > 0 && (
                 <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
@@ -2669,6 +2603,72 @@ export default function ReservasView({
                   </div>
                 );
               })()}
+
+              {/* Resumen de Salud Financiera (Widget de Conciliación) */}
+              <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2 flex items-center gap-1.5 text-zinc-600">
+                  🛡️ Estado de Caja y Saldos
+                </h4>
+                {(() => {
+                  const resInvoices = invoices.filter(inv => inv.clientName.includes(`Localizador ${activeRes.id}`) && inv.type === "Cobro");
+                  // Only FAC- invoices represent cash collected; NC- (credits) and ABO- (wallet transfers) are excluded
+                  const paidInvoicesTotal = resInvoices
+                    .filter(inv => inv.status === "Pagado" && inv.id.startsWith("FAC-"))
+                    .reduce((sum, inv) => sum + inv.amount, 0);
+                  const unpaidFacIds = resInvoices.filter(inv => inv.status !== "Pagado" && inv.id.startsWith("FAC-")).map(inv => inv.id);
+                  // Vouchers on unpaid FAC invoices count as partial collections
+                  const partialVerifiedVouchers = (vouchers || []).filter(v =>
+                    v.status === "Verificado" &&
+                    (v.locatorId === activeRes.id || (v.invoiceId && unpaidFacIds.includes(v.invoiceId)))
+                  );
+                  const totalCobrado = Math.max(0, paidInvoicesTotal + partialVerifiedVouchers.reduce((sum, v) => sum + v.amount, 0));
+                  const adjustments = (activeRes.variaciones || []).reduce((sum, v) => sum + v.amountSale, 0);
+                  const originalPrice = activeRes.totalPrice - adjustments;
+                  const pctCobrado = activeRes.totalPrice > 0 ? Math.min(100, Math.round((totalCobrado / activeRes.totalPrice) * 100)) : 0;
+
+                  return (
+                    <div className="space-y-3.5">
+                      {/* KPIs */}
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-left">
+                          <span className="text-[9px] uppercase font-bold text-zinc-400 block">Precio Original</span>
+                          <span className="font-mono text-zinc-700 font-bold block mt-0.5">${originalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-left">
+                          <span className="text-[9px] uppercase font-bold text-zinc-400 block">Ajustes (Modif.)</span>
+                          <span className={`font-mono font-bold block mt-0.5 ${adjustments >= 0 ? "text-amber-600" : "text-emerald-700"}`}>
+                            {adjustments >= 0 ? "+" : ""}${adjustments.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Bar indicator */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-zinc-600">
+                          <span>Total Cobrado (${totalCobrado.toFixed(2)})</span>
+                          <span>{pctCobrado}%</span>
+                        </div>
+                        <div className="w-full bg-zinc-100 h-2.5 rounded-full overflow-hidden border border-zinc-200">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              pctCobrado === 100 ? "bg-emerald-600" : "bg-amber-500"
+                            }`}
+                            style={{ width: `${pctCobrado}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Pending to collect */}
+                      <div className="flex justify-between items-center bg-zinc-50 border border-zinc-150 rounded p-2.5">
+                        <span className="text-[10px] font-bold text-zinc-500">Saldo Pendiente de Cobro:</span>
+                        <span className={`font-mono font-black text-sm ${pctCobrado === 100 ? "text-emerald-700" : "text-red-600 animate-pulse"}`}>
+                          ${Math.max(0, activeRes.totalPrice - totalCobrado).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
 
               {/* Liquidación a Proveedores */}
               {(() => {
