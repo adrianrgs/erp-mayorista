@@ -23,7 +23,8 @@ mutation InsertReservation(
   $facturacionTipo: String,
   $facturacionRechazoMotivo: String,
   $facturacionRechazoArchivos: String,
-  $variaciones: Any
+  $variaciones: Any,
+  $pasajeros: Any
 , $updatedAt: String) @auth(level: PUBLIC) {
   reservation_insert(data: {
     id: $id,
@@ -40,6 +41,7 @@ mutation InsertReservation(
     tipo: $tipo,
     servicios: $servicios,
     variaciones: $variaciones,
+    pasajeros: $pasajeros,
     telefono: $telefono,
     email: $email,
     flightNo: $flightNo,
@@ -86,7 +88,8 @@ mutation UpdateReservation(
   $facturacionTipo: String,
   $facturacionRechazoMotivo: String,
   $facturacionRechazoArchivos: String,
-  $variaciones: Any
+  $variaciones: Any,
+  $pasajeros: Any
 , $updatedAt: String) @auth(level: PUBLIC) {
   reservation_update(id: $id,
     data: {
@@ -103,6 +106,7 @@ mutation UpdateReservation(
     tipo: $tipo,
     servicios: $servicios,
     variaciones: $variaciones,
+    pasajeros: $pasajeros,
     telefono: $telefono,
     email: $email,
     flightNo: $flightNo,

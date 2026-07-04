@@ -96,9 +96,18 @@ export default function App() {
     return <LoginScreen onLogin={() => setAuthenticated(true)} />;
   }
 
-  // Navigation Section
-  const [currentSection, setCurrentSection] = useState<ProjectView>(ProjectView.PROPIEDADES);
-  
+  // Navigation Section — se recuerda entre recargas de página
+  const [currentSection, setCurrentSectionState] = useState<ProjectView>(() => {
+    const saved = localStorage.getItem("currentSection");
+    return (saved && Object.values(ProjectView).includes(saved as ProjectView))
+      ? (saved as ProjectView)
+      : ProjectView.PROPIEDADES;
+  });
+  const setCurrentSection = (section: ProjectView) => {
+    localStorage.setItem("currentSection", section);
+    setCurrentSectionState(section);
+  };
+
   // App state managers
   const [properties, setProperties] = useState<HotelProperty[]>(initialProperties);
   const [reservations, setReservations] = useState<Reservation[]>(initialReservas);
@@ -460,6 +469,7 @@ export default function App() {
         facturacionRechazoMotivo: newRes.facturacionRechazoMotivo,
         facturacionRechazoArchivos: newRes.facturacionRechazoArchivos,
         variaciones: newRes.variaciones ? JSON.parse(JSON.stringify(newRes.variaciones)) : null,
+        pasajeros: newRes.pasajeros ? JSON.parse(JSON.stringify(newRes.pasajeros)) : null,
         updatedAt: newRes.updatedAt
       });
     } catch (e) {
@@ -749,6 +759,7 @@ export default function App() {
         facturacionRechazoMotivo: finalRes.facturacionRechazoMotivo,
         facturacionRechazoArchivos: finalRes.facturacionRechazoArchivos,
         variaciones: finalRes.variaciones ? JSON.parse(JSON.stringify(finalRes.variaciones)) : null,
+        pasajeros: finalRes.pasajeros ? JSON.parse(JSON.stringify(finalRes.pasajeros)) : null,
         updatedAt: finalRes.updatedAt
       });
       console.log(`[DB] Reservation ${finalRes.id} saved. facturacionTipo=${finalRes.facturacionTipo}, servicios statusList=[${(finalRes.servicios||[]).map((s:any)=>s.statusFacturacion).join(',')}]`);

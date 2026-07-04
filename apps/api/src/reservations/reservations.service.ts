@@ -17,6 +17,7 @@ export class ReservationsService {
       ...r,
       servicios: parseJsonField(r.servicios, []),
       variaciones: parseJsonField(r.variaciones, []),
+      pasajeros: parseJsonField(r.pasajeros, []),
     };
   }
 
@@ -53,6 +54,7 @@ export class ReservationsService {
       specialRequests: dto.specialRequests || null,
       servicios: JSON.stringify(dto.servicios || []),
       variaciones: JSON.stringify([]),
+      pasajeros: JSON.stringify(dto.pasajeros || []),
       createdAt: now.split('T')[0],
       updatedAt: now,
     });
@@ -79,6 +81,7 @@ export class ReservationsService {
         ...dto.previousState,
         servicios: dto.previousState.servicios || [],
         variaciones: dto.previousState.variaciones || [],
+        pasajeros: dto.previousState.pasajeros || [],
       };
       const newRes = {
         ...oldRes,
@@ -86,6 +89,7 @@ export class ReservationsService {
         id,
         servicios: dto.servicios,
         variaciones: dto.variaciones || oldRes.variaciones,
+        pasajeros: dto.pasajeros || oldRes.pasajeros,
       };
 
       const result = this.reconciler.reconcileDossierUpdate(oldRes, newRes, clients, obligations);
@@ -98,6 +102,7 @@ export class ReservationsService {
         netPrice: result.updatedRes.netPrice,
         servicios: JSON.stringify(result.updatedRes.servicios || []),
         variaciones: JSON.stringify(result.updatedRes.variaciones || []),
+        pasajeros: JSON.stringify((result.updatedRes as any).pasajeros || []),
         updatedAt: now,
         ...(dto.holder && { holder: dto.holder }),
         ...(dto.checkIn && { checkIn: dto.checkIn }),
@@ -151,6 +156,7 @@ export class ReservationsService {
       ...(dto.specialRequests !== undefined && { specialRequests: dto.specialRequests }),
       ...(dto.servicios && { servicios: JSON.stringify(dto.servicios) }),
       ...(dto.variaciones && { variaciones: JSON.stringify(dto.variaciones) }),
+      ...(dto.pasajeros && { pasajeros: JSON.stringify(dto.pasajeros) }),
     });
 
     return { success: true };

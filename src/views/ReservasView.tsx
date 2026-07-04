@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient, FleetVehicle, CompanyConfig } from "../types";
+import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient, FleetVehicle, CompanyConfig, ReservationPassenger, PassengerType } from "../types";
+import { createEmptyPassenger, deriveHolderName, derivePassengersFromLegacyReservation, markTitular } from "../lib/passengers";
+import { Tabs } from "../components/reservas/Tabs";
 import { Property, RoomType, RatePlan, TipoCobro, ExtraService, ServiceRate } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
 import { buildRoute, formatGDSDate } from "../lib/parsers/pnrParser";
@@ -46,6 +48,7 @@ import { FinancialInvoice, PayableObligation, PaymentVoucher } from "../types";
 import { useDialog } from "../components/ui/DialogProvider";
 import { reconcileDossierUpdate } from "../lib/financialReconciler";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
+import { getStatusBadge, formatDate } from "../components/reservas/reservasFormat";
 
 interface ReservasViewProps {
   reservations: Reservation[];
@@ -153,12 +156,17 @@ export default function ReservasView({
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const { showAlert, showConfirm } = useDialog();
   // Navigation inside the module:
-  // 1: List (dashboard), 2: Expediente (details), 3: Crear Expediente (Cart), 4: Configurar Servicio
-  const [viewLevel, setViewLevel] = useState<1 | 2 | 3 | 4>(1);
+  // 1: List (dashboard), 2: Expediente unificado (Resumen/Datos Generales/Pasajeros/Servicios/Administración), 3: Configurar Servicio
+  const [viewLevel, setViewLevel] = useState<1 | 2 | 3>(1);
   const [selectedResId, setSelectedResId] = useState<string | null>(reservations[0]?.id || null);
   const [financialImpactPreview, setFinancialImpactPreview] = useState<any | null>(null);
   const [pendingSaveReservation, setPendingSaveReservation] = useState<Reservation | null>(null);
-  
+
+  // Pestaña activa dentro del expediente unificado (Level 2)
+  type ExpedienteTab = "resumen" | "datosGenerales" | "pasajeros" | "servicios" | "administracion";
+  const [activeExpedienteTab, setActiveExpedienteTab] = useState<ExpedienteTab>("resumen");
+  const [cartPasajeros, setCartPasajeros] = useState<ReservationPassenger[]>([]);
+
   // Search & Filters (Level 1)
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("Todas");
@@ -277,7 +285,7 @@ export default function ReservasView({
     id: string;
     roomTypeId: string;
     adultsCount: number;
-    guests: { name: string; type: "Adulto" | "Niño" }[];
+    guests: { name: string; type: "Adulto" | "Niño"; passengerId?: string }[];
   }[]>([]);
   const [comisionB2B, setComisionB2B] = useState(10);
   const [comisionPropia, setComisionPropia] = useState(5);
@@ -332,6 +340,18 @@ export default function ReservasView({
   const [submitSuccess, setSubmitSuccess] = useState("");
 
   const activeRes = reservations.find(r => r.id === selectedResId);
+
+  // Modo derivado del expediente unificado: sin reserva activa = creando una nueva;
+  // con reserva activa + edición en curso = editando; si no, solo viendo (solo lectura).
+  const expedienteMode: "create" | "view" | "edit" =
+    !activeRes ? "create" : (isEditingReservationId ? "edit" : "view");
+
+  // Lista de pasajeros "efectiva" a mostrar: el borrador en memoria mientras se crea/edita,
+  // o (para reservas ya guardadas que aún no tienen `pasajeros` persistido) una lista
+  // reconstruida al vuelo a partir del titular + huéspedes de Alojamiento ya cargados.
+  const effectivePasajeros: ReservationPassenger[] = expedienteMode !== "view"
+    ? cartPasajeros
+    : derivePassengersFromLegacyReservation(activeRes);
 
   const handleAutofillTransfer = () => {
     // Buscar vuelo vinculado (priorizar el seleccionado en el carrito, luego el de la base de datos)
@@ -572,9 +592,13 @@ export default function ReservasView({
     setCartSpecialRequests("");
     setCartFlightNo("");
     setCartServices([]);
+    setCartPasajeros([]);
     setComisionB2B(10);
     setComisionPropia(5);
-    setViewLevel(3);
+    setSelectedResId(null);
+    setIsEditingReservationId(null);
+    setActiveExpedienteTab("datosGenerales");
+    setViewLevel(2);
   };
 
   // Navigate to Level 4 to add service
@@ -647,8 +671,8 @@ export default function ReservasView({
       setComisionB2B(10);
       setComisionPropia(5);
     }
-    
-    setViewLevel(4);
+
+    setViewLevel(3);
   };
 
   const getStayNights = () => {
@@ -757,6 +781,26 @@ export default function ReservasView({
       if (room.id !== roomId) return room;
       const updatedGuests = [...room.guests];
       updatedGuests[guestIndex] = { ...updatedGuests[guestIndex], name };
+      return { ...room, guests: updatedGuests };
+    }));
+  };
+
+  // Asigna un pasajero de la lista de la reserva (pestaña Pasajeros) a un huésped de la habitación
+  const handleRoomGuestAssign = (roomId: string, guestIndex: number, passengerId: string) => {
+    const p = cartPasajeros.find(x => x.id === passengerId);
+    if (!p) return;
+    setLodgingRooms(prev => prev.map(room => {
+      if (room.id !== roomId) return room;
+      const updatedGuests = [...room.guests];
+      const current = updatedGuests[guestIndex];
+      const suggestedType: "Adulto" | "Niño" = p.tipo === "Adulto" ? "Adulto" : "Niño";
+      updatedGuests[guestIndex] = {
+        ...current,
+        name: p.nombre,
+        passengerId: p.id,
+        // Solo sugiere el tipo si el huésped no tenía uno asignado manualmente antes
+        type: current?.name ? current.type : suggestedType,
+      };
       return { ...room, guests: updatedGuests };
     }));
   };
@@ -1003,7 +1047,8 @@ export default function ReservasView({
       setSubmitSuccess(`✓ Servicio "${activeServiceType}" agregado al carrito.`);
     }
 
-    setViewLevel(3);
+    setViewLevel(2);
+    setActiveExpedienteTab("servicios");
     setTimeout(() => setSubmitSuccess(""), 4000);
   };
 
@@ -1021,46 +1066,30 @@ export default function ReservasView({
     setSortBy("ultimas");
   };
 
-  // Backing out from cart
-  const handleCancelCart = () => {
-    if (isEditingReservationId) {
-      setViewLevel(2);
-      setIsEditingReservationId(null);
-    } else {
-      setViewLevel(1);
-    }
-  };
+  // Carga el estado del carrito/borrador a partir de una reserva ya guardada.
+  // Se usa tanto para "Ver" (solo lectura) como para "Editar" un expediente.
+  const loadReservationIntoCart = (res: Reservation) => {
+    setCartId(res.id);
+    setCartHolder(res.holder);
+    setCartCheckIn(res.checkIn);
+    setCartCheckOut(res.checkOut);
+    setCartMercado(res.mercado || "INTERNACIONAL");
+    setCartAgencia(res.agenciaName || "");
+    setAgencySearch(res.agenciaName || "");
 
-  // Backing out from Service Configuration form
-  const handleBackToCart = () => {
-    setEditingServiceId(null);
-    setViewLevel(3);
-  };
-
-  // Prepare reservation fields to edit
-  const handleEditReservation = () => {
-    if (!activeRes) return;
-    setIsEditingReservationId(activeRes.id);
-    setCartId(activeRes.id);
-    setCartHolder(activeRes.holder);
-    setCartCheckIn(activeRes.checkIn);
-    setCartCheckOut(activeRes.checkOut);
-    setCartMercado(activeRes.mercado || "INTERNACIONAL");
-    setCartAgencia(activeRes.agenciaName || "");
-    setAgencySearch(activeRes.agenciaName || "");
-    
-    const matchedClient = clients.find(c => c.nombre.toLowerCase() === (activeRes.agenciaName || "").toLowerCase());
+    const matchedClient = clients.find(c => c.nombre.toLowerCase() === (res.agenciaName || "").toLowerCase());
     setSelectedClient(matchedClient || null);
-    
-    setCartTelefono(activeRes.telefono || "");
-    setCartEmail(activeRes.email || "");
-    setCartTipo(activeRes.tipo || "Reserva Real");
-    setCartSpecialRequests(activeRes.specialRequests || "");
-    setCartFlightNo(activeRes.flightNo || "");
-    
-    if (activeRes.servicios && activeRes.servicios.length > 0) {
+
+    setCartTelefono(res.telefono || "");
+    setCartEmail(res.email || "");
+    setCartTipo(res.tipo || "Reserva Real");
+    setCartSpecialRequests(res.specialRequests || "");
+    setCartFlightNo(res.flightNo || "");
+    setCartPasajeros(derivePassengersFromLegacyReservation(res));
+
+    if (res.servicios && res.servicios.length > 0) {
       const seenIds = new Set<string>();
-      const sanitizedServices = activeRes.servicios.map(s => {
+      const sanitizedServices = res.servicios.map(s => {
         let sid = s.id;
         if (!sid || seenIds.has(sid)) {
           sid = `SRV-${Math.floor(1000 + Math.random() * 9000)}-${Math.random().toString(36).substring(2, 5)}`;
@@ -1074,27 +1103,98 @@ export default function ReservasView({
       const legacyService: ServiceItem = {
         id: `SRV-${Math.floor(100 + Math.random() * 900)}`,
         tipo: ServiceType.ALOJAMIENTO,
-        descripcion: `Hotel: ${activeRes.hotelName} - 7 noches - ${activeRes.pax} Pax - IN: ${formatDate(activeRes.checkIn)} / OUT: ${formatDate(activeRes.checkOut)}`,
-        precioNeto: activeRes.netPrice,
-        precioVenta: activeRes.totalPrice,
+        descripcion: `Hotel: ${res.hotelName} - 7 noches - ${res.pax} Pax - IN: ${formatDate(res.checkIn)} / OUT: ${formatDate(res.checkOut)}`,
+        precioNeto: res.netPrice,
+        precioVenta: res.totalPrice,
         detalles: {
-          hotelSearchQuery: activeRes.hotelName,
-          checkInDate: activeRes.checkIn,
-          checkOutDate: activeRes.checkOut,
+          hotelSearchQuery: res.hotelName,
+          checkInDate: res.checkIn,
+          checkOutDate: res.checkOut,
           comisionB2B: 10,
           comisionPropia: 5,
           lodgingRooms: [{
             id: `rm-${Date.now()}-1`,
-            roomTypeId: roomTypes.filter(rt => rt.property_id === (detailedProperties.find(p => p.nombre.toLowerCase() === activeRes.hotelName.toLowerCase())?.id || ""))[0]?.id || "",
-            adultsCount: activeRes.pax,
-            guests: [{ name: activeRes.holder, type: "Adulto" }]
+            roomTypeId: roomTypes.filter(rt => rt.property_id === (detailedProperties.find(p => p.nombre.toLowerCase() === res.hotelName.toLowerCase())?.id || ""))[0]?.id || "",
+            adultsCount: res.pax,
+            guests: [{ name: res.holder, type: "Adulto" }]
           }]
         }
       };
       setCartServices([legacyService]);
     }
-    setViewLevel(3);
   };
+
+  // Abrir un expediente ya guardado en modo solo-lectura (Level 2, pestaña Resumen)
+  const handleOpenReservation = (id: string) => {
+    const res = reservations.find(r => r.id === id);
+    if (res) loadReservationIntoCart(res);
+    setSelectedResId(id);
+    setIsEditingReservationId(null);
+    setActiveExpedienteTab("resumen");
+    setViewLevel(2);
+  };
+
+  // Backing out from cart
+  const handleCancelCart = () => {
+    if (isEditingReservationId) {
+      // Descartar cambios no guardados: recargar el borrador desde el último estado persistido
+      if (activeRes) loadReservationIntoCart(activeRes);
+      setIsEditingReservationId(null);
+      setActiveExpedienteTab("resumen");
+    } else {
+      setViewLevel(1);
+    }
+  };
+
+  // Backing out from Service Configuration form
+  const handleBackToCart = () => {
+    setEditingServiceId(null);
+    setViewLevel(2);
+    setActiveExpedienteTab("servicios");
+  };
+
+  // Prepare reservation fields to edit
+  const handleEditReservation = () => {
+    if (!activeRes) return;
+    loadReservationIntoCart(activeRes);
+    setIsEditingReservationId(activeRes.id);
+    setActiveExpedienteTab("datosGenerales");
+  };
+
+  // --- PASAJEROS (Level 2, pestaña Pasajeros) ---
+  const handleAddPasajero = () => {
+    setCartPasajeros(prev => [...prev, createEmptyPassenger(prev.length === 0)]);
+  };
+
+  const handleUpdatePasajeroNombre = (id: string, nombre: string) => {
+    setCartPasajeros(prev => prev.map(p => p.id === id ? { ...p, nombre } : p));
+  };
+
+  const handleUpdatePasajeroTipo = (id: string, tipo: PassengerType) => {
+    setCartPasajeros(prev => prev.map(p => p.id === id ? { ...p, tipo } : p));
+  };
+
+  const handleRemovePasajero = (id: string) => {
+    setCartPasajeros(prev => {
+      const removed = prev.find(p => p.id === id);
+      const rest = prev.filter(p => p.id !== id);
+      if (removed?.esTitular && rest.length > 0) {
+        rest[0] = { ...rest[0], esTitular: true };
+      }
+      return rest;
+    });
+  };
+
+  const handleSetTitular = (id: string) => {
+    setCartPasajeros(prev => markTitular(prev, id));
+  };
+
+  // Deriva cartHolder automáticamente a partir del pasajero titular
+  React.useEffect(() => {
+    const derived = deriveHolderName(cartPasajeros);
+    if (derived !== cartHolder) setCartHolder(derived);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartPasajeros]);
 
   // Prepare service fields to edit
   const handleEditService = (service: ServiceItem) => {
@@ -1212,12 +1312,12 @@ export default function ReservasView({
         setManualSupplier("Directo");
       }
     }
-    setViewLevel(4);
+    setViewLevel(3);
   };
 
   // Save the entire booking file (Level 3 to Level 2)
-  const handleConfirmExpediente = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleConfirmExpediente = (e?: React.FormEvent) => {
+    e?.preventDefault();
     if (!cartHolder.trim()) {
       showAlert({ title: "Atención", message: "Por favor ingrese el titular del viaje.", type: "warning" });
       return;
@@ -1261,6 +1361,7 @@ export default function ReservasView({
         createdAt: activeRes?.createdAt || new Date().toISOString().split("T")[0],
         mercado: cartMercado,
         servicios: cartServices,
+        pasajeros: cartPasajeros,
         tipo: cartTipo
       };
 
@@ -1305,6 +1406,7 @@ export default function ReservasView({
       }
       setSelectedResId(isEditingReservationId);
       setIsEditingReservationId(null);
+      setActiveExpedienteTab("resumen");
       setViewLevel(2);
       setSubmitSuccess(`✓ Cambios guardados en el expediente "${isEditingReservationId}".`);
     } else {
@@ -1326,6 +1428,7 @@ export default function ReservasView({
         createdAt: new Date().toISOString().split("T")[0],
         mercado: cartMercado,
         servicios: cartServices.map(s => ({ ...s, statusFacturacion: s.statusFacturacion || "Borrador" as const })),
+        pasajeros: cartPasajeros,
         tipo: cartTipo
       };
 
@@ -1344,6 +1447,7 @@ export default function ReservasView({
       // ─────────────────────────────────────────────────────────────────────
 
       setSelectedResId(cartId);
+      setActiveExpedienteTab("resumen");
       setViewLevel(2);
       setSubmitSuccess(`✓ Expediente "${cartId}" creado exitosamente.`);
     }
@@ -1356,37 +1460,13 @@ export default function ReservasView({
       onUpdateReservation(pendingSaveReservation);
       setSelectedResId(pendingSaveReservation.id);
       setIsEditingReservationId(null);
+      setActiveExpedienteTab("resumen");
       setViewLevel(2);
       setSubmitSuccess(`✓ Cambios guardados en el expediente "${pendingSaveReservation.id}".`);
     }
     setFinancialImpactPreview(null);
     setPendingSaveReservation(null);
     setTimeout(() => setSubmitSuccess(""), 4000);
-  };
-
-  const getStatusBadge = (status: Reservation["status"]) => {
-    switch (status) {
-      case "Confirmada":
-        return "bg-emerald-50 border-emerald-200 text-emerald-700 font-extrabold";
-      case "Pendiente de Pago":
-        return "bg-amber-50 border-amber-250 text-amber-700 font-bold";
-      case "Petición Especial":
-        return "bg-blue-50 border-blue-200 text-blue-700 font-bold";
-      case "Modificada":
-        return "bg-purple-50 border-purple-200 text-purple-700 font-bold";
-      case "Cancelada":
-        return "bg-red-50 border-red-200 text-red-650 font-bold";
-      default:
-        return "bg-zinc-50 border-zinc-200 text-zinc-655 font-medium";
-    }
-  };
-
-  // Helper: format date from yyyy-mm-dd to dd/mm/yyyy
-  const formatDate = (dateStr?: string): string => {
-    if (!dateStr) return '';
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
   };
 
   const rejectedReservations = reservations.filter(r => r.facturacionRechazoMotivo || (r.servicios && r.servicios.some(s => s.statusFacturacion === "Rechazado")));
@@ -1615,7 +1695,7 @@ export default function ReservasView({
                     filteredAndSorted.map((r) => (
                       <React.Fragment key={r.id}>
                         <tr 
-                          onClick={() => { setSelectedResId(r.id); setViewLevel(2); }}
+                          onClick={() => { handleOpenReservation(r.id); }}
                           className="hover:bg-zinc-50/60 transition-colors cursor-pointer group"
                         >
                         <td className="px-2 py-2.5 font-mono font-bold text-zinc-900 whitespace-nowrap truncate text-[11px]">
@@ -1681,7 +1761,7 @@ export default function ReservasView({
                         </td>
                         <td className="px-2 py-2.5 text-center whitespace-nowrap text-[11px]" onClick={e => e.stopPropagation()}>
                           <button
-                            onClick={() => { setSelectedResId(r.id); setViewLevel(2); }}
+                            onClick={() => { handleOpenReservation(r.id); }}
                             className="p-1.5 bg-zinc-50 border border-zinc-200 hover:bg-zinc-900 hover:text-white rounded text-[10px] cursor-pointer transition-all inline-flex items-center justify-center"
                             title="Ver Expediente"
                           >
@@ -1690,7 +1770,7 @@ export default function ReservasView({
                         </td>
                         </tr>
                         {filterStatus === "Rechazadas" && (r.facturacionRechazoMotivo || (r.servicios && r.servicios.some(s => s.statusFacturacion === "Rechazado"))) && (
-                          <tr className="bg-red-50 border-b border-red-100 hover:bg-red-50 cursor-pointer" onClick={() => { setSelectedResId(r.id); setViewLevel(2); }}>
+                          <tr className="bg-red-50 border-b border-red-100 hover:bg-red-50 cursor-pointer" onClick={() => { handleOpenReservation(r.id); }}>
                             <td colSpan={10} className="px-4 py-3">
                               <div className="flex flex-col gap-2">
                                 <div className="text-zinc-700 text-xs flex gap-2">
@@ -1734,30 +1814,68 @@ export default function ReservasView({
       )}
 
       {/* VIEW LEVEL 2: DETALLE DEL EXPEDIENTE (B2B BOOKING FILE) */}
-      {viewLevel === 2 && activeRes && (
+      {viewLevel === 2 && (
         <div className="space-y-6 animate-fade-in">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-zinc-200 pb-4 sticky top-16 bg-zinc-50/95 backdrop-blur-xs pt-2 z-10 -mx-8 px-8">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setViewLevel(1)}
-                className="p-1.5 hover:bg-zinc-200 rounded-md transition-colors cursor-pointer border border-zinc-200 bg-white"
-              >
-                <ArrowLeft className="w-4 h-4 text-zinc-700" />
-              </button>
-              <div>
-                <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-                  <span>Expedientes de Reserva</span>
-                  <span>/</span>
-                  <span className="font-mono">{activeRes.id}</span>
+          {/* Header + Tabs: se mueven juntos como un solo bloque sticky para que nunca se superpongan */}
+          <div className="sticky top-16 z-20 bg-zinc-50/95 backdrop-blur-xs -mx-8 px-8 pt-2 space-y-0">
+          {/* Header — modo creación (sin expediente guardado todavía) */}
+          {expedienteMode === "create" && (
+            <div className="flex items-center justify-between gap-3 border-b border-zinc-200 pb-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <button
+                  onClick={handleCancelCart}
+                  className="p-1 hover:bg-zinc-200 rounded-md transition-colors cursor-pointer border border-zinc-200 bg-white shrink-0"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 text-zinc-700" />
+                </button>
+                <div className="min-w-0">
+                  <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider block leading-none">Nuevo Registro</span>
+                  <h3 className="font-black text-xl text-zinc-950 font-mono tracking-tight leading-tight">{cartId}</h3>
                 </div>
-                <h3 className="font-black text-lg text-zinc-950 uppercase">{activeRes.holder}</h3>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleCancelCart}
+                  className="px-2.5 py-1 border border-zinc-200 hover:bg-zinc-50 rounded text-[10.5px] font-bold uppercase cursor-pointer bg-white whitespace-nowrap"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmExpediente()}
+                  disabled={(cartServices.length === 0 && cartLinkedFlights.filter(f => f.facturarConjunto).length === 0) || !cartHolder.trim()}
+                  className="px-2.5 py-1 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-[10.5px] font-black uppercase cursor-pointer transition-all whitespace-nowrap disabled:bg-zinc-200 disabled:text-zinc-400 disabled:cursor-not-allowed"
+                >
+                  Guardar Reserva
+                </button>
               </div>
             </div>
-            
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 bg-white p-1 rounded-full border border-zinc-200 shadow-3xs">
-                <span className="text-[9px] uppercase font-black text-zinc-400 pl-2">Estatus:</span>
+          )}
+
+          {/* Header — expediente ya guardado (ver/editar) */}
+          {expedienteMode !== "create" && activeRes && (
+          <div className="flex items-center justify-between gap-3 border-b border-zinc-200 pb-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <button
+                onClick={() => setViewLevel(1)}
+                className="p-1 hover:bg-zinc-200 rounded-md transition-colors cursor-pointer border border-zinc-200 bg-white shrink-0"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-zinc-700" />
+              </button>
+              <div className="min-w-0">
+                <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider block leading-none">Expedientes de Reserva</span>
+                <div className="flex items-center gap-2 leading-tight">
+                  <h3 className="font-black text-xl text-zinc-950 font-mono tracking-tight">{activeRes.id}</h3>
+                  <span className="text-xs font-bold text-zinc-500 uppercase truncate">{activeRes.holder}</span>
+                  {expedienteMode === "edit" && <span className="px-1.5 py-0.25 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold uppercase shrink-0">Editando</span>}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-1 bg-white p-0.5 rounded-full border border-zinc-200 shadow-3xs">
+                <span className="text-[8.5px] uppercase font-black text-zinc-400 pl-2 whitespace-nowrap">Estatus:</span>
                 <select
                   value={activeRes.status}
                   onChange={(e) => {
@@ -1769,7 +1887,7 @@ export default function ReservasView({
                       });
                     }
                   }}
-                  className={`px-3 py-1 border rounded-full text-[10px] font-black uppercase tracking-wider focus:outline-none cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all ${getStatusBadge(activeRes.status)}`}
+                  className={`px-2 py-0.5 border rounded-full text-[9.5px] font-black uppercase tracking-wider focus:outline-none cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all ${getStatusBadge(activeRes.status)}`}
                 >
                   <option value="Confirmada">Confirmada</option>
                   <option value="Pendiente de Pago">Pendiente de Pago</option>
@@ -1778,122 +1896,86 @@ export default function ReservasView({
                   <option value="Petición Especial">Petición Especial</option>
                 </select>
               </div>
-              
-              <button
-                onClick={handleEditReservation}
-                className="px-3 py-1.5 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-zinc-700 hover:text-zinc-950 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
-                title="Editar Expediente"
-              >
-                <Edit className="w-3.5 h-3.5" />
-                <span>Editar</span>
-              </button>
 
               <button
                 onClick={() => setShowB2BModal(true)}
-                className="px-3 py-1.5 border border-zinc-900 bg-zinc-900 hover:bg-zinc-800 rounded text-white font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
+                className="px-2.5 py-1 border border-zinc-900 bg-zinc-900 hover:bg-zinc-800 rounded text-white font-bold text-[10.5px] uppercase cursor-pointer transition-all flex items-center gap-1 whitespace-nowrap"
                 title="Compartir Formato B2B"
               >
-                <Share2 className="w-3.5 h-3.5" />
+                <Share2 className="w-3 h-3" />
                 <span>Formato B2B</span>
               </button>
-
-              {activeRes.status !== "Cancelada" ? (
-                <button
-                  onClick={() => {
-                    showConfirm({
-                      title: "Anular Expediente de Reserva",
-                      message: "Escriba el Localizador exacto para confirmar la anulación. El expediente cambiará a estado Cancelada.",
-                      requireInputToConfirm: activeRes.id,
-                      type: "danger",
-                      confirmText: "Sí, Anular",
-                      onConfirm: () => {
-                        if (onUpdateReservation) {
-                          onUpdateReservation({ ...activeRes, status: "Cancelada" });
-                          showAlert({ title: "Expediente Anulado", message: "El expediente ha sido anulado correctamente.", type: "success" });
-                        }
-                      }
-                    });
-                  }}
-                  className="px-3 py-1.5 border border-red-200 bg-red-50 hover:bg-red-100 rounded text-red-600 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
-                  title="Anular Expediente"
-                >
-                  <XCircle className="w-3.5 h-3.5" />
-                  <span>Anular</span>
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={() => {
-                      showConfirm({
-                        title: "Reactivar Expediente",
-                        message: "¿Está seguro que desea reactivar este expediente? Volverá al estado Pendiente de Pago.",
-                        type: "warning",
-                        confirmText: "Sí, Reactivar",
-                        onConfirm: () => {
-                          if (onUpdateReservation) {
-                            onUpdateReservation({ ...activeRes, status: "Pendiente de Pago" });
-                            showAlert({ title: "Expediente Reactivado", message: "El expediente ha sido devuelto al estado Pendiente de Pago.", type: "success" });
-                          }
-                        }
-                      });
-                    }}
-                    className="px-3 py-1.5 border border-amber-200 bg-amber-50 hover:bg-amber-100 rounded text-amber-700 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
-                    title="Reactivar Expediente"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Reactivar</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      showConfirm({
-                        title: "Eliminar Permanentemente",
-                        message: "Esta acción no se puede deshacer. El expediente y sus traslados serán eliminados de la base de datos de manera definitiva, liberando su identificador.",
-                        requireInputToConfirm: activeRes.id,
-                        type: "danger",
-                        confirmText: "Sí, Eliminar Permanentemente",
-                        onConfirm: () => {
-                          if (onDeleteReservation) {
-                            onDeleteReservation(activeRes.id);
-                            showAlert({ title: "Expediente Eliminado", message: "El expediente ha sido eliminado de forma permanente.", type: "success" });
-                            setViewLevel(1);
-                          }
-                        }
-                      });
-                    }}
-                    className="px-3 py-1.5 border border-red-300 bg-red-100 hover:bg-red-200 rounded text-red-700 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
-                    title="Eliminar Permanente"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Eliminar Permanente</span>
-                  </button>
-                </>
-              )}
 
               {activeRes.servicios?.some(s => s.statusFacturacion === "Facturado") && (
                 <button
                   onClick={() => setShowVoucherModal(true)}
-                  className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold uppercase cursor-pointer transition-all flex items-center gap-1 animate-fade-in"
+                  className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[10.5px] font-bold uppercase cursor-pointer transition-all flex items-center gap-1 whitespace-nowrap animate-fade-in"
                   title="Generar Voucher de Viaje Oficial para Pasajero"
                 >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Voucher Pasajero</span>
+                  <Printer className="w-3 h-3" />
+                  <span>Voucher</span>
                 </button>
               )}
 
-              <button
-                onClick={() => setShowB2BModal(true)}
-                className="p-2 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-zinc-750 cursor-pointer transition-all flex items-center justify-center"
-                title="Imprimir Formato B2B"
-              >
-                <Printer className="w-3.5 h-3.5" />
-              </button>
+              {expedienteMode === "edit" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleCancelCart}
+                    className="px-2.5 py-1 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-zinc-700 hover:text-zinc-950 font-bold text-[10.5px] uppercase cursor-pointer transition-all flex items-center gap-1 whitespace-nowrap"
+                    title="Cancelar Edición"
+                  >
+                    <XCircle className="w-3 h-3" />
+                    <span>Cancelar</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmExpediente()}
+                    disabled={(cartServices.length === 0 && cartLinkedFlights.filter(f => f.facturarConjunto).length === 0) || !cartHolder.trim()}
+                    className="px-2.5 py-1 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-[10.5px] font-black uppercase cursor-pointer transition-all flex items-center gap-1 whitespace-nowrap disabled:bg-zinc-200 disabled:text-zinc-400 disabled:cursor-not-allowed"
+                    title="Guardar Cambios"
+                  >
+                    <span>Guardar</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleEditReservation}
+                  className="px-2.5 py-1 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-zinc-700 hover:text-zinc-950 font-bold text-[10.5px] uppercase cursor-pointer transition-all flex items-center gap-1 whitespace-nowrap"
+                  title="Editar Expediente"
+                >
+                  <Edit className="w-3 h-3" />
+                  <span>Editar</span>
+                </button>
+              )}
             </div>
           </div>
+          )}
 
+          <Tabs
+            tabs={[
+              { key: "resumen", label: "Resumen" },
+              { key: "datosGenerales", label: "Datos Generales" },
+              { key: "pasajeros", label: "Pasajeros", badge: effectivePasajeros.length },
+              { key: "servicios", label: "Servicios", badge: cartServices.length },
+              { key: "administracion", label: "Administración" },
+            ]}
+            active={activeExpedienteTab}
+            onChange={(k) => setActiveExpedienteTab(k as ExpedienteTab)}
+          />
+          </div>
+
+          {activeExpedienteTab === "resumen" && !activeRes && (
+            <div className="bg-white border border-zinc-200 rounded-lg p-8 text-center text-zinc-500 text-xs font-semibold">
+              Complete Datos Generales, Pasajeros y Servicios y guarde el expediente para ver aquí el resumen completo.
+            </div>
+          )}
+
+          {activeExpedienteTab === "resumen" && activeRes && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Columna Izquierda */}
             <div className="lg:col-span-8 space-y-6">
-              
+
               {/* Resumen Comercial */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
                 <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2">Datos Comerciales del Expediente</h4>
@@ -2355,6 +2437,96 @@ export default function ReservasView({
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+          )}
+
+          {activeExpedienteTab === "administracion" && !activeRes && (
+            <div className="bg-white border border-zinc-200 rounded-lg p-8 text-center text-zinc-500 text-xs font-semibold flex flex-col items-center gap-2">
+              <Clock className="w-5 h-5 text-zinc-400" />
+              Esta información estará disponible después de guardar el expediente.
+            </div>
+          )}
+
+          {activeExpedienteTab === "administracion" && activeRes && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              {/* Acciones del Expediente */}
+              <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-3 shadow-xs lg:col-span-2">
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block text-zinc-650 border-b border-zinc-150 pb-2">Acciones del Expediente</h4>
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeRes.status !== "Cancelada" ? (
+                    <button
+                      onClick={() => {
+                        showConfirm({
+                          title: "Anular Expediente de Reserva",
+                          message: "Escriba el Localizador exacto para confirmar la anulación. El expediente cambiará a estado Cancelada.",
+                          requireInputToConfirm: activeRes.id,
+                          type: "danger",
+                          confirmText: "Sí, Anular",
+                          onConfirm: () => {
+                            if (onUpdateReservation) {
+                              onUpdateReservation({ ...activeRes, status: "Cancelada" });
+                              showAlert({ title: "Expediente Anulado", message: "El expediente ha sido anulado correctamente.", type: "success" });
+                            }
+                          }
+                        });
+                      }}
+                      className="px-3 py-1.5 border border-red-200 bg-red-50 hover:bg-red-100 rounded text-red-600 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
+                      title="Anular Expediente"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span>Anular</span>
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          showConfirm({
+                            title: "Reactivar Expediente",
+                            message: "¿Está seguro que desea reactivar este expediente? Volverá al estado Pendiente de Pago.",
+                            type: "warning",
+                            confirmText: "Sí, Reactivar",
+                            onConfirm: () => {
+                              if (onUpdateReservation) {
+                                onUpdateReservation({ ...activeRes, status: "Pendiente de Pago" });
+                                showAlert({ title: "Expediente Reactivado", message: "El expediente ha sido devuelto al estado Pendiente de Pago.", type: "success" });
+                              }
+                            }
+                          });
+                        }}
+                        className="px-3 py-1.5 border border-amber-200 bg-amber-50 hover:bg-amber-100 rounded text-amber-700 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
+                        title="Reactivar Expediente"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Reactivar</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          showConfirm({
+                            title: "Eliminar Permanentemente",
+                            message: "Esta acción no se puede deshacer. El expediente y sus traslados serán eliminados de la base de datos de manera definitiva, liberando su identificador.",
+                            requireInputToConfirm: activeRes.id,
+                            type: "danger",
+                            confirmText: "Sí, Eliminar Permanentemente",
+                            onConfirm: () => {
+                              if (onDeleteReservation) {
+                                onDeleteReservation(activeRes.id);
+                                showAlert({ title: "Expediente Eliminado", message: "El expediente ha sido eliminado de forma permanente.", type: "success" });
+                                setViewLevel(1);
+                              }
+                            }
+                          });
+                        }}
+                        className="px-3 py-1.5 border border-red-300 bg-red-100 hover:bg-red-200 rounded text-red-700 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
+                        title="Eliminar Permanente"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Eliminar Permanente</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
 
               {/* Tipo de Expediente y Facturación */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
@@ -2597,64 +2769,33 @@ export default function ReservasView({
                   </div>
                 );
               })()}
-            </div>
           </div>
-        </div>
-      )}
+          )}
 
-      {/* VIEW LEVEL 3: CREAR EXPEDIENTE (CARRITO DE COMPRA B2B) */}
-      {viewLevel === 3 && (
-        <div className="space-y-6 animate-fade-in">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-zinc-200 pb-4 sticky top-16 bg-zinc-50/95 backdrop-blur-xs pt-2 z-10 -mx-8 px-8">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleCancelCart}
-                className="p-1.5 hover:bg-zinc-200 rounded-md transition-colors cursor-pointer border border-zinc-200 bg-white"
-              >
-                <ArrowLeft className="w-4 h-4 text-zinc-700" />
-              </button>
-              <div>
-                <span className="text-[9.5px] text-zinc-400 font-bold uppercase tracking-wider block">
-                  {isEditingReservationId ? "Editar Expediente" : "Nuevo Registro"}
-                </span>
-                <h3 className="font-black text-lg text-zinc-900 uppercase font-sans">
-                  {isEditingReservationId ? `Modificar Expediente: ${isEditingReservationId}` : `Generar Expediente: ${cartId}`}
-                </h3>
-              </div>
-            </div>
-            
-            <button
-              type="button"
-              onClick={handleCancelCart}
-              className="px-4 py-2 border border-zinc-200 hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer bg-white"
-            >
-              {isEditingReservationId ? "Cancelar Edición" : "Cancelar Registro"}
-            </button>
-          </div>
-
-          <form onSubmit={handleConfirmExpediente} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            
-            {/* Cabecera del expediente y Carrito */}
+          {activeExpedienteTab === "datosGenerales" && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <div className="lg:col-span-8 space-y-6">
-              
               {/* Datos Generales / Cabecera */}
-              <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
+              <fieldset disabled={expedienteMode === "view"} className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs border-0 min-w-0">
                 <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2 flex items-center gap-2">
-                  <User className="w-4 h-4 text-zinc-400" /> Cabecera y Pasajero Principal
+                  <User className="w-4 h-4 text-zinc-400" /> Datos Generales del Expediente
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Nombre Pasajero Titular</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ej: Alexander Pierce Group / Familia Mendoza"
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
-                      value={cartHolder}
-                      onChange={(e) => setCartHolder(e.target.value)}
-                    />
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Pasajero Titular</label>
+                    <div className="w-full p-2.5 border border-zinc-200 bg-zinc-50 rounded text-xs font-bold text-zinc-900 flex items-center justify-between gap-2">
+                      <span className={cartHolder ? "" : "text-zinc-400 font-semibold"}>{cartHolder || "Agregue pasajeros para definir el titular"}</span>
+                      {expedienteMode !== "view" && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveExpedienteTab("pasajeros")}
+                          className="text-[9px] font-black uppercase tracking-wider text-zinc-500 hover:text-zinc-900 cursor-pointer whitespace-nowrap"
+                        >
+                          Ir a Pasajeros
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-1.5">
@@ -2989,8 +3130,143 @@ export default function ReservasView({
                     <ChevronRight className="w-4 h-4 text-zinc-300 group-hover:text-zinc-600 transition-colors" />
                   </button>
                 </div>
+              </fieldset>
+            </div>
+            {expedienteMode !== "view" && (
+            <div className="lg:col-span-4 space-y-6">
+              {/* Totalizadores de Carrito */}
+              <div className="bg-zinc-900 text-white rounded-lg p-5 space-y-4 shadow-md">
+                <h4 className="font-extrabold text-white text-xs uppercase tracking-widest border-b border-zinc-800 pb-2">
+                  Cotización Mayorista (Carrito)
+                </h4>
+
+                {(() => {
+                  let totalNeto = cartServices.reduce((sum, s) => sum + s.precioNeto, 0);
+                  let totalVenta = cartServices.reduce((sum, s) => sum + s.precioVenta, 0);
+
+                  const targetResId = isEditingReservationId || cartId;
+                  const jointFlightsToRender = cartLinkedFlights.filter(f => f.facturarConjunto).map(f => boletos.find(b => b.id === f.id)).filter(Boolean) as FlightTicket[];
+
+                  jointFlightsToRender.forEach(f => {
+                    totalNeto += f.costoNeto;
+                    totalVenta += f.precioVenta;
+                  });
+
+                  const totalMargen = totalVenta - totalNeto;
+                  const ratioMargen = totalNeto > 0 ? Math.round((totalMargen / totalNeto) * 100) : 0;
+                  
+                  return (
+                    <div className="space-y-3.5 text-xs">
+                      <div className="flex items-center justify-between py-1 border-b border-zinc-850">
+                        <span className="text-zinc-400 uppercase text-[9.5px]">Total Venta B2B PVP</span>
+                        <span className="font-black text-xl text-white">${totalVenta.toLocaleString("es-ES")} USD</span>
+                      </div>
+
+                      <div className="flex items-center justify-between py-1 border-b border-zinc-850">
+                        <span className="text-zinc-400">Total Costo Neto</span>
+                        <span className="font-bold text-zinc-300">${totalNeto.toLocaleString("es-ES")} USD</span>
+                      </div>
+
+                      <div className="flex items-center justify-between py-1 border-b border-zinc-850">
+                        <span className="text-zinc-450">Margen Mayorista Directo</span>
+                        <span className="font-bold text-emerald-400">+${totalMargen.toLocaleString("es-ES")} USD</span>
+                      </div>
+
+                      <div className="flex justify-between font-mono text-[9px] text-zinc-500">
+                        <span>Margen promedio:</span>
+                        <span>{ratioMargen}% de recargo</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+            )}
+          </div>
+          )}
+
+          {activeExpedienteTab === "pasajeros" && (
+            <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs max-w-3xl">
+              <div className="flex items-center justify-between border-b border-zinc-150 pb-2">
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest">Pasajeros del Expediente</h4>
+                {expedienteMode !== "view" && (
+                  <button
+                    type="button"
+                    onClick={handleAddPasajero}
+                    className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-[10.5px] font-bold uppercase cursor-pointer transition-all flex items-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Agregar Pasajero
+                  </button>
+                )}
               </div>
 
+              {effectivePasajeros.length === 0 ? (
+                <div className="p-4 bg-zinc-50 border border-zinc-200 text-zinc-500 text-xs rounded font-semibold text-center">
+                  Aún no hay pasajeros cargados. {expedienteMode !== "view" && "Agregue al menos uno — el primero se marca automáticamente como titular."}
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {(expedienteMode === "view" ? effectivePasajeros : cartPasajeros).map((p) => (
+                    <div key={p.id} className="flex items-center gap-3 border border-zinc-150 rounded-md p-3 bg-zinc-50/50">
+                      {expedienteMode === "view" ? (
+                        <>
+                          <span className="flex-1 text-xs font-bold text-zinc-900">{p.nombre || "(sin nombre)"}</span>
+                          <span className="text-[10px] font-semibold text-zinc-500 uppercase">{p.tipo}</span>
+                          {p.esTitular && (
+                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase bg-zinc-900 text-white">Titular</span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <input
+                            type="text"
+                            required
+                            placeholder="Nombre completo"
+                            value={p.nombre}
+                            onChange={(e) => handleUpdatePasajeroNombre(p.id, e.target.value)}
+                            className="flex-1 p-2 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                          />
+                          <select
+                            value={p.tipo}
+                            onChange={(e) => handleUpdatePasajeroTipo(p.id, e.target.value as PassengerType)}
+                            className="p-2 border border-zinc-200 bg-white rounded text-[11px] font-bold text-zinc-700 cursor-pointer focus:outline-none"
+                          >
+                            <option value="Adulto">Adulto</option>
+                            <option value="Niño">Niño</option>
+                            <option value="Infante">Infante</option>
+                          </select>
+                          {p.esTitular ? (
+                            <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-zinc-900 text-white whitespace-nowrap">Titular</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSetTitular(p.id)}
+                              className="px-2 py-1 rounded-full text-[9px] font-bold uppercase bg-zinc-100 hover:bg-zinc-200 text-zinc-600 whitespace-nowrap cursor-pointer border-none"
+                            >
+                              Marcar Titular
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePasajero(p.id)}
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded cursor-pointer"
+                            title="Quitar pasajero"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeExpedienteTab === "servicios" && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <div className="lg:col-span-8 space-y-6">
+              <fieldset disabled={expedienteMode === "view"} className="border-0 p-0 m-0 min-w-0 space-y-6">
               {/* Carrito de Servicios */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
                 <div className="flex items-center justify-between border-b border-zinc-150 pb-2">
@@ -3179,9 +3455,9 @@ export default function ReservasView({
                   </button>
                 </div>
               </div>
+              </fieldset>
             </div>
-
-            {/* Columna Derecha de Confirmación */}
+            {expedienteMode !== "view" && (
             <div className="lg:col-span-4 space-y-6">
               {/* Totalizadores de Carrito */}
               <div className="bg-zinc-900 text-white rounded-lg p-5 space-y-4 shadow-md">
@@ -3229,27 +3505,16 @@ export default function ReservasView({
                   );
                 })()}
               </div>
-
-              {/* Botón de Confirmar */}
-              <div className="bg-white border border-zinc-200 rounded-lg p-4 shadow-xs space-y-3">
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-zinc-950 hover:bg-zinc-850 text-white font-black text-xs uppercase tracking-wider rounded transition-all cursor-pointer text-center block shadow-sm disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed"
-                  disabled={(cartServices.length === 0 && (cartLinkedFlights.filter(f => f.facturarConjunto).length === 0)) || !cartHolder.trim()}
-                >
-                  {isEditingReservationId ? "Guardar Cambios del Expediente" : "Confirmar y Generar Expediente"}
-                </button>
-                <p className="text-[10px] text-zinc-400 text-center font-medium leading-relaxed">
-                  Al confirmar, se consolidará el expediente de reservas en el release de Foratour ERP y se asignará el localizador final.
-                </p>
-              </div>
             </div>
-          </form>
+            )}
+          </div>
+          )}
         </div>
       )}
 
-      {/* VIEW LEVEL 4: CONFIGURAR SERVICIO INDIVIDUAL (NUEVO NIVEL) */}
-      {viewLevel === 4 && activeServiceType && (
+
+      {/* VIEW LEVEL 3: CONFIGURAR SERVICIO INDIVIDUAL */}
+      {viewLevel === 3 && activeServiceType && (
         <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-zinc-200 pb-4 sticky top-16 bg-zinc-50/95 backdrop-blur-xs pt-2 z-10">
@@ -3550,31 +3815,34 @@ export default function ReservasView({
                               {room.guests.map((guest, guestIndex) => (
                                 <div key={guestIndex} className="space-y-2 bg-white border border-zinc-150 p-2.5 rounded-md shadow-2xs">
                                   <div className="relative flex items-center">
-                                    <input
-                                      type="text"
+                                    <select
                                       required
-                                      placeholder={guestIndex === 0 && index === 0 ? "Huésped 1 (Titular de la Reserva)" : `Nombre Huésped ${guestIndex + 1}`}
-                                      className="w-full p-2.5 pr-16 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-850 focus:outline-none"
-                                      value={guest.name}
-                                      onChange={(e) => handleRoomGuestNameChange(room.id, guestIndex, e.target.value)}
-                                    />
-                                    {cartHolder && guest.name !== cartHolder && (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRoomGuestNameChange(room.id, guestIndex, cartHolder)}
-                                        className="absolute right-2 px-1.5 py-0.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded text-[9px] font-bold uppercase transition-all border-none cursor-pointer"
-                                        title="Asignar titular"
-                                      >
-                                        Titular
-                                      </button>
-                                    )}
-                                    {cartHolder && guest.name === cartHolder && (
-                                      <span className="absolute right-2 px-1.5 py-0.5 bg-zinc-950 text-white rounded text-[8px] font-black uppercase tracking-wider">
-                                        Titular
-                                      </span>
-                                    )}
+                                      value={guest.passengerId || cartPasajeros.find(p => p.nombre && p.nombre === guest.name)?.id || ""}
+                                      onChange={(e) => {
+                                        if (e.target.value === "__nuevo__") {
+                                          setActiveExpedienteTab("pasajeros");
+                                          setViewLevel(2);
+                                          return;
+                                        }
+                                        handleRoomGuestAssign(room.id, guestIndex, e.target.value);
+                                      }}
+                                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-850 focus:outline-none cursor-pointer"
+                                    >
+                                      <option value="" disabled>Seleccionar pasajero...</option>
+                                      {cartPasajeros.map(p => (
+                                        <option key={p.id} value={p.id}>
+                                          {p.nombre || "(sin nombre)"}{p.esTitular ? " — Titular" : ""} · {p.tipo}
+                                        </option>
+                                      ))}
+                                      <option value="__nuevo__">+ Agregar nuevo pasajero…</option>
+                                    </select>
                                   </div>
-                                  
+                                  {cartPasajeros.length === 0 && (
+                                    <p className="text-[9.5px] text-amber-700 font-semibold">
+                                      No hay pasajeros cargados. Agréguelos primero en la pestaña Pasajeros.
+                                    </p>
+                                  )}
+
                                   <div className="flex items-center gap-4 pt-0.5">
                                     <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Tipo:</span>
                                     <div className="flex gap-3">

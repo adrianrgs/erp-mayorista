@@ -41,6 +41,15 @@ export interface HotelProperty {
   supplierName: string;
 }
 
+export type PassengerType = "Adulto" | "Niño" | "Infante";
+
+export interface ReservationPassenger {
+  id: string;
+  nombre: string;
+  tipo: PassengerType;
+  esTitular?: boolean; // exactamente uno debería tener esto en true
+}
+
 export interface Reservation {
   updatedAt?: string;
   id: string;
@@ -60,6 +69,7 @@ export interface Reservation {
   createdAt?: string; // YYYY-MM-DD
   mercado?: "NACIONAL" | "INTERNACIONAL";
   servicios?: ServiceItem[];
+  pasajeros?: ReservationPassenger[];
   tipo?: "Cotización" | "Reserva Real";
   comprobanteRef?: string;
   comprobanteMonto?: number;

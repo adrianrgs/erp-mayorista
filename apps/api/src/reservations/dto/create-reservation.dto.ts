@@ -59,4 +59,8 @@ export class CreateReservationDto {
   @IsOptional()
   @IsArray()
   servicios?: any[];
+
+  @IsOptional()
+  @IsArray()
+  pasajeros?: any[];
 }

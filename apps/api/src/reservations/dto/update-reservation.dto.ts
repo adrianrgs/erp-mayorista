@@ -61,6 +61,10 @@ export class UpdateReservationDto {
   @IsArray()
   variaciones?: any[];
 
+  @IsOptional()
+  @IsArray()
+  pasajeros?: any[];
+
   // Contexto para reconciliación financiera
   @IsOptional()
   previousState?: any;
