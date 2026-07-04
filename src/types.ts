@@ -393,10 +393,16 @@ export interface FinancialVariation {
   reason: string;
   date: string;
   invoiceId?: string;
-  // Only meaningful for type "Suplemento": gates visibility in Facturación behind an explicit
-  // "Enviar a Facturación" action from Reservas, mirroring the Borrador→Solicitado flow for
-  // ServiceItem. "Credito" variations have no gate — the balance effect already applies immediately.
+  // Gates visibility in Facturación behind an explicit "Enviar a Facturación" action from Reservas,
+  // mirroring the Borrador→Solicitado flow for ServiceItem. Applies to "Suplemento" and to "Credito"
+  // variations sourced from a price modification (not from a cancellation/annulment, which apply
+  // their balance effect immediately and never get a status).
   status?: "Borrador" | "Solicitado";
+  // Only meaningful for "Credito": when the client overpaid relative to the reduced total AND the
+  // provider for that service was already paid, the excess is NOT credited to saldoFavor right away
+  // — it's parked here until someone confirms (in Facturación) whether the provider will actually
+  // refund it. Cleared once resolved (accepted or discarded).
+  excessPendingVerification?: number;
 }
 
 export interface B2BWalletTransaction {

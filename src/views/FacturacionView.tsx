@@ -35,6 +35,7 @@ import {
   Calculator
 } from "lucide-react";
 import { useDialog } from "../components/ui/DialogProvider";
+import { Tabs } from "../components/reservas/Tabs";
 import { storage } from "../lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -113,7 +114,9 @@ export default function FacturacionView({
   const [search, setSearch] = useState("");
   const [selectedResId, setSelectedResId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
-  
+  const [refundInputs, setRefundInputs] = useState<Record<string, string>>({});
+  const [queueTab, setQueueTab] = useState<"anuladas" | "atencion" | "proveedor" | "facturadas">("atencion");
+
   const [showDossierModal, setShowDossierModal] = useState(false);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   
@@ -583,6 +586,52 @@ export default function FacturacionView({
     return bHasReq - aHasReq;
   });
 
+  // Shared per-reservation status computation, used both to classify each row into a queue tab
+  // ("bucket") and to render its badges/buttons — avoids computing this twice per row.
+  const getBookingStatus = (r: Reservation) => {
+    const services = r.servicios || [];
+    const jointFlights = boletos.filter(b => b.expedienteId === r.id && b.facturarConjunto);
+    const billedCount = services.filter(s => s.statusFacturacion === "Facturado").length +
+                       jointFlights.filter(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea").length;
+    const requestedCount = services.filter(s => s.statusFacturacion === "Solicitado").length +
+                          jointFlights.filter(b => b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador").length;
+    const totalCount = services.length + jointFlights.length;
+    const percent = totalCount > 0 ? Math.round((billedCount / totalCount) * 100) : 100;
+    const hasRequest = requestedCount > 0 || jointFlights.some(b => b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador");
+    const hasBilled = billedCount > 0;
+    const draftCount = services.filter(s => s.statusFacturacion === "Borrador").length;
+    const pendingVariationSupplements = (r.variaciones || []).filter((v: any) => v.type === "Suplemento" && v.status === "Solicitado" && !v.invoiceId).length;
+    const pendingVariationCredits = (r.variaciones || []).filter((v: any) => v.type === "Credito" && v.status !== "Borrador" && !v.invoiceId).length;
+    const hasPendingSupplement = hasBilled && (draftCount > 0 || pendingVariationSupplements > 0);
+    const hasPendingCreditNote = hasBilled && pendingVariationCredits > 0;
+    const hasPendingExcessVerification = (r.variaciones || []).some((v: any) => (v.excessPendingVerification || 0) > 0);
+    const isCancellationRequest = r.status === "Cancelada" && (
+      services.some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado") ||
+      jointFlights.some(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador")
+    );
+    const isCancelled = r.status === "Cancelada";
+
+    let bucket: "anuladas" | "atencion" | "proveedor" | "facturadas";
+    if (isCancelled) bucket = "anuladas";
+    else if (hasRequest || hasPendingSupplement || hasPendingCreditNote) bucket = "atencion";
+    else if (hasPendingExcessVerification) bucket = "proveedor";
+    else bucket = "facturadas";
+
+    return {
+      services, jointFlights, billedCount, requestedCount, totalCount, percent, hasRequest, hasBilled,
+      draftCount, pendingVariationSupplements, pendingVariationCredits, hasPendingSupplement,
+      hasPendingCreditNote, hasPendingExcessVerification, isCancellationRequest, isCancelled, bucket
+    };
+  };
+
+  const queueTabCounts = sortedAndFiltered.reduce((acc, r) => {
+    const { bucket } = getBookingStatus(r);
+    acc[bucket] = (acc[bucket] || 0) + 1;
+    return acc;
+  }, {} as Record<"anuladas" | "atencion" | "proveedor" | "facturadas", number>);
+
+  const queueTabFiltered = sortedAndFiltered.filter(r => getBookingStatus(r).bucket === queueTab);
+
   const activeRes = selectedResId ? realBookings.find(r => r.id === selectedResId) : undefined;
   const activeResId = activeRes?.id || null;
 
@@ -701,6 +750,7 @@ export default function FacturacionView({
     // applied here instead, now that Facturación is formally approving the credit. Cancellation/
     // annulment-sourced credits already had their balance impact applied immediately at save time —
     // skip here to avoid double-counting (they have no "Modificación tarifa:" reason prefix).
+    let pendingExcessAmount = 0;
     if (variation.reason?.startsWith("Modificación tarifa:") && _cnAgency && onUpdateClient) {
       const creditAmount = Math.abs(variation.amountSale);
       const isCreditClient = _cnAgency.tipo === "A Crédito" || activeRes.facturacionTipo === "Crédito";
@@ -717,26 +767,48 @@ export default function FacturacionView({
       const newTotalDue = activeRes.totalPrice;
 
       let newSaldoDeber = _cnAgency.saldoDeber;
-      let newSaldoFavor = _cnAgency.saldoFavor;
+      let excess = 0;
 
       if (isCreditClient) {
         if (totalPaid >= newTotalDue) {
-          // Client already paid more than what's now owed — clear the remaining debt and
-          // credit the excess to saldoFavor instead of silently discarding it.
-          const excess = totalPaid - newTotalDue;
+          // Client already paid more than what's now owed — clear the remaining debt. Whether the
+          // excess becomes saldoFavor right away or needs a manual check is decided below.
+          excess = totalPaid - newTotalDue;
           newSaldoDeber = Math.max(0, newSaldoDeber - invoiceRemaining);
-          if (excess > 0) newSaldoFavor += excess;
         } else {
           newSaldoDeber = Math.max(0, newSaldoDeber - creditAmount);
         }
       } else {
-        const excess = Math.max(0, totalPaid - newTotalDue);
-        if (excess > 0) newSaldoFavor += excess;
+        excess = Math.max(0, totalPaid - newTotalDue);
       }
 
-      if (newSaldoDeber !== _cnAgency.saldoDeber || newSaldoFavor !== _cnAgency.saldoFavor) {
-        onUpdateClient({ ..._cnAgency, saldoDeber: newSaldoDeber, saldoFavor: newSaldoFavor });
-      }
+      const applyClientBalance = (creditExcessToFavor: boolean) => {
+        const finalSaldoFavor = creditExcessToFavor ? _cnAgency.saldoFavor + excess : _cnAgency.saldoFavor;
+        if (newSaldoDeber !== _cnAgency.saldoDeber || finalSaldoFavor !== _cnAgency.saldoFavor) {
+          onUpdateClient({ ..._cnAgency, saldoDeber: newSaldoDeber, saldoFavor: finalSaldoFavor });
+        }
+      };
+
+      // If the provider (hotel) for this specific service was already paid (parcial o total), the
+      // wholesaler may not get that money back for the cancelled unit/night — crediting the excess
+      // to saldoFavor automatically could become a real loss, and deciding on the spot with a popup
+      // isn't realistic (someone has to actually check with the provider first). So instead of asking
+      // right away, the debt is cleared now and the excess is parked as "pendiente de verificar" —
+      // visible in the panel below, resolved later via "Proveedor reembolsó" / "Proveedor no reembolsa"
+      // once someone has actually done that check.
+      const serviceForCredit = activeRes.servicios?.find(s => s.id === variation.serviceItemId);
+      const relatedObligation = serviceForCredit
+        ? payableObligations.find(obl =>
+            obl.locatorId === activeRes.id &&
+            (obl.serviceDetail.toLowerCase().includes(serviceForCredit.descripcion.toLowerCase()) ||
+             obl.providerName.toLowerCase().includes((serviceForCredit.proveedor || "").toLowerCase()))
+          )
+        : undefined;
+      const providerAlreadyPaid = relatedObligation?.status === "Pagado Parcial" || relatedObligation?.status === "Pagado Total";
+      const excessNeedsVerification = excess > 0 && providerAlreadyPaid;
+      if (excessNeedsVerification) pendingExcessAmount = excess;
+
+      applyClientBalance(excess > 0 && !excessNeedsVerification);
 
       // The client's aggregate saldoDeber above is now correct, but the original invoice record
       // itself (what "Facturas Pendientes" in Cuentas por Cobrar actually reads) still shows its
@@ -762,7 +834,7 @@ export default function FacturacionView({
 
     const updatedVariations = (activeRes.variaciones || []).map((v: any) => {
       if (v.id === variation.id) {
-        return { ...v, invoiceId: creditNote.id };
+        return { ...v, invoiceId: creditNote.id, excessPendingVerification: pendingExcessAmount > 0 ? pendingExcessAmount : undefined };
       }
       return v;
     });
@@ -773,7 +845,40 @@ export default function FacturacionView({
       __billingOnly: true
     } as any);
 
-    setStatusMessage(`✓ Nota de Crédito emitida con éxito. Documento: ${creditNote.id}`);
+    setStatusMessage(
+      pendingExcessAmount > 0
+        ? `✓ Nota de Crédito emitida. Documento: ${creditNote.id} — Excedente de $${pendingExcessAmount.toFixed(2)} pendiente de verificar con el proveedor antes de acreditar saldo a favor.`
+        : `✓ Nota de Crédito emitida con éxito. Documento: ${creditNote.id}`
+    );
+    setTimeout(() => setStatusMessage(""), 5000);
+  };
+
+  const handleResolvePendingExcess = (variation: any, refundedAmount: number) => {
+    if (!activeRes) return;
+    const excessAmount = variation.excessPendingVerification || 0;
+    const creditedAmount = Math.max(0, Math.min(refundedAmount, excessAmount));
+    const agencyRecord = clients.find(c => c.nombre === activeRes.agenciaName);
+
+    if (creditedAmount > 0 && agencyRecord && onUpdateClient) {
+      onUpdateClient({ ...agencyRecord, saldoFavor: agencyRecord.saldoFavor + creditedAmount });
+    }
+
+    const updatedVariations = (activeRes.variaciones || []).map((v: any) =>
+      v.id === variation.id ? { ...v, excessPendingVerification: undefined } : v
+    );
+    onUpdateReservation({
+      ...activeRes,
+      variaciones: updatedVariations,
+      __billingOnly: true
+    } as any);
+
+    const notCredited = excessAmount - creditedAmount;
+    setStatusMessage(
+      creditedAmount > 0
+        ? `✓ Se acreditaron $${creditedAmount.toFixed(2)} de saldo a favor al cliente.` +
+          (notCredited > 0 ? ` Los $${notCredited.toFixed(2)} restantes no reembolsados quedan a cargo de la empresa.` : "")
+        : `✓ Excedente descartado — la empresa asume los $${excessAmount.toFixed(2)}, no se acreditó saldo a favor.`
+    );
     setTimeout(() => setStatusMessage(""), 5000);
   };
 
@@ -1417,6 +1522,17 @@ export default function FacturacionView({
               </div>
             </div>
 
+            <Tabs
+              tabs={[
+                { key: "atencion", label: "Necesitan Atención", badge: queueTabCounts.atencion || undefined, badgeVariant: "alert" },
+                { key: "proveedor", label: "Esperando Proveedor", badge: queueTabCounts.proveedor || undefined },
+                { key: "facturadas", label: "Facturadas", badge: queueTabCounts.facturadas || undefined },
+                { key: "anuladas", label: "Anuladas", badge: queueTabCounts.anuladas || undefined },
+              ]}
+              active={queueTab}
+              onChange={(k) => setQueueTab(k as typeof queueTab)}
+            />
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs divide-y divide-zinc-200">
                 <thead>
@@ -1429,39 +1545,26 @@ export default function FacturacionView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 font-medium">
-                  {sortedAndFiltered.length === 0 ? (
+                  {queueTabFiltered.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-zinc-400 italic">
-                        No se encontraron expedientes en la cola.
+                        No se encontraron expedientes en esta pestaña.
                       </td>
                     </tr>
                   ) : (
-                    sortedAndFiltered.map((r) => {
-                      const services = r.servicios || [];
-                      const jointFlights = boletos.filter(b => b.expedienteId === r.id && b.facturarConjunto);
-                      const billedCount = services.filter(s => s.statusFacturacion === "Facturado").length +
-                                         jointFlights.filter(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea").length;
-                      const requestedCount = services.filter(s => s.statusFacturacion === "Solicitado").length +
-                                            jointFlights.filter(b => b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador").length;
-                      const totalCount = services.length + jointFlights.length;
-                      const percent = totalCount > 0 ? Math.round((billedCount / totalCount) * 100) : 100;
-                      const hasRequest = requestedCount > 0 || jointFlights.some(b => b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador");
-                      const hasBilled = billedCount > 0;
-                      const draftCount = services.filter(s => s.statusFacturacion === "Borrador").length;
-                      const pendingVariationSupplements = (r.variaciones || []).filter((v: any) => v.type === "Suplemento" && v.status === "Solicitado" && !v.invoiceId).length;
-                      const pendingVariationCredits = (r.variaciones || []).filter((v: any) => v.type === "Credito" && v.status !== "Borrador" && !v.invoiceId).length;
-                      const hasPendingSupplement = hasBilled && (draftCount > 0 || pendingVariationSupplements > 0);
-                      const hasPendingCreditNote = hasBilled && pendingVariationCredits > 0;
-                      const isCancellationRequest = r.status === "Cancelada" && (
-                        services.some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado") ||
-                        jointFlights.some(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador")
-                      );
+                    queueTabFiltered.map((r) => {
+                      const {
+                        services, jointFlights, billedCount, requestedCount, totalCount, percent,
+                        hasRequest, draftCount, pendingVariationSupplements, pendingVariationCredits,
+                        hasPendingSupplement, hasPendingCreditNote, hasPendingExcessVerification,
+                        isCancellationRequest
+                      } = getBookingStatus(r);
 
                       return (
                         <tr
                           key={r.id}
                           onClick={() => setSelectedResId(r.id)}
-                          className={`hover:bg-zinc-50/50 cursor-pointer transition-colors ${isCancellationRequest ? "bg-red-50/20" : hasPendingCreditNote ? "bg-orange-50/20" : hasPendingSupplement ? "bg-blue-50/20" : ""}`}
+                          className={`hover:bg-zinc-50/50 cursor-pointer transition-colors ${isCancellationRequest ? "bg-red-50/20" : hasPendingCreditNote ? "bg-orange-50/20" : hasPendingSupplement ? "bg-blue-50/20" : hasPendingExcessVerification ? "bg-cyan-50/20" : ""}`}
                         >
                           <td className="p-3 font-mono font-bold text-zinc-900">
                             <div className="flex items-center gap-1.5">
@@ -1474,6 +1577,8 @@ export default function FacturacionView({
                                 <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" title="Nota de crédito pendiente de emitir" />
                               ) : hasPendingSupplement ? (
                                 <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" title="Suplemento pendiente de facturar" />
+                              ) : hasPendingExcessVerification ? (
+                                <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-pulse" title="Esperando respuesta del proveedor" />
                               ) : null}
                             </div>
                             <span className={`text-[8.5px] font-black uppercase px-1 rounded-sm mt-0.5 inline-block ${
@@ -1512,11 +1617,15 @@ export default function FacturacionView({
                                   <span className="px-1 py-0.25 bg-blue-50 text-blue-700 rounded border border-blue-200 text-[8px] font-black uppercase">
                                     {draftCount + pendingVariationSupplements} Suplemento
                                   </span>
+                                ) : hasPendingExcessVerification ? (
+                                  <span className="px-1 py-0.25 bg-cyan-50 text-cyan-700 rounded border border-cyan-200 text-[8px] font-black uppercase">
+                                    Esperando Proveedor
+                                  </span>
                                 ) : null}
                               </div>
                               <div className="w-28 bg-zinc-100 h-1.5 rounded-full overflow-hidden border border-zinc-200">
                                 <div
-                                  className={`h-full rounded-full ${isCancellationRequest ? "bg-red-500" : hasRequest ? "bg-amber-500" : hasPendingCreditNote ? "bg-orange-500" : hasPendingSupplement ? "bg-blue-500" : "bg-emerald-500"}`}
+                                  className={`h-full rounded-full ${isCancellationRequest ? "bg-red-500" : hasRequest ? "bg-amber-500" : hasPendingCreditNote ? "bg-orange-500" : hasPendingSupplement ? "bg-blue-500" : hasPendingExcessVerification ? "bg-cyan-500" : "bg-emerald-500"}`}
                                   style={{ width: `${percent}%` }}
                                 />
                               </div>
@@ -1538,10 +1647,12 @@ export default function FacturacionView({
                                       ? "bg-orange-600 border-orange-600 hover:bg-orange-700 text-white"
                                       : hasPendingSupplement
                                         ? "bg-blue-700 border-blue-700 hover:bg-blue-800 text-white"
-                                        : "bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-900 hover:text-white"
+                                        : hasPendingExcessVerification
+                                          ? "bg-cyan-700 border-cyan-700 hover:bg-cyan-800 text-white"
+                                          : "bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-900 hover:text-white"
                               }`}
                             >
-                              {isCancellationRequest ? "Anular" : hasRequest ? "Aprobar" : hasPendingCreditNote ? "Nota C." : hasPendingSupplement ? "Suplemento" : "Revisar"}
+                              {isCancellationRequest ? "Anular" : hasRequest ? "Aprobar" : hasPendingCreditNote ? "Nota C." : hasPendingSupplement ? "Suplemento" : hasPendingExcessVerification ? "Verificar" : "Revisar"}
                             </button>
                           </td>
                         </tr>
@@ -1832,6 +1943,65 @@ export default function FacturacionView({
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* Panel de Excedentes Pendientes de Verificar con Proveedor */}
+            {/* Cuando un crédito por reducción de servicio deja al cliente con un pago de más y el
+                proveedor de ese servicio ya fue pagado, el excedente no se acredita automáticamente
+                como saldo a favor — se deja aquí hasta que alguien confirme si el proveedor
+                efectivamente reembolsará ese monto. */}
+            {(activeRes.variaciones || []).some((v: any) => (v.excessPendingVerification || 0) > 0) && (
+              <div className="space-y-3 mt-4">
+                <h5 className="text-[10px] font-bold text-orange-600 uppercase tracking-widest flex items-center gap-1.5">
+                  🔎 Excedentes Pendientes de Verificar con Proveedor
+                </h5>
+                <div className="divide-y divide-zinc-150 border border-orange-200 rounded overflow-hidden bg-orange-50/10">
+                  {(activeRes.variaciones || []).filter((v: any) => (v.excessPendingVerification || 0) > 0).map((v: any) => (
+                    <div key={v.id} className="p-3 bg-white space-y-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-orange-50 text-orange-700 border border-orange-200">
+                          Pendiente de Verificar
+                        </span>
+                        <span className="text-[9px] font-mono text-zinc-400">{v.id}</span>
+                      </div>
+                      <p className="text-xs font-bold text-zinc-950">{v.reason}</p>
+                      <p className="text-[10.5px] text-zinc-500 leading-relaxed">
+                        El cliente pagó ${v.excessPendingVerification.toFixed(2)} de más y el proveedor de este servicio ya había sido pagado.
+                        Verifica con el proveedor cuánto reembolsará (puede ser total, parcial o nada) e ingresa ese monto exacto.
+                      </p>
+                      <div className="flex items-center justify-between gap-2 pt-0.5 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] text-zinc-450 font-bold uppercase">Reembolsó</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min={0}
+                            max={v.excessPendingVerification}
+                            value={refundInputs[v.id] ?? v.excessPendingVerification.toFixed(2)}
+                            onChange={(e) => setRefundInputs(prev => ({ ...prev, [v.id]: e.target.value }))}
+                            className="w-24 px-2 py-1 border border-zinc-250 rounded text-[11px] font-mono font-bold text-right focus:outline-none focus:border-zinc-500"
+                          />
+                          <span className="text-[9px] text-zinc-450 font-bold">/ ${v.excessPendingVerification.toFixed(2)} USD</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleResolvePendingExcess(v, 0)}
+                            className="px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded text-[9.5px] font-bold uppercase tracking-wider cursor-pointer border border-zinc-200 transition-all shrink-0"
+                          >
+                            No Reembolsó
+                          </button>
+                          <button
+                            onClick={() => handleResolvePendingExcess(v, parseFloat(refundInputs[v.id] ?? v.excessPendingVerification.toFixed(2)) || 0)}
+                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9.5px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs transition-all shrink-0"
+                          >
+                            Confirmar Reembolso
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
