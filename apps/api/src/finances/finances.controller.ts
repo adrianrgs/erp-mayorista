@@ -17,6 +17,9 @@ export class FinancesController {
   @Patch('invoices/:id')
   updateInvoice(@Param('id') id: string, @Body() dto: any) { return this.service.updateInvoice(id, dto); }
 
+  @Delete('invoices/:id')
+  deleteInvoice(@Param('id') id: string) { return this.service.deleteInvoice(id); }
+
   // ── Existing: Vouchers ────────────────────────────────────────────────────
   @Get('vouchers')
   findAllVouchers() { return this.service.findAllVouchers(); }
@@ -26,6 +29,9 @@ export class FinancesController {
 
   @Patch('vouchers/:id')
   updateVoucher(@Param('id') id: string, @Body() dto: any) { return this.service.updateVoucher(id, dto); }
+
+  @Delete('vouchers/:id')
+  deleteVoucher(@Param('id') id: string) { return this.service.deleteVoucher(id); }
 
   // ── Existing: Payable Obligations ─────────────────────────────────────────
   @Get('obligations')
@@ -37,12 +43,18 @@ export class FinancesController {
   @Patch('obligations/:id')
   updateObligation(@Param('id') id: string, @Body() dto: any) { return this.service.updateObligation(id, dto); }
 
+  @Delete('obligations/:id')
+  deleteObligation(@Param('id') id: string) { return this.service.deleteObligation(id); }
+
   // ── Existing: Provider Statements ────────────────────────────────────────
   @Get('statements')
   findAllStatements() { return this.service.findAllStatements(); }
 
   @Post('statements')
   createStatement(@Body() dto: any) { return this.service.createStatement(dto); }
+
+  @Delete('statements/:id')
+  deleteStatement(@Param('id') id: string) { return this.service.deleteStatement(id); }
 
   // ── Tax Jurisdiction (multi-country config) ───────────────────────────────
   @Get('jurisdiction')

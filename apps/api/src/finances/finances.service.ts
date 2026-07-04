@@ -23,6 +23,11 @@ export class FinancesService {
     return { success: true };
   }
 
+  async deleteInvoice(id: string) {
+    await this.dc.executeMutation('DeleteInvoice', { id });
+    return { success: true };
+  }
+
   // ── Payment Vouchers ──────────────────────────────────────────────────────
 
   async findAllVouchers() {
@@ -40,6 +45,11 @@ export class FinancesService {
 
   async updateVoucher(id: string, dto: any) {
     await this.dc.executeMutation('UpdatePaymentVoucher', { id, status: dto.status });
+    return { success: true };
+  }
+
+  async deleteVoucher(id: string) {
+    await this.dc.executeMutation('DeletePaymentVoucher', { id });
     return { success: true };
   }
 
@@ -66,6 +76,11 @@ export class FinancesService {
     return { success: true };
   }
 
+  async deleteObligation(id: string) {
+    await this.dc.executeMutation('DeletePayableObligation', { id });
+    return { success: true };
+  }
+
   // ── Provider Statements ───────────────────────────────────────────────────
 
   async findAllStatements() {
@@ -80,6 +95,11 @@ export class FinancesService {
       updatedAt: new Date().toISOString(),
     });
     return { success: true, id };
+  }
+
+  async deleteStatement(id: string) {
+    await this.dc.executeMutation('DeleteProviderStatement', { id });
+    return { success: true };
   }
 
   // ── Tax Jurisdiction ──────────────────────────────────────────────────────
