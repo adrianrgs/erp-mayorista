@@ -175,6 +175,8 @@ export default function ReservasView({
   // --- VISOR DE COMPROBANTE MODAL STATES ---
   const [showProvReceiptModal, setShowProvReceiptModal] = useState(false);
   const [selectedObligationForReceipt, setSelectedObligationForReceipt] = useState<PayableObligation | null>(null);
+  const [showClientReceiptModal, setShowClientReceiptModal] = useState(false);
+  const [selectedVoucherForReceipt, setSelectedVoucherForReceipt] = useState<PaymentVoucher | null>(null);
 
   // --- HELPERS TO RESOLVE PAYMENT STATUSES ---
   const getClientPaymentStatus = (resId: string) => {
@@ -461,7 +463,9 @@ export default function ReservasView({
     const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
     const unsentServices = services.filter(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === "Rechazado" || s.statusFacturacion === undefined);
     const unsentFlights = jointFlights.filter(b => !b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined);
-    const pendingTotal = unsentServices.reduce((sum, s) => sum + s.precioVenta, 0) + unsentFlights.reduce((sum, b) => sum + b.precioVenta, 0);
+    const unsentSupplements = (activeRes.variaciones || []).filter(v => v.type === "Suplemento" && v.status === "Borrador" && !v.invoiceId);
+    const pendingTotal = unsentServices.reduce((sum, s) => sum + s.precioVenta, 0) + unsentFlights.reduce((sum, b) => sum + b.precioVenta, 0)
+      + unsentSupplements.reduce((sum, v) => sum + v.amountSale, 0);
     setBillingMonto(pendingTotal.toString());
     setBillingModalError("");
     setShowSendBillingModal(true);
@@ -483,9 +487,17 @@ export default function ReservasView({
       return s;
     });
 
+    const updatedVariations = (activeRes.variaciones || []).map(v => {
+      if (v.type === "Suplemento" && v.status === "Borrador" && !v.invoiceId) {
+        return { ...v, status: "Solicitado" as const };
+      }
+      return v;
+    });
+
     const updatedRes: Reservation = {
       ...activeRes,
       servicios: updatedServices,
+      variaciones: updatedVariations,
       facturacionTipo: billingFacturacionTipo,
       comprobanteRef: billingFacturacionTipo === "Pago Contado" ? billingRef.trim() : undefined,
       comprobanteMonto: billingFacturacionTipo === "Pago Contado" ? (parseFloat(billingMonto) || 0) : undefined,
@@ -1086,6 +1098,11 @@ export default function ReservasView({
     setCartSpecialRequests(res.specialRequests || "");
     setCartFlightNo(res.flightNo || "");
     setCartPasajeros(derivePassengersFromLegacyReservation(res));
+
+    // Restaurar boletos ya vinculados a este expediente — si no se hace, el guardado
+    // interpreta que todos los vuelos previamente vinculados se "quitaron" y los desvincula.
+    const linkedBoletos = boletos.filter(b => b.expedienteId === res.id);
+    setCartLinkedFlights(linkedBoletos.map(b => ({ id: b.id, facturarConjunto: !!b.facturarConjunto })));
 
     if (res.servicios && res.servicios.length > 0) {
       const seenIds = new Set<string>();
@@ -2491,14 +2508,18 @@ export default function ReservasView({
                       const services = activeRes.servicios || [];
                       const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
                       
+                      const unsentSupplements = (activeRes.variaciones || []).filter(v => v.type === "Suplemento" && v.status === "Borrador" && !v.invoiceId);
+                      const sentSupplements = (activeRes.variaciones || []).filter(v => v.type === "Suplemento" && v.status === "Solicitado" && !v.invoiceId);
+
                       const billedCount = services.filter(s => s.statusFacturacion === "Facturado").length +
                                          jointFlights.filter(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea").length;
-                                         
+
                       const totalCount = services.length + jointFlights.length;
-                      
+
                       const hasPending = services.some(s => s.statusFacturacion !== "Facturado") ||
-                                         jointFlights.some(b => b.expedienteAereo?.status !== "Facturado" && b.expedienteAereo?.status !== "PagadoAerolinea");
-                                         
+                                         jointFlights.some(b => b.expedienteAereo?.status !== "Facturado" && b.expedienteAereo?.status !== "PagadoAerolinea") ||
+                                         unsentSupplements.length > 0 || sentSupplements.length > 0;
+
                       return (
                         <div className="space-y-3 text-xs font-semibold">
                           <div className="flex justify-between text-[11px] text-zinc-655">
@@ -2510,19 +2531,22 @@ export default function ReservasView({
 
                           {(() => {
                             const hasBorradorOrRechazado = services.some(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === "Rechazado" || s.statusFacturacion === undefined) ||
-                                                           jointFlights.some(b => !b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined);
+                                                           jointFlights.some(b => !b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined) ||
+                                                           unsentSupplements.length > 0;
                             const hasSolicitado = services.some(s => s.statusFacturacion === "Solicitado") ||
-                                                  jointFlights.some(b => b.expedienteAereo?.status === "Solicitado");
-                            
+                                                  jointFlights.some(b => b.expedienteAereo?.status === "Solicitado") ||
+                                                  sentSupplements.length > 0;
+
                             const billedServices = services.filter(s => s.statusFacturacion === "Facturado");
                             const billedFlights = jointFlights.filter(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea");
-                            
+
                             const pendingServices = services.filter(s => s.statusFacturacion === "Solicitado");
                             const pendingFlights = jointFlights.filter(b => b.expedienteAereo?.status === "Solicitado");
-                            
+
                             const unsentServices = services.filter(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === "Rechazado" || s.statusFacturacion === undefined);
                             const unsentFlights = jointFlights.filter(b => !b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined);
-                            const pendingTotal = unsentServices.reduce((sum, s) => sum + s.precioVenta, 0) + unsentFlights.reduce((sum, b) => sum + b.precioVenta, 0);
+                            const pendingTotal = unsentServices.reduce((sum, s) => sum + s.precioVenta, 0) + unsentFlights.reduce((sum, b) => sum + b.precioVenta, 0)
+                              + unsentSupplements.reduce((sum, v) => sum + v.amountSale, 0);
 
                             return (
                               <div className="space-y-3 text-xs font-semibold">
@@ -2534,13 +2558,13 @@ export default function ReservasView({
                                   {hasSolicitado && (
                                     <div className="flex justify-between text-[11px] text-zinc-655">
                                       <span>En Revisión Facturación:</span>
-                                      <span className="text-blue-700 font-extrabold">{pendingServices.length + pendingFlights.length}</span>
+                                      <span className="text-blue-700 font-extrabold">{pendingServices.length + pendingFlights.length + sentSupplements.length}</span>
                                     </div>
                                   )}
                                   {hasBorradorOrRechazado && (
                                     <div className="flex justify-between text-[11px] text-zinc-655">
                                       <span>Pendientes de Enviar:</span>
-                                      <span className="text-amber-700 font-extrabold">{unsentServices.length + unsentFlights.length} (${pendingTotal} USD)</span>
+                                      <span className="text-amber-700 font-extrabold">{unsentServices.length + unsentFlights.length + unsentSupplements.length} (${pendingTotal} USD)</span>
                                     </div>
                                   )}
                                 </div>
@@ -2577,27 +2601,71 @@ export default function ReservasView({
                 )}
               </div>
 
-              {/* Status de Pago */}
+              {/* Status de Pago + Historial de Comprobantes del Cliente */}
               {(() => {
                 const b2bPayment = getClientPaymentStatus(activeRes.id);
+                const resInvoiceIds = (invoices || [])
+                  .filter(inv => inv.clientName.includes(`Localizador ${activeRes.id}`) && inv.type === "Cobro")
+                  .map(inv => inv.id);
+                const clientVouchers = (vouchers || [])
+                  .filter(v => v.locatorId === activeRes.id || (v.invoiceId && resInvoiceIds.includes(v.invoiceId)))
+                  .sort((a, b) => (a.date < b.date ? 1 : -1));
+
                 return (
                   <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-3 shadow-xs">
-                    <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block text-zinc-650">Condición de Cobro B2B</h4>
-                    {activeRes.status === "Cancelada" ? (
-                      <div className="p-3 bg-red-50 border border-red-200 text-red-750 text-xs rounded font-semibold leading-relaxed">
-                        Expediente anulado. No se procesarán transacciones de cobro.
-                      </div>
-                    ) : b2bPayment.status === "Cobrado Total" ? (
-                      <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded font-semibold leading-relaxed">
-                        Acreditado. Los importes han sido cobrados y conciliados en contabilidad mayorista.
-                      </div>
-                    ) : b2bPayment.status === "Sin Facturar" ? (
-                      <div className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-600 text-xs rounded font-semibold leading-relaxed">
-                        Pendiente de emisión de factura. Los servicios aún no han sido cobrados a la agencia.
+                    <div className="flex items-center justify-between border-b border-zinc-150 pb-2">
+                      <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest text-zinc-650">Condición de Cobro B2B</h4>
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${
+                        activeRes.status === "Cancelada" ? "text-red-750 bg-red-50 border-red-200" : b2bPayment.color
+                      }`}>
+                        {activeRes.status === "Cancelada" ? "Anulado" : b2bPayment.status}
+                      </span>
+                    </div>
+
+                    {clientVouchers.length === 0 ? (
+                      <div className="py-4 text-center text-zinc-400 italic text-[11px]">
+                        No se han registrado pagos del cliente para este expediente.
                       </div>
                     ) : (
-                      <div className="p-3 bg-amber-50 border border-amber-250 text-amber-800 text-xs rounded font-semibold leading-relaxed">
-                        Factura emitida pendiente de cobro. Límite de crédito sujeto a revisión de la cartera.
+                      <div className="divide-y divide-zinc-150">
+                        {clientVouchers.map(v => (
+                          <div key={v.id} className="py-2.5 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[10.5px] font-mono font-bold text-zinc-700 truncate">{v.reference}</span>
+                                <span className={`px-1.5 py-0.25 rounded-full border text-[8px] font-bold uppercase ${
+                                  v.status === "Verificado" ? "bg-emerald-50 text-emerald-700 border-emerald-250" :
+                                  v.status === "Rechazado" ? "bg-red-50 text-red-750 border-red-200" :
+                                  "bg-amber-50 text-amber-700 border-amber-250"
+                                }`}>
+                                  {v.status}
+                                </span>
+                              </div>
+                              <p className="text-[9.5px] text-zinc-450 font-medium truncate">
+                                {v.method}{v.bankName ? ` (${v.bankName})` : ""} · {formatDate(v.date)}
+                              </p>
+                            </div>
+                            <div className="text-right flex items-center gap-2 shrink-0">
+                              <span className="font-mono font-black text-xs text-zinc-900">
+                                ${v.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => { setSelectedVoucherForReceipt(v); setShowClientReceiptModal(true); }}
+                                className="p-1.5 hover:bg-zinc-100 text-zinc-500 hover:text-zinc-950 rounded cursor-pointer transition-all border border-transparent hover:border-zinc-200"
+                                title="Ver comprobante adjunto"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {activeRes.status === "Cancelada" && (
+                      <div className="p-2.5 bg-red-50 border border-red-200 text-red-750 text-[10.5px] rounded font-semibold leading-relaxed">
+                        Expediente anulado. No se procesarán nuevas transacciones de cobro.
                       </div>
                     )}
                   </div>
@@ -2611,20 +2679,46 @@ export default function ReservasView({
                 </h4>
                 {(() => {
                   const resInvoices = invoices.filter(inv => inv.clientName.includes(`Localizador ${activeRes.id}`) && inv.type === "Cobro");
-                  // Only FAC- invoices represent cash collected; NC- (credits) and ABO- (wallet transfers) are excluded
+                  // FAC- (regular invoices) and SUP- (suplementos facturados vía "Facturar Suplemento")
+                  // represent cash collected; NC- (credits) and ABO- (wallet transfers) are excluded
+                  const isCollectibleInvoice = (inv: FinancialInvoice) => inv.id.startsWith("FAC-") || inv.id.startsWith("SUP-");
                   const paidInvoicesTotal = resInvoices
-                    .filter(inv => inv.status === "Pagado" && inv.id.startsWith("FAC-"))
+                    .filter(inv => inv.status === "Pagado" && isCollectibleInvoice(inv))
                     .reduce((sum, inv) => sum + inv.amount, 0);
-                  const unpaidFacIds = resInvoices.filter(inv => inv.status !== "Pagado" && inv.id.startsWith("FAC-")).map(inv => inv.id);
-                  // Vouchers on unpaid FAC invoices count as partial collections
+                  const unpaidFacIds = resInvoices.filter(inv => inv.status !== "Pagado" && isCollectibleInvoice(inv)).map(inv => inv.id);
+                  // Vouchers on unpaid FAC invoices count as partial collections. Vouchers already
+                  // tied to a fully "Pagado" invoice must NOT be counted here too — their amount is
+                  // already included in paidInvoicesTotal above, so only vouchers without an
+                  // invoiceId (not yet imputed to any specific invoice) fall back to the locator match.
                   const partialVerifiedVouchers = (vouchers || []).filter(v =>
                     v.status === "Verificado" &&
-                    (v.locatorId === activeRes.id || (v.invoiceId && unpaidFacIds.includes(v.invoiceId)))
+                    ((!v.invoiceId && v.locatorId === activeRes.id) || (v.invoiceId && unpaidFacIds.includes(v.invoiceId)))
                   );
                   const totalCobrado = Math.max(0, paidInvoicesTotal + partialVerifiedVouchers.reduce((sum, v) => sum + v.amount, 0));
-                  const adjustments = (activeRes.variaciones || []).reduce((sum, v) => sum + v.amountSale, 0);
-                  const originalPrice = activeRes.totalPrice - adjustments;
-                  const pctCobrado = activeRes.totalPrice > 0 ? Math.min(100, Math.round((totalCobrado / activeRes.totalPrice) * 100)) : 0;
+                  // Este cuadro refleja el estado de cobro de lo YA facturado a la agencia — no de servicios
+                  // nuevos que todavía están en borrador/pendientes de enviar a Facturación. Si se incluyera
+                  // el total completo de la reserva, agregar un servicio nuevo (sin facturar aún) desalinearía
+                  // "Ajustes" (que solo registra modificaciones de servicios ya facturados) con el total mostrado.
+                  const billedJointFlights = boletos.filter(b =>
+                    b.expedienteId === activeRes.id && b.facturarConjunto &&
+                    (b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea")
+                  );
+                  // Suplementos still pending manual approval ("Facturar Suplemento" en Facturación,
+                  // sin invoiceId todavía) no deben contarse como ya facturados/cobrables — el precio
+                  // del servicio ya refleja el monto nuevo, pero el cobro al cliente sigue pendiente.
+                  const pendingSupplementTotal = (activeRes.variaciones || [])
+                    .filter(v => v.type === "Suplemento" && !v.invoiceId)
+                    .reduce((sum, v) => sum + v.amountSale, 0);
+                  const billedTotal = (activeRes.servicios || [])
+                    .filter(s => s.statusFacturacion === "Facturado")
+                    .reduce((sum, s) => sum + s.precioVenta, 0)
+                    + billedJointFlights.reduce((sum, b) => sum + b.precioVenta, 0)
+                    - pendingSupplementTotal;
+                  const adjustments = (activeRes.variaciones || [])
+                    .filter(v => v.type !== "Suplemento" || v.invoiceId)
+                    .reduce((sum, v) => sum + v.amountSale, 0);
+                  const originalPrice = billedTotal - adjustments;
+                  const pctCobrado = billedTotal > 0 ? Math.min(100, Math.round((totalCobrado / billedTotal) * 100)) : 0;
 
                   return (
                     <div className="space-y-3.5">
@@ -2662,7 +2756,7 @@ export default function ReservasView({
                       <div className="flex justify-between items-center bg-zinc-50 border border-zinc-150 rounded p-2.5">
                         <span className="text-[10px] font-bold text-zinc-500">Saldo Pendiente de Cobro:</span>
                         <span className={`font-mono font-black text-sm ${pctCobrado === 100 ? "text-emerald-700" : "text-red-600 animate-pulse"}`}>
-                          ${Math.max(0, activeRes.totalPrice - totalCobrado).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                          ${Math.max(0, billedTotal - totalCobrado).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
                         </span>
                       </div>
                     </div>
@@ -5851,6 +5945,138 @@ export default function ReservasView({
                   <Send className="w-3.5 h-3.5 text-emerald-400" /> Enviar a Proveedor
                 </button>
               </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL DETALLE DE COMPROBANTE CLIENTE --- */}
+      {showClientReceiptModal && selectedVoucherForReceipt && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in font-sans">
+          <div className="bg-white rounded-lg w-full max-w-lg shadow-2xl overflow-hidden animate-scale-up border border-zinc-200">
+
+            {/* Modal Header */}
+            <div className="bg-zinc-950 text-white px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <h4 className="font-extrabold text-sm uppercase tracking-wider">Comprobante de Pago del Cliente</h4>
+                  <p className="text-[10px] text-zinc-400 font-medium">Auditoría y Soporte de Cobro - Cobranzas B2B</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowClientReceiptModal(false);
+                  setSelectedVoucherForReceipt(null);
+                }}
+                className="p-1 hover:bg-zinc-900 rounded text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-5 text-left text-xs">
+
+              {/* Receipt Preview card */}
+              <div className="bg-zinc-900 text-zinc-100 rounded-lg p-5 border border-zinc-800 font-mono shadow-md relative overflow-hidden">
+                <div className="absolute right-0 bottom-0 translate-x-4 translate-y-4 opacity-5 rotate-12">
+                  <CheckCircle2 className="w-48 h-48" />
+                </div>
+
+                <div className="flex justify-between border-b border-zinc-850 pb-2 mb-3 items-center">
+                  <span className="text-[9.5px] uppercase font-black text-zinc-500 tracking-wider">Foratour ERP - Comprobante de Ingreso</span>
+                  <span className="text-[10.5px] font-black text-emerald-400">{selectedVoucherForReceipt.id}</span>
+                </div>
+
+                <div className="space-y-2 font-semibold">
+                  <div className="grid grid-cols-3">
+                    <span className="text-zinc-550 text-[10px] uppercase">Cliente:</span>
+                    <span className="col-span-2 font-bold text-white uppercase text-[11px] truncate">{selectedVoucherForReceipt.clientName}</span>
+                  </div>
+                  <div className="grid grid-cols-3">
+                    <span className="text-zinc-550 text-[10px] uppercase">Localizador:</span>
+                    <span className="col-span-2 font-bold text-white text-[11px]">{selectedVoucherForReceipt.locatorId || activeRes.id}</span>
+                  </div>
+                  <div className="grid grid-cols-3">
+                    <span className="text-zinc-550 text-[10px] uppercase">Importe:</span>
+                    <span className="col-span-2 font-bold text-zinc-100 text-[11.5px]">${selectedVoucherForReceipt.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                  </div>
+                  <div className="grid grid-cols-3">
+                    <span className="text-zinc-550 text-[10px] uppercase">Método Pago:</span>
+                    <span className="col-span-2 font-bold text-zinc-100 text-[11px]">{selectedVoucherForReceipt.method}{selectedVoucherForReceipt.bankName ? ` (${selectedVoucherForReceipt.bankName})` : ""}</span>
+                  </div>
+                  <div className="grid grid-cols-3">
+                    <span className="text-zinc-550 text-[10px] uppercase">Nro Referencia:</span>
+                    <span className="col-span-2 font-bold text-emerald-400 text-[11.5px] tracking-wide select-all">{selectedVoucherForReceipt.reference || "N/A"}</span>
+                  </div>
+                  {selectedVoucherForReceipt.invoiceId && (
+                    <div className="grid grid-cols-3">
+                      <span className="text-zinc-550 text-[10px] uppercase">Factura:</span>
+                      <span className="col-span-2 font-bold text-zinc-200 text-[11px]">{selectedVoucherForReceipt.invoiceId}</span>
+                    </div>
+                  )}
+                  {selectedVoucherForReceipt.date && (
+                    <div className="grid grid-cols-3">
+                      <span className="text-zinc-555 text-[10px] uppercase">Fecha:</span>
+                      <span className="col-span-2 font-bold text-zinc-200 text-[11px]">{formatDate(selectedVoucherForReceipt.date)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {selectedVoucherForReceipt.notes && (
+                  <div className="border-t border-zinc-850 pt-2.5 mt-3 text-[10px] text-zinc-400 italic">
+                    Notas: {selectedVoucherForReceipt.notes}
+                  </div>
+                )}
+              </div>
+
+              {/* Support file reference */}
+              <div className="space-y-1.5 bg-zinc-50 border border-zinc-200 p-4 rounded">
+                <span className="text-[10px] uppercase font-bold text-zinc-455 block">Archivo Adjunto de Cobranzas</span>
+                <div className="flex items-center justify-between bg-white border border-zinc-200 rounded p-2.5">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-zinc-450" />
+                    <div>
+                      <span className="font-bold text-zinc-800 block text-[11px]">{selectedVoucherForReceipt.attachedFile || "comprobante_registrado.jpg"}</span>
+                      <span className="text-[9.5px] text-zinc-450 block">Tamaño: 1.2 MB | Formato: PDF</span>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase border ${
+                    selectedVoucherForReceipt.status === "Verificado" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                    selectedVoucherForReceipt.status === "Rechazado" ? "bg-red-50 text-red-700 border-red-200" :
+                    "bg-amber-50 text-amber-700 border-amber-200"
+                  }`}>
+                    {selectedVoucherForReceipt.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-zinc-50 border-t border-zinc-200 px-5 py-4 flex justify-between gap-3 font-semibold">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowClientReceiptModal(false);
+                  setSelectedVoucherForReceipt(null);
+                }}
+                className="px-4 py-2 border border-zinc-250 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase cursor-pointer"
+              >
+                Cerrar
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  showAlert({ title: "Descarga de soporte", message: `Simulando descarga de soporte: ${selectedVoucherForReceipt.attachedFile || "comprobante_registrado.jpg"}`, type: "info" });
+                }}
+                className="px-4 py-2 border border-zinc-250 hover:bg-zinc-100 text-zinc-700 bg-white rounded text-xs font-bold uppercase cursor-pointer flex items-center gap-1.5 shadow-3xs"
+              >
+                <Download className="w-3.5 h-3.5" /> Descargar PDF
+              </button>
             </div>
 
           </div>

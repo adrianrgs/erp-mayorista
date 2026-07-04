@@ -1353,7 +1353,7 @@ export default function FacturacionView({
                       const hasRequest = requestedCount > 0 || jointFlights.some(b => b.expedienteAereo?.status === "Solicitado" || b.expedienteAereo?.status === "Borrador");
                       const hasBilled = billedCount > 0;
                       const draftCount = services.filter(s => s.statusFacturacion === "Borrador").length;
-                      const pendingVariationSupplements = (r.variaciones || []).filter((v: any) => v.type === "Suplemento" && !v.invoiceId).length;
+                      const pendingVariationSupplements = (r.variaciones || []).filter((v: any) => v.type === "Suplemento" && v.status === "Solicitado" && !v.invoiceId).length;
                       const pendingVariationCredits = (r.variaciones || []).filter((v: any) => v.type === "Credito" && !v.invoiceId).length;
                       const hasPendingSupplement = hasBilled && (draftCount > 0 || pendingVariationSupplements > 0);
                       const hasPendingCreditNote = hasBilled && pendingVariationCredits > 0;
@@ -1692,13 +1692,15 @@ export default function FacturacionView({
             </div>
 
             {/* Panel de Ajustes y Modificaciones Pendientes de Facturar */}
-            {(activeRes.variaciones || []).some((v: any) => !v.invoiceId) && (
+            {/* Los suplementos ("Suplemento") en status "Borrador" todavía no fueron enviados por el
+                operador de Reservas ("Enviar a Facturación") — permanecen ocultos aquí hasta entonces. */}
+            {(activeRes.variaciones || []).some((v: any) => !v.invoiceId && (v.type !== "Suplemento" || v.status === "Solicitado")) && (
               <div className="space-y-3 mt-4">
                 <h5 className="text-[10px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-1.5">
                   ⚠️ Ajustes y Modificaciones Pendientes de Facturación
                 </h5>
                 <div className="divide-y divide-zinc-150 border border-amber-200 rounded overflow-hidden bg-amber-50/10">
-                  {(activeRes.variaciones || []).filter((v: any) => !v.invoiceId).map((v: any) => {
+                  {(activeRes.variaciones || []).filter((v: any) => !v.invoiceId && (v.type !== "Suplemento" || v.status === "Solicitado")).map((v: any) => {
                     const isPositive = v.amountSale > 0;
                     return (
                       <div key={v.id} className="p-3 bg-white space-y-1.5">

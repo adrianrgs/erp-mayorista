@@ -199,7 +199,7 @@ export function reconcileDossierUpdate(
           log.push(`[Modificación Tarifa] Servicio "${sNew.descripcion}" varió de precio. Delta venta: $${deltaSale.toFixed(2)}, Delta neto: $${deltaNet.toFixed(2)}`);
 
           const varType = deltaSale > 0 ? "Suplemento" as const : "Credito" as const;
-          
+
           const variation: FinancialVariation = {
             id: genId("VAR-MOD"),
             reservationId: newRes.id,
@@ -208,14 +208,17 @@ export function reconcileDossierUpdate(
             amountNet: deltaNet,
             amountSale: deltaSale,
             reason: `Modificación tarifa: ${sNew.descripcion}`,
-            date: new Date().toISOString().split("T")[0]
+            date: new Date().toISOString().split("T")[0],
+            // Suplementos quedan en "Borrador" — invisibles para Facturación hasta que el
+            // operador de Reservas los envíe explícitamente con "Enviar a Facturación".
+            status: varType === "Suplemento" ? "Borrador" : undefined
           };
           newVariations.push(variation);
           currentVariations.push(variation);
 
           if (deltaSale > 0) {
             // Supplement: balance update deferred to FacturacionView when user approves billing
-            log.push(`[Suplemento Pendiente] $${deltaSale.toFixed(2)} sobre "${sNew.descripcion}" — pendiente de aprobación en Facturación.`);
+            log.push(`[Suplemento Pendiente] $${deltaSale.toFixed(2)} sobre "${sNew.descripcion}" — pendiente de enviar a Facturación.`);
           } else {
             applyCreditToClient(Math.abs(deltaSale), `Crédito por rebaja tarifa: ${sNew.descripcion}`);
           }

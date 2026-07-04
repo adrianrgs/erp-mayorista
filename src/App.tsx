@@ -977,7 +977,10 @@ export default function App() {
     try {
       setBoletos(prev => prev.map(b => b.id === updated.id ? updated : b));
       await updateFlightTicket(dataConnect, { ...updated });
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to update flight ticket", e);
+      alert(`Error al guardar el boleto aéreo: ${(e as any)?.message || e}. Por favor reintente.`);
+    }
   };
   const handleDeleteBoleto = async (id: string) => {
     try {

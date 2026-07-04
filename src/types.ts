@@ -393,6 +393,10 @@ export interface FinancialVariation {
   reason: string;
   date: string;
   invoiceId?: string;
+  // Only meaningful for type "Suplemento": gates visibility in Facturación behind an explicit
+  // "Enviar a Facturación" action from Reservas, mirroring the Borrador→Solicitado flow for
+  // ServiceItem. "Credito" variations have no gate — the balance effect already applies immediately.
+  status?: "Borrador" | "Solicitado";
 }
 
 export interface B2BWalletTransaction {
