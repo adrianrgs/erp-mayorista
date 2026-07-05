@@ -2,7 +2,8 @@
  * reset-data.mjs
  * Limpia todos los datos transaccionales del ERP (reservas, facturas, obligaciones, etc.)
  * Conserva: catálogo de hoteles, tipos de habitación, tarifas, flota, proveedores,
- *            clientes B2B (resetea saldos a 0), tasas de cambio, jurisdicción fiscal.
+ *            clientes B2B y clientes directos (resetea saldos a 0), tasas de cambio,
+ *            jurisdicción fiscal.
  *
  * Uso:
  *   node scripts/reset-data.mjs
@@ -131,6 +132,42 @@ async function resetClientBalances(token) {
   console.log(`  ✓ Clientes B2B: saldos reseteados en ${reset}/${clients.length} cliente(s)`);
 }
 
+async function resetDirectClientBalances(token) {
+  let clients;
+  try {
+    clients = await request("GET", "/direct-clients", null, token);
+  } catch (e) {
+    console.warn(`  ⚠ No se pudo listar clientes directos: ${e.message}`);
+    return;
+  }
+
+  if (!Array.isArray(clients) || clients.length === 0) {
+    console.log("  ✓ Clientes Directos: ninguno registrado");
+    return;
+  }
+
+  if (DRY_RUN) {
+    console.log(`  ~ Clientes Directos: se resetearían saldos de ${clients.length} cliente(s)`);
+    return;
+  }
+
+  let reset = 0;
+  for (const c of clients) {
+    if (c.saldoDeber === 0 && c.saldoFavor === 0 && !c.moroso) continue;
+    try {
+      await request("PATCH", `/direct-clients/${c.id}`, {
+        saldoDeber: 0,
+        saldoFavor: 0,
+        moroso: false,
+      }, token);
+      reset++;
+    } catch (e) {
+      console.warn(`    ⚠ No se pudo resetear cliente directo ${c.id}: ${e.message}`);
+    }
+  }
+  console.log(`  ✓ Clientes Directos: saldos reseteados en ${reset}/${clients.length} cliente(s)`);
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -161,6 +198,7 @@ async function main() {
 
   console.log("\n── Datos de clientes ─────────────────────────────────");
   await resetClientBalances(token);
+  await resetDirectClientBalances(token);
 
   console.log("\n── Datos en localStorage (manual) ───────────────────");
   console.log("  Abre la consola del navegador (F12) y ejecuta:");
@@ -174,7 +212,7 @@ async function main() {
   console.log("  ✓ Catálogo de servicios extra y tarifas");
   console.log("  ✓ Flota (vehículos y conductores)");
   console.log("  ✓ Proveedores");
-  console.log("  ✓ Clientes B2B (saldos reseteados a 0)");
+  console.log("  ✓ Clientes B2B y Clientes Directos (saldos reseteados a 0)");
   console.log("  ✓ Jurisdicción fiscal y tasas de cambio");
   console.log("  ✓ Configuración de la empresa");
 
