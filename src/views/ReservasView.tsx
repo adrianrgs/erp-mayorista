@@ -376,6 +376,28 @@ export default function ReservasView({
     }
   }, [hotelId, checkInDate, cartMercado, ratePlans, roomTypes]);
 
+  // Propaga la estructura de comisión configurada en el hotel (Property.comisionBruta) y en
+  // el plan de tarifa seleccionado (RatePlan.comisionCedidaB2B) a los campos de comisión del
+  // expediente — mismo mecanismo ya usado para Traslado/Servicio Vario (ver ServiceRate). Se
+  // usa solo el plan "principal" (selectedRatePlanId) aunque la estadía cruce temporadas
+  // (tarifa mixta), igual que ya hace el auto-select de arriba; queda editable a mano para
+  // ajustes de último momento. Hoteles/planes sin comisión configurada no tocan los campos,
+  // para no pisar la entrada manual existente.
+  React.useEffect(() => {
+    if (activeServiceType !== ServiceType.ALOJAMIENTO) return;
+    const property = detailedProperties.find(p => p.id === hotelId);
+    if (!property || property.comisionBruta === undefined) return;
+    const plan = ratePlans.find(rp => rp.id === selectedRatePlanId);
+    if (cartCanalVenta === "Directo") {
+      setComisionB2B(0);
+      setComisionPropia(property.comisionBruta);
+    } else {
+      const cedida = plan?.comisionCedidaB2B ?? property.comisionBruta;
+      setComisionB2B(cedida);
+      setComisionPropia(Math.max(0, property.comisionBruta - cedida));
+    }
+  }, [hotelId, selectedRatePlanId, cartCanalVenta, activeServiceType, detailedProperties, ratePlans]);
+
   // Aviso no bloqueante: si el hotel + rango de fechas elegido se solapa con un Stop Sale
   // vigente, se avisa UNA sola vez por combinación (el vendedor puede seguir igual, a veces
   // el hotel libera cupo pese al cierre nominal). El ref evita repetir el aviso en cada

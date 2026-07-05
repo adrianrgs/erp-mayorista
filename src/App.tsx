@@ -1203,7 +1203,8 @@ export default function App() {
         tarifaExtraAdulto: newRate.tarifaExtraAdulto,
         tarifaExtraNino: newRate.tarifaExtraNino,
         politicasCancelacion: newRate.politicasCancelacion,
-        mercado: newRate.mercado
+        mercado: newRate.mercado,
+        comisionCedidaB2B: newRate.comisionCedidaB2B
       });
     } catch (e) {
       console.error("Error in handleAddRatePlan:", e);
@@ -1224,7 +1225,8 @@ export default function App() {
         tarifaExtraAdulto: updatedRate.tarifaExtraAdulto,
         tarifaExtraNino: updatedRate.tarifaExtraNino,
         politicasCancelacion: updatedRate.politicasCancelacion,
-        mercado: updatedRate.mercado
+        mercado: updatedRate.mercado,
+        comisionCedidaB2B: updatedRate.comisionCedidaB2B
       });
     } catch (e) {
       console.error("Error in handleUpdateRatePlan:", e);

@@ -29,6 +29,10 @@ export interface Property {
   politicasGenerales: string;
   imagen?: string; // Para visualización elegante de la galería
   supplierName?: string; // Nombre de proveedor mayorista
+  // Comisión bruta (%) que este hotel deja sobre el PVP. Se configura una sola vez por hotel
+  // y se propaga automáticamente a Reservas al agregar un Alojamiento, en vez de que el
+  // vendedor la tipee a mano cada vez.
+  comisionBruta?: number;
 }
 
 export interface RoomType {
@@ -53,6 +57,9 @@ export interface RatePlan {
   tarifaExtraNino: number;
   politicasCancelacion: string;
   mercado: 'NACIONAL' | 'INTERNACIONAL';
+  // % de la comisión bruta del hotel (Property.comisionBruta) que este plan de tarifa cede a
+  // la agencia B2B revendedora; el resto queda para la propia agencia.
+  comisionCedidaB2B?: number;
 }
 
 export interface StopSale {

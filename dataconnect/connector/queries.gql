@@ -131,6 +131,7 @@ nombre
     politicasGenerales
     imagen
     supplierName
+    comisionBruta
   }
 }
 
@@ -161,6 +162,7 @@ propertyId
     tarifaExtraNino
     politicasCancelacion
     mercado
+    comisionCedidaB2B
   }
 }
 

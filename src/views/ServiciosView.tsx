@@ -37,19 +37,17 @@ export default function ServiciosView({
 
   // Form states
   const [serviceForm, setServiceForm] = useState<Partial<ExtraService>>({});
-  const [rateForm, setRateForm] = useState<Partial<ServiceRate>>({
-    pricingModel: PricingModel.POR_PERSONA
-  });
+  const RATE_FORM_DEFAULT: Partial<ServiceRate> = { pricingModel: PricingModel.POR_PERSONA, comisionBruta: 15 };
+  const [rateForm, setRateForm] = useState<Partial<ServiceRate>>(RATE_FORM_DEFAULT);
   const [editingRateId, setEditingRateId] = useState<string | null>(null);
-  const [margen, setMargen] = useState<number>(15);
 
   const calculatePVP = (neto: number | undefined, pct: number) => {
     if (!neto) return 0;
     return Math.round((neto / (1 - pct / 100)) * 100) / 100;
   };
 
-  // Reverse of calculatePVP — used when the provider gives the PVP/venta directly (commission
-  // already included) and the neto needs to be derived from the margin instead.
+  // Reverse of calculatePVP — used when el proveedor da el PVP/venta directamente (comisión ya
+  // incluida) y el neto necesita derivarse a partir de la comisión bruta en vez de al revés.
   const calculateNeto = (venta: number | undefined, pct: number) => {
     if (!venta) return 0;
     return Math.round((venta * (1 - pct / 100)) * 100) / 100;
@@ -82,7 +80,7 @@ export default function ServiciosView({
     }
     setActiveTab("detalles");
     setEditingRateId(null);
-    setRateForm({ pricingModel: PricingModel.POR_PERSONA });
+    setRateForm(RATE_FORM_DEFAULT);
   };
 
   const handleSaveService = () => {
@@ -113,7 +111,7 @@ export default function ServiciosView({
       onAddServiceRate(newRate);
     }
     setEditingRateId(null);
-    setRateForm({ pricingModel: PricingModel.POR_PERSONA }); // reset
+    setRateForm(RATE_FORM_DEFAULT);
   };
 
   const handleEditRate = (rate: ServiceRate) => {
@@ -123,7 +121,7 @@ export default function ServiciosView({
 
   const handleCancelEditRate = () => {
     setEditingRateId(null);
-    setRateForm({ pricingModel: PricingModel.POR_PERSONA });
+    setRateForm(RATE_FORM_DEFAULT);
   };
 
   const handleDeleteRate = (id: string) => {
@@ -488,42 +486,55 @@ export default function ServiciosView({
                       />
                     </div>
 
-                    <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-lg">
-                      <div className="mb-4 pb-4 border-b border-zinc-200">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-1.5">
-                          Margen Sugerido (%) para Autocalcular PVP
-                        </label>
-                        <div className="flex items-center gap-4">
-                          <div className="relative w-48">
-                            <input 
-                              type="number" 
-                              value={margen} 
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                      <label className="text-[10px] font-bold text-amber-700 uppercase tracking-widest block mb-1.5">
+                        Comisión Bruta (%) para Autocalcular PVP y Cesión a Agencia B2B
+                      </label>
+                      <p className="text-[10px] text-amber-700 font-medium mb-3">
+                        Se aplica automáticamente al agregar este servicio en Reservas. Para Clientes Directos (sin agencia intermediaria), la comisión bruta completa queda para tu propia agencia.
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest block">Comisión Bruta (%)</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              value={rateForm.comisionBruta ?? ""}
                               onChange={e => {
-                                const newMargen = parseFloat(e.target.value) || 0;
-                                setMargen(newMargen);
+                                const pct = parseFloat(e.target.value) || 0;
                                 if (rateForm.pricingModel === PricingModel.POR_PERSONA) {
                                   setRateForm({
                                     ...rateForm,
-                                    ventaAdulto: calculatePVP(rateForm.netoAdulto, newMargen),
-                                    ventaNino: calculatePVP(rateForm.netoNino, newMargen)
+                                    comisionBruta: pct,
+                                    ventaAdulto: calculatePVP(rateForm.netoAdulto, pct),
+                                    ventaNino: calculatePVP(rateForm.netoNino, pct)
                                   });
                                 } else {
                                   setRateForm({
                                     ...rateForm,
-                                    ventaTotal: calculatePVP(rateForm.netoTotal, newMargen)
+                                    comisionBruta: pct,
+                                    ventaTotal: calculatePVP(rateForm.netoTotal, pct)
                                   });
                                 }
                               }}
-                              className="w-full px-3 py-2 pr-8 border border-zinc-200 rounded text-sm font-bold text-zinc-900 bg-white focus:outline-none" 
+                              className="w-full px-3 py-2 pr-8 border border-zinc-200 rounded text-sm font-bold text-zinc-900 bg-white focus:outline-none"
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">%</span>
                           </div>
-                          <span className="text-[10px] text-zinc-500 font-medium">
-                            Al ingresar el Costo Neto, el PVP se calculará usando este porcentaje de ganancia.
-                          </span>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest block">Cesión a Agencia B2B (%)</label>
+                          <input
+                            type="number"
+                            value={rateForm.comisionCedidaB2B ?? ""}
+                            onChange={e => setRateForm({ ...rateForm, comisionCedidaB2B: parseFloat(e.target.value) })}
+                            className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-mono bg-white"
+                          />
                         </div>
                       </div>
+                    </div>
 
+                    <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-lg">
                       {rateForm.pricingModel === PricingModel.POR_PERSONA ? (
                         <div className="grid grid-cols-4 gap-4">
                           <div className="space-y-1.5">
@@ -533,7 +544,7 @@ export default function ServiciosView({
                               value={rateForm.netoAdulto || ""} 
                               onChange={e => {
                                 const val = parseFloat(e.target.value);
-                                setRateForm({...rateForm, netoAdulto: val, ventaAdulto: calculatePVP(val, margen)});
+                                setRateForm({...rateForm, netoAdulto: val, ventaAdulto: calculatePVP(val, rateForm.comisionBruta || 0)});
                               }} 
                               className="w-full px-3 py-2 border border-blue-200 rounded text-sm font-mono" 
                             />
@@ -545,7 +556,7 @@ export default function ServiciosView({
                               value={rateForm.ventaAdulto || ""}
                               onChange={e => {
                                 const val = parseFloat(e.target.value);
-                                setRateForm({...rateForm, ventaAdulto: val, netoAdulto: calculateNeto(val, margen)});
+                                setRateForm({...rateForm, ventaAdulto: val, netoAdulto: calculateNeto(val, rateForm.comisionBruta || 0)});
                               }}
                               className="w-full px-3 py-2 border border-green-200 rounded text-sm font-mono"
                             />
@@ -557,7 +568,7 @@ export default function ServiciosView({
                               value={rateForm.netoNino || ""} 
                               onChange={e => {
                                 const val = parseFloat(e.target.value);
-                                setRateForm({...rateForm, netoNino: val, ventaNino: calculatePVP(val, margen)});
+                                setRateForm({...rateForm, netoNino: val, ventaNino: calculatePVP(val, rateForm.comisionBruta || 0)});
                               }} 
                               className="w-full px-3 py-2 border border-blue-200 rounded text-sm font-mono" 
                             />
@@ -569,7 +580,7 @@ export default function ServiciosView({
                               value={rateForm.ventaNino || ""}
                               onChange={e => {
                                 const val = parseFloat(e.target.value);
-                                setRateForm({...rateForm, ventaNino: val, netoNino: calculateNeto(val, margen)});
+                                setRateForm({...rateForm, ventaNino: val, netoNino: calculateNeto(val, rateForm.comisionBruta || 0)});
                               }}
                               className="w-full px-3 py-2 border border-green-200 rounded text-sm font-mono"
                             />
@@ -588,7 +599,7 @@ export default function ServiciosView({
                               value={rateForm.netoTotal || ""} 
                               onChange={e => {
                                 const val = parseFloat(e.target.value);
-                                setRateForm({...rateForm, netoTotal: val, ventaTotal: calculatePVP(val, margen)});
+                                setRateForm({...rateForm, netoTotal: val, ventaTotal: calculatePVP(val, rateForm.comisionBruta || 0)});
                               }} 
                               className="w-full px-3 py-2 border border-blue-200 rounded text-sm font-mono" 
                             />
@@ -600,42 +611,13 @@ export default function ServiciosView({
                               value={rateForm.ventaTotal || ""}
                               onChange={e => {
                                 const val = parseFloat(e.target.value);
-                                setRateForm({...rateForm, ventaTotal: val, netoTotal: calculateNeto(val, margen)});
+                                setRateForm({...rateForm, ventaTotal: val, netoTotal: calculateNeto(val, rateForm.comisionBruta || 0)});
                               }}
                               className="w-full px-3 py-2 border border-green-200 rounded text-sm font-mono"
                             />
                           </div>
                         </div>
                       )}
-                    </div>
-
-                    <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                      <label className="text-[10px] font-bold text-amber-700 uppercase tracking-widest block mb-1.5">
-                        Estructura de Comisión
-                      </label>
-                      <p className="text-[10px] text-amber-700 font-medium mb-3">
-                        Se aplica automáticamente al agregar este servicio en Reservas. Para Clientes Directos (sin agencia intermediaria), la comisión bruta completa queda para tu propia agencia.
-                      </p>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest block">Comisión Bruta (%)</label>
-                          <input
-                            type="number"
-                            value={rateForm.comisionBruta ?? ""}
-                            onChange={e => setRateForm({ ...rateForm, comisionBruta: parseFloat(e.target.value) })}
-                            className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-mono bg-white"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest block">Cesión a Agencia B2B (%)</label>
-                          <input
-                            type="number"
-                            value={rateForm.comisionCedidaB2B ?? ""}
-                            onChange={e => setRateForm({ ...rateForm, comisionCedidaB2B: parseFloat(e.target.value) })}
-                            className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-mono bg-white"
-                          />
-                        </div>
-                      </div>
                     </div>
 
                     <div className="mt-4 flex justify-end gap-2">

@@ -314,6 +314,7 @@ export default function PropiedadesView({
     ciudad: "",
     categoria: "5",
     supplierName: "",
+    comisionBruta: "",
     politicasGenerales: "Check-in: 15:05 hrs. Check-out: 12:00 hrs. Todo voucher de reventa debe ser abonado con 72h hábiles de anticipación. Cancelaciones aplican según vigencia de contrato de release."
   });
   // Manual entry fallback for country / state when "Otro" is selected
@@ -345,7 +346,8 @@ export default function PropiedadesView({
     fechaInicio: "",
     fechaFin: "",
     tipoCobro: TipoCobro.POR_HABITACION,
-    politicasCancelacion: "Cancelación sin cargos hasta 5 días hábiles antes de la llegada."
+    politicasCancelacion: "Cancelación sin cargos hasta 5 días hábiles antes de la llegada.",
+    comisionCedidaB2B: ""
   });
 
   const [activeMercadoTab, setActiveMercadoTab] = useState<"NACIONAL" | "INTERNACIONAL">("NACIONAL");
@@ -425,6 +427,7 @@ export default function PropiedadesView({
       status: PropertyStatus.ACTIVO,
       politicasGenerales: newPropForm.politicasGenerales,
       supplierName: newPropForm.supplierName || "Registro Directo",
+      comisionBruta: newPropForm.comisionBruta === "" ? undefined : parseFloat(newPropForm.comisionBruta),
       imagen: [
         "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80",
         "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?auto=format&fit=crop&w=800&q=80",
@@ -476,6 +479,7 @@ export default function PropiedadesView({
       ciudad: "",
       categoria: "5",
       supplierName: "",
+      comisionBruta: "",
       politicasGenerales: "Check-in: 15:05 hrs. Check-out: 12:00 hrs. Todo voucher de reventa debe ser abonado con 72h hábiles de anticipación. Cancelaciones aplican según vigencia de contrato de release."
     });
 
@@ -506,16 +510,24 @@ export default function PropiedadesView({
 
   // Level 2: Tab Políticas - Save General Policies
   const [policyText, setPolicyText] = useState("");
+  // Comisión bruta (%) del hotel: se configura una sola vez aquí y se propaga automáticamente
+  // a Reservas al agregar un Alojamiento, en vez de que el vendedor la tipee a mano cada vez.
+  const [comisionBrutaText, setComisionBrutaText] = useState("");
   useEffect(() => {
     if (activeProperty) {
       setPolicyText(activeProperty.politicasGenerales);
+      setComisionBrutaText(activeProperty.comisionBruta !== undefined ? String(activeProperty.comisionBruta) : "");
     }
   }, [activePropertyId, viewLevel]);
 
   const handleSavePolicies = () => {
     const propertyToUpdate = localProperties.find(p => p.id === activePropertyId);
     if (propertyToUpdate) {
-      onUpdateDetailedProperty({ ...propertyToUpdate, politicasGenerales: policyText });
+      onUpdateDetailedProperty({
+        ...propertyToUpdate,
+        politicasGenerales: policyText,
+        comisionBruta: comisionBrutaText === "" ? undefined : parseFloat(comisionBrutaText)
+      });
     }
     triggerNotification("✓ Políticas y condiciones comerciales de alojamiento actualizadas.");
   };
@@ -603,14 +615,15 @@ export default function PropiedadesView({
         tarifaExtraAdulto: parseFloat(pricing.tarifaExtraAdulto) || 0,
         tarifaExtraNino: parseFloat(pricing.tarifaExtraNino) || 0,
         politicasCancelacion: newRateForm.politicasCancelacion,
-        mercado: activeMercadoTab
+        mercado: activeMercadoTab,
+        comisionCedidaB2B: newRateForm.comisionCedidaB2B === "" ? undefined : parseFloat(newRateForm.comisionCedidaB2B)
       };
     });
 
     newRates.forEach(rate => onAddRatePlan(rate));
     setSelectedRooms({});
     setEditingPlanGroup(null);
-    setNewRateForm(prev => ({ ...prev, nombrePromocion: "", fechaInicio: "", fechaFin: "" }));
+    setNewRateForm(prev => ({ ...prev, nombrePromocion: "", fechaInicio: "", fechaFin: "", comisionCedidaB2B: "" }));
     // Auto-expand the newly created group
     setExpandedGroups(prev => new Set([...prev, planName]));
     triggerNotification(`✓ Plan "${planName}" guardado con ${newRates.length} habitación(es).`);
@@ -626,7 +639,8 @@ export default function PropiedadesView({
       fechaInicio: firstRate?.fechaInicio || "",
       fechaFin: firstRate?.fechaFin || "",
       tipoCobro: firstRate?.tipoCobro || TipoCobro.POR_HABITACION,
-      politicasCancelacion: firstRate?.politicasCancelacion || "Cancelación sin cargos hasta 5 días hábiles antes de la llegada."
+      politicasCancelacion: firstRate?.politicasCancelacion || "Cancelación sin cargos hasta 5 días hábiles antes de la llegada.",
+      comisionCedidaB2B: firstRate?.comisionCedidaB2B !== undefined ? String(firstRate.comisionCedidaB2B) : ""
     });
     setActiveMercadoTab((firstRate?.mercado as "NACIONAL" | "INTERNACIONAL") || "NACIONAL");
 
@@ -1275,6 +1289,22 @@ export default function PropiedadesView({
                   />
                 </div>
 
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <label className="text-[10px] font-bold text-amber-700 uppercase tracking-widest block mb-1.5">Comisión Bruta del Hotel (%)</label>
+                  <p className="text-[10px] text-amber-700 font-medium mb-3">
+                    Se propaga automáticamente a Reservas al agregar un Alojamiento en este hotel — combinada con la cesión a la agencia B2B configurada en cada plan de tarifa. Igual queda editable en Reservas por si hay que ajustarla de último momento.
+                  </p>
+                  <div className="relative w-48">
+                    <input
+                      type="number"
+                      value={comisionBrutaText}
+                      onChange={(e) => setComisionBrutaText(e.target.value)}
+                      className="w-full px-3 py-2 pr-8 border border-zinc-200 rounded text-sm font-bold text-zinc-900 bg-white focus:outline-none"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">%</span>
+                  </div>
+                </div>
+
                 <div className="p-4 bg-zinc-50 rounded border border-zinc-205 text-zinc-650 text-xs leading-relaxed font-semibold">
                   <span className="font-bold text-zinc-900 block uppercase mb-1 text-[10px] tracking-wider">Nota Importante:</span>
                   Toda enmienda salvada en este panel modificará al instante el XML y plantillas PDF de Voucher Receptivo. Por favor, mantenga la claridad de horarios locales de entrega de habitaciones.
@@ -1558,7 +1588,7 @@ export default function PropiedadesView({
                         type="button"
                         onClick={() => {
                           setEditingPlanGroup(null);
-                          setNewRateForm(prev => ({ ...prev, nombrePromocion: "", fechaInicio: "", fechaFin: "" }));
+                          setNewRateForm(prev => ({ ...prev, nombrePromocion: "", fechaInicio: "", fechaFin: "", comisionCedidaB2B: "" }));
                           setSelectedRooms({});
                         }}
                         className="text-xs text-red-600 hover:text-red-700 underline font-bold cursor-pointer flex items-center gap-1"
@@ -1726,6 +1756,27 @@ export default function PropiedadesView({
                       value={newRateForm.politicasCancelacion}
                       onChange={(e) => setNewRateForm(prev => ({ ...prev, politicasCancelacion: e.target.value }))}
                     />
+                  </div>
+
+                  {/* Cesión a Agencia B2B: junto con la Comisión Bruta del hotel (pestaña Políticas),
+                      se propaga automáticamente a Reservas al agregar un Alojamiento con este plan. */}
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-1.5">
+                    <label className="text-[9px] font-bold text-amber-700 uppercase tracking-widest block">Cesión a Agencia B2B (%) — aplica a todo el plan</label>
+                    <div className="relative w-48">
+                      <input
+                        id="rateplan-cedida-b2b-input"
+                        type="number"
+                        className="w-full p-2.5 pr-8 border border-zinc-200 rounded text-xs bg-white text-zinc-900 font-bold focus:outline-none"
+                        value={newRateForm.comisionCedidaB2B}
+                        onChange={(e) => setNewRateForm(prev => ({ ...prev, comisionCedidaB2B: e.target.value }))}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
+                    </div>
+                    <p className="text-[9px] text-amber-700 font-medium">
+                      {activeProperty?.comisionBruta !== undefined
+                        ? `Comisión bruta del hotel: ${activeProperty.comisionBruta}%. El resto (no cedido) queda para tu propia agencia.`
+                        : "Este hotel no tiene Comisión Bruta configurada aún (pestaña Políticas) — sin ella, Reservas no podrá autocompletar la comisión."}
+                    </p>
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
@@ -2102,6 +2153,22 @@ export default function PropiedadesView({
                       <option value="0">Sin estrellas (Posada / Apartamento / Otro)</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Comisión Bruta del Hotel */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Comisión Bruta (%) — opcional</label>
+                  <div className="relative w-48">
+                    <input
+                      type="number"
+                      placeholder="Ej: 20"
+                      className="w-full px-3 py-2 pr-8 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-900 focus:outline-none"
+                      value={newPropForm.comisionBruta}
+                      onChange={(e) => setNewPropForm(prev => ({ ...prev, comisionBruta: e.target.value }))}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-450 font-medium">Se propaga automáticamente a Reservas al agregar un Alojamiento en este hotel. Se puede configurar luego desde la pestaña Políticas.</p>
                 </div>
 
                 {/* Políticas Generales de Contrato Inicial */}

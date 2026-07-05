@@ -9,6 +9,7 @@ type DetailedProperty @table {
   politicasGenerales: String!
   imagen: String
   supplierName: String
+  comisionBruta: Float
   updatedAt: String
 }
 
@@ -35,6 +36,7 @@ type RatePlan @table {
   tarifaExtraNino: Float!
   politicasCancelacion: String!
   mercado: String!
+  comisionCedidaB2B: Float
   updatedAt: String
 }
 
