@@ -179,6 +179,12 @@ export default function ReservasView({
   const [showClientReceiptModal, setShowClientReceiptModal] = useState(false);
   const [selectedVoucherForReceipt, setSelectedVoucherForReceipt] = useState<PaymentVoucher | null>(null);
 
+  // `canalVenta` no se persiste todavía en la base de datos (falta la columna en el esquema), así
+  // que se deriva de `agenciaName` cuando no viene explícito — misma lógica que la restauración del
+  // carrito en loadReservationIntoCart. Usar este helper en todo lado evita que se desincronicen.
+  const isCanalDirecto = (r: Pick<Reservation, "canalVenta" | "agenciaName">) =>
+    (r.canalVenta || (!r.agenciaName ? "Directo" : "B2B")) === "Directo";
+
   // --- HELPERS TO RESOLVE PAYMENT STATUSES ---
   const getClientPaymentStatus = (resId: string) => {
     const resInvoices = (invoices || []).filter(inv => inv.clientName.includes(`Localizador ${resId}`) && inv.type === "Cobro");
@@ -227,6 +233,10 @@ export default function ReservasView({
   const [cartFlightNo, setCartFlightNo] = useState("");
   const [cartServices, setCartServices] = useState<ServiceItem[]>([]);
   const [cartTipo, setCartTipo] = useState<"Cotización" | "Reserva Real">("Reserva Real");
+  const [cartCanalVenta, setCartCanalVenta] = useState<"B2B" | "Directo">("B2B");
+  // Cliente Directo: no hay agencia B2B de por medio, así que la Comisión B2B por defecto es 0%
+  // (el cliente paga el PVP completo) en vez del 10% que se asume para una venta B2B.
+  const getDefaultComisionB2B = () => cartCanalVenta === "Directo" ? 0 : 10;
 
   // ── Estado de vinculación con Módulo de Vuelos ─────────────────────────────
   // Multiple linked flights
@@ -601,7 +611,8 @@ export default function ReservasView({
     setCartTelefono("");
     setCartEmail("");
     setCartTipo("Reserva Real");
-    
+    setCartCanalVenta("B2B");
+
     setCartSpecialRequests("");
     setCartFlightNo("");
     setCartServices([]);
@@ -644,7 +655,7 @@ export default function ReservasView({
           { name: "", type: "Adulto" }
         ] 
       }]);
-      setComisionB2B(10);
+      setComisionB2B(getDefaultComisionB2B());
       setComisionPropia(5);
     } else if (type === ServiceType.TRASLADO) {
       setTransDate(cartCheckIn || "2026-06-20");
@@ -653,7 +664,7 @@ export default function ReservasView({
       setTransReturnDate(cartCheckOut || "2026-06-27");
       setTransServiceType("privado");
       setTransPax(paxCount || 2);
-      setComisionB2B(10);
+      setComisionB2B(getDefaultComisionB2B());
       setComisionPropia(5);
     } else if (type === ServiceType.RENT_A_CAR) {
       const start = cartCheckIn || "2026-06-20";
@@ -681,7 +692,7 @@ export default function ReservasView({
         setInsDays(7);
       }
       setInsPax(paxCount || 1);
-      setComisionB2B(10);
+      setComisionB2B(getDefaultComisionB2B());
       setComisionPropia(5);
     }
 
@@ -1096,6 +1107,10 @@ export default function ReservasView({
     setCartTelefono(res.telefono || "");
     setCartEmail(res.email || "");
     setCartTipo(res.tipo || "Reserva Real");
+    // `canalVenta` todavía no se persiste en la base de datos (el esquema de Reservation no tiene
+    // esa columna todavía), así que se deriva de `agenciaName` — que sí persiste — igual que ya
+    // hace el resto del sistema para tratar una reserva sin agencia como "Canal Directo".
+    setCartCanalVenta(res.canalVenta || (!res.agenciaName ? "Directo" : "B2B"));
     setCartSpecialRequests(res.specialRequests || "");
     setCartFlightNo(res.flightNo || "");
     setCartPasajeros(derivePassengersFromLegacyReservation(res));
@@ -1229,7 +1244,7 @@ export default function ReservasView({
         setSelectedPromoName(det.selectedPromoName || "");
         setSelectedRatePlanId(det.selectedRatePlanId || "");
         setLodgingRooms(det.lodgingRooms ? JSON.parse(JSON.stringify(det.lodgingRooms)) : []);
-        setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : 10);
+        setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
         setComisionPropia(det.comisionPropia !== undefined ? det.comisionPropia : 5);
       } else if (service.tipo === ServiceType.TRASLADO) {
         setTransPickup(det.transPickup || "");
@@ -1244,7 +1259,7 @@ export default function ReservasView({
         setTransSupplier(service.proveedor || "Foratour Receptivo S.A.");
         setNetPrice(det.netPrice || "");
         setSalePrice(det.salePrice || "");
-        setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : 10);
+        setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
         setComisionPropia(det.comisionPropia !== undefined ? det.comisionPropia : 5);
       } else if (service.tipo === ServiceType.RENT_A_CAR) {
         setCarCategory(det.carCategory || "Compacto Automático");
@@ -1254,7 +1269,7 @@ export default function ReservasView({
         setCarDays(det.carDays || 7);
         setNetPrice(det.netPrice || "");
         setSalePrice(det.salePrice || "");
-        setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : 10);
+        setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
       } else if (service.tipo === ServiceType.SEGURO) {
         setInsPlan(det.insPlan || "");
         setInsStartDate(det.insStartDate || "");
@@ -1264,14 +1279,14 @@ export default function ReservasView({
         setInsSupplier(service.proveedor || "Asistencia Global Travel");
         setNetPrice(det.netPrice || "");
         setSalePrice(det.salePrice || "");
-        setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : 10);
+        setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
         setComisionPropia(det.comisionPropia !== undefined ? det.comisionPropia : 5);
       } else if (service.tipo === ServiceType.MANUAL) {
         setManualDescription(det.manualDescription || "");
         setManualSupplier(service.proveedor || det.manualSupplier || "");
         setNetPrice(det.netPrice || "");
         setSalePrice(det.salePrice || "");
-        setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : 10);
+        setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
       } else if (service.tipo === ServiceType.SERVICIO_VARIO) {
         setSvExtraServiceId(det.svExtraServiceId || "");
         setSvRateId(det.svRateId || "");
@@ -1307,7 +1322,7 @@ export default function ReservasView({
           adultsCount: activeRes?.pax || 2,
           guests: [{ name: activeRes?.holder || cartHolder || "", type: "Adulto" }]
         }]);
-        setComisionB2B(10);
+        setComisionB2B(getDefaultComisionB2B());
         setComisionPropia(5);
       } else if (service.tipo === ServiceType.TRASLADO) {
         setTransPickup("");
@@ -1375,12 +1390,13 @@ export default function ReservasView({
         flightNo: cartFlightNo || undefined,
         telefono: cartTelefono || "Sin registrar",
         email: cartEmail || "Sin registrar",
-        agenciaName: cartAgencia,
+        agenciaName: cartCanalVenta === "Directo" ? undefined : cartAgencia,
         createdAt: activeRes?.createdAt || new Date().toISOString().split("T")[0],
         mercado: cartMercado,
         servicios: cartServices,
         pasajeros: cartPasajeros,
-        tipo: cartTipo
+        tipo: cartTipo,
+        canalVenta: cartCanalVenta
       };
 
       // ── AUTO-VINCULAR boletos seleccionados (EDICION) ──────────────────────────────
@@ -1442,12 +1458,13 @@ export default function ReservasView({
         flightNo: cartFlightNo || undefined,
         telefono: cartTelefono || "Sin registrar",
         email: cartEmail || "Sin registrar",
-        agenciaName: cartAgencia,
+        agenciaName: cartCanalVenta === "Directo" ? undefined : cartAgencia,
         createdAt: new Date().toISOString().split("T")[0],
         mercado: cartMercado,
         servicios: cartServices.map(s => ({ ...s, statusFacturacion: s.statusFacturacion || "Borrador" as const })),
         pasajeros: cartPasajeros,
-        tipo: cartTipo
+        tipo: cartTipo,
+        canalVenta: cartCanalVenta
       };
 
       onAddReservation(newRes);
@@ -1918,10 +1935,10 @@ export default function ReservasView({
               <button
                 onClick={() => setShowB2BModal(true)}
                 className="px-2.5 py-1 border border-zinc-900 bg-zinc-900 hover:bg-zinc-800 rounded text-white font-bold text-[10.5px] uppercase cursor-pointer transition-all flex items-center gap-1 whitespace-nowrap"
-                title="Compartir Formato B2B"
+                title={isCanalDirecto(activeRes) ? "Compartir Cotización con Cliente" : "Compartir Formato B2B"}
               >
                 <Share2 className="w-3 h-3" />
-                <span>Formato B2B</span>
+                <span>{isCanalDirecto(activeRes) ? "Cotización Cliente" : "Formato B2B"}</span>
               </button>
 
               {activeRes.servicios?.some(s => s.statusFacturacion === "Facturado") && (
@@ -2997,10 +3014,49 @@ export default function ReservasView({
                 </div>
 
 
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Canal de Venta</label>
+                  <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-md border border-zinc-200 max-w-xs">
+                    <button
+                      type="button"
+                      onClick={() => setCartCanalVenta("B2B")}
+                      className={`flex-1 py-1.5 px-3 rounded text-xs font-bold whitespace-nowrap transition-all cursor-pointer text-center ${
+                        cartCanalVenta === "B2B"
+                          ? "bg-zinc-950 text-white shadow-xs"
+                          : "text-zinc-500 hover:text-zinc-800"
+                      }`}
+                    >
+                      Agencia B2B
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCartCanalVenta("Directo");
+                        setCartAgencia("");
+                        setAgencySearch("");
+                        setSelectedClient(null);
+                      }}
+                      className={`flex-1 py-1.5 px-3 rounded text-xs font-bold whitespace-nowrap transition-all cursor-pointer text-center ${
+                        cartCanalVenta === "Directo"
+                          ? "bg-zinc-950 text-white shadow-xs"
+                          : "text-zinc-500 hover:text-zinc-800"
+                      }`}
+                    >
+                      Cliente Directo
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1.5 md:col-span-2 relative">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Agencia de Origen B2B</label>
-                    
+
+                    {cartCanalVenta === "Directo" ? (
+                      <div className="w-full p-2.5 border border-dashed border-zinc-250 bg-zinc-50 rounded text-xs font-semibold text-zinc-400 italic">
+                        No aplica — Cliente Directo (sin agencia intermediaria)
+                      </div>
+                    ) : (
+                    <>
                     <div className="relative">
                       <input
                         type="text"
@@ -3035,8 +3091,8 @@ export default function ReservasView({
 
                     {/* Backdrop to close list */}
                     {showAgencyDropdown && (
-                      <div 
-                        className="fixed inset-0 z-40" 
+                      <div
+                        className="fixed inset-0 z-40"
                         onClick={() => setShowAgencyDropdown(false)}
                       />
                     )}
@@ -3120,6 +3176,8 @@ export default function ReservasView({
                         <AlertCircle className="w-3.5 h-3.5 text-amber-700" />
                         <span>ALERTA DE MORA: Agencia con saldo vencido (${selectedClient.saldoDeber.toLocaleString("es-ES")} USD).</span>
                       </div>
+                    )}
+                    </>
                     )}
                   </div>
 
@@ -4576,8 +4634,9 @@ export default function ReservasView({
                         max="100"
                         step="0.5"
                         required
-                        className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                        className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed"
                         value={comisionB2B}
+                        disabled={cartCanalVenta === "Directo"}
                         onChange={(e) => setComisionB2B(Math.max(0, parseFloat(e.target.value) || 0))}
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
@@ -4632,7 +4691,7 @@ export default function ReservasView({
                       />
                     </div>
                     <span className="text-[9px] text-zinc-450 font-medium leading-tight block">
-                      Agencia B2B retiene su {comisionB2B}% de comisión.
+                      {cartCanalVenta === "Directo" ? "Cliente Directo: sin comisión de agencia, precio de venta = PVP." : `Agencia B2B retiene su ${comisionB2B}% de comisión.`}
                     </span>
                   </div>
 
@@ -4696,8 +4755,9 @@ export default function ReservasView({
                               min="0"
                               max="100"
                               step="0.5"
-                              className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                              className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed"
                               value={comisionB2B}
+                              disabled={cartCanalVenta === "Directo"}
                               onChange={(e) => setComisionB2B(Math.max(0, parseFloat(e.target.value) || 0))}
                             />
                             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
@@ -4751,7 +4811,7 @@ export default function ReservasView({
                             />
                           </div>
                           <span className="text-[9px] text-zinc-450 font-medium leading-tight block">
-                            Agencia B2B retiene su {comisionB2B}% de comisión.
+                            {cartCanalVenta === "Directo" ? "Cliente Directo: sin comisión de agencia, precio de venta = PVP." : `Agencia B2B retiene su ${comisionB2B}% de comisión.`}
                           </span>
                         </div>
 
@@ -4812,8 +4872,9 @@ export default function ReservasView({
                         max="100"
                         step="0.5"
                         required
-                        className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                        className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed"
                         value={comisionB2B}
+                        disabled={cartCanalVenta === "Directo"}
                         onChange={(e) => setComisionB2B(Math.max(0, parseFloat(e.target.value) || 0))}
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
@@ -4877,7 +4938,7 @@ export default function ReservasView({
                           />
                         </div>
                         <span className="text-[9px] text-zinc-450 font-medium leading-tight block">
-                          Agencia B2B retiene su {comisionB2B}% de comisión.
+                          {cartCanalVenta === "Directo" ? "Cliente Directo: sin comisión de agencia, precio de venta = PVP." : `Agencia B2B retiene su ${comisionB2B}% de comisión.`}
                         </span>
                       </div>
 
@@ -4946,8 +5007,9 @@ export default function ReservasView({
                         max="100"
                         step="0.5"
                         required
-                        className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                        className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed"
                         value={comisionB2B}
+                        disabled={cartCanalVenta === "Directo"}
                         onChange={(e) => setComisionB2B(Math.max(0, parseFloat(e.target.value) || 0))}
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
@@ -4959,7 +5021,7 @@ export default function ReservasView({
                 {netPrice && salePrice && (
                   <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-md text-xs space-y-2 text-zinc-700 font-semibold">
                     <div className="flex justify-between items-center">
-                      <span>Importe Neto B2B (a Pagar por Agencia):</span>
+                      <span>{cartCanalVenta === "Directo" ? "Importe a Pagar por el Cliente:" : "Importe Neto B2B (a Pagar por Agencia):"}</span>
                       <span className="text-zinc-955 font-black">
                         ${((parseFloat(salePrice) || 0) * (1 - comisionB2B / 100)).toFixed(2)} USD
                       </span>
@@ -4997,21 +5059,25 @@ export default function ReservasView({
       )}
 
       {/* MODAL DE COMPARTIR/IMPRIMIR FORMATO B2B */}
-      {showB2BModal && activeRes && (
+      {showB2BModal && activeRes && (() => {
+        const isDirecto = isCanalDirecto(activeRes);
+        return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans print-modal-container">
           <div className="bg-white border border-zinc-200 rounded-lg shadow-xl w-full max-w-3xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh] print-modal-content">
-            
+
             {/* Modal Header */}
             <div className="bg-zinc-950 text-white px-5 py-4 flex items-center justify-between no-print">
               <div>
                 <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2 font-sans">
-                  <Share2 className="w-4.5 h-4.5 text-zinc-400" /> Formato para Compartir con Agencia B2B
+                  <Share2 className="w-4.5 h-4.5 text-zinc-400" /> {isDirecto ? "Cotización para Cliente Directo" : "Formato para Compartir con Agencia B2B"}
                 </h4>
                 <p className="text-[10px] text-zinc-400 font-semibold mt-0.5 font-sans">
-                  Versión limpia optimizada para cliente. Costos netos y márgenes mayoristas ocultos.
+                  {isDirecto
+                    ? "Versión limpia para el pasajero. Sin desglose de comisiones ni costos internos."
+                    : "Versión limpia optimizada para cliente. Costos netos y márgenes mayoristas ocultos."}
                 </p>
               </div>
-              <button 
+              <button
                 onClick={() => setShowB2BModal(false)}
                 className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
               >
@@ -5021,7 +5087,7 @@ export default function ReservasView({
 
             {/* Document Container */}
             <div className="p-8 overflow-y-auto flex-1 bg-white" id="printable-b2b-doc">
-              
+
               {/* Document Header */}
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b-2 border-zinc-900 pb-6 mb-6">
                 <div>
@@ -5038,10 +5104,10 @@ export default function ReservasView({
                     Consolidador Mayorista de Servicios Terrestres
                   </p>
                 </div>
-                
+
                 <div className="text-left sm:text-right">
                   <span className="px-2.5 py-1 bg-zinc-100 border border-zinc-200 rounded text-[9px] font-black uppercase tracking-wider text-zinc-800 font-sans">
-                    Ficha de Reserva B2B
+                    {isDirecto ? "Cotización de Viaje" : "Ficha de Reserva B2B"}
                   </span>
                   <div className="mt-2 text-xs font-bold text-zinc-900 font-sans">
                     Localizador: <span className="font-mono text-zinc-955 font-black">{activeRes.id}</span>
@@ -5079,10 +5145,14 @@ export default function ReservasView({
                 </div>
 
                 <div className="space-y-2.5">
-                  <h4 className="font-bold text-[10px] uppercase text-zinc-455 tracking-wider">Agencia Minorista (Emisora)</h4>
+                  <h4 className="font-bold text-[10px] uppercase text-zinc-455 tracking-wider">{isDirecto ? "Información de Contacto" : "Agencia Minorista (Emisora)"}</h4>
                   <div className="grid grid-cols-3 gap-y-1 text-zinc-700">
-                    <span className="font-bold text-zinc-450">Agencia B2B:</span>
-                    <span className="col-span-2 font-extrabold text-zinc-950">{activeRes.agenciaName || "Directo"}</span>
+                    {!isDirecto && (
+                      <>
+                        <span className="font-bold text-zinc-450">Agencia B2B:</span>
+                        <span className="col-span-2 font-extrabold text-zinc-950">{activeRes.agenciaName || "Directo"}</span>
+                      </>
+                    )}
 
                     <span className="font-bold text-zinc-450">Teléfono:</span>
                     <span className="col-span-2 font-semibold text-zinc-900">{activeRes.telefono || "Sin registrar"}</span>
@@ -5090,8 +5160,12 @@ export default function ReservasView({
                     <span className="font-bold text-zinc-450">Email:</span>
                     <span className="col-span-2 font-semibold text-zinc-900">{activeRes.email || "Sin registrar"}</span>
 
-                    <span className="font-bold text-zinc-455">Mercado Tarifario:</span>
-                    <span className="col-span-2 font-bold text-zinc-900 uppercase">{activeRes.mercado || "INTERNACIONAL"}</span>
+                    {!isDirecto && (
+                      <>
+                        <span className="font-bold text-zinc-455">Mercado Tarifario:</span>
+                        <span className="col-span-2 font-bold text-zinc-900 uppercase">{activeRes.mercado || "INTERNACIONAL"}</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -5135,9 +5209,15 @@ export default function ReservasView({
                               <th className="p-3 w-16">Cod</th>
                               <th className="p-3 w-24">Tipo</th>
                               <th className="p-3">Descripción / Itinerario del Servicio</th>
-                              <th className="p-3 text-right w-24">PVP Tarifa</th>
-                              <th className="p-3 text-center w-36">Comisión B2B</th>
-                              <th className="p-3 text-right w-28">Neto a Pagar B2B</th>
+                              {isDirecto ? (
+                                <th className="p-3 text-right w-28">Precio</th>
+                              ) : (
+                                <>
+                                  <th className="p-3 text-right w-24">PVP Tarifa</th>
+                                  <th className="p-3 text-center w-36">Comisión B2B</th>
+                                  <th className="p-3 text-right w-28">Neto a Pagar B2B</th>
+                                </>
+                              )}
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-zinc-200 text-zinc-800">
@@ -5161,14 +5241,20 @@ export default function ReservasView({
                                             IN: {formatDate(s.detalles.checkInDate)} / OUT: {formatDate(s.detalles.checkOutDate)} ({s.detalles.selectedPromoName || "Tarifa Directa"})
                                           </span>
                                         </td>
-                                        <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                        <td className="p-3 text-center font-bold text-zinc-650">
-                                          {comisionPct}%
-                                          <span className="text-[10.5px] text-zinc-400 block font-normal">
-                                            (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
-                                          </span>
-                                        </td>
-                                        <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                        {isDirecto ? (
+                                          <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                        ) : (
+                                          <>
+                                            <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                            <td className="p-3 text-center font-bold text-zinc-650">
+                                              {comisionPct}%
+                                              <span className="text-[10.5px] text-zinc-400 block font-normal">
+                                                (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
+                                              </span>
+                                            </td>
+                                            <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                          </>
+                                        )}
                                       </tr>
                                       {/* Room Rows */}
                                       {s.detalles.lodgingRooms.map((room: any, rIdx: number) => {
@@ -5183,14 +5269,20 @@ export default function ReservasView({
                                               <span className="font-semibold text-zinc-850 text-xs">{roomTypeName}</span>
                                               {guestsNames && <span className="block text-[10px] text-zinc-400 italic">Pasajeros: {guestsNames}</span>}
                                             </td>
-                                            <td className="p-2.5 text-right text-zinc-700 text-xs font-semibold">${rates.pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                            <td className="p-2.5 text-center text-zinc-500 text-[10.5px]">
-                                              {comisionPct}%
-                                              <span className="text-[9.5px] text-zinc-400 block font-normal">
-                                                (${rates.comisionB2BVal.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
-                                              </span>
-                                            </td>
-                                            <td className="p-2.5 text-right text-zinc-850 font-bold text-xs">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                            {isDirecto ? (
+                                              <td className="p-2.5 text-right text-zinc-850 font-bold text-xs">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                            ) : (
+                                              <>
+                                                <td className="p-2.5 text-right text-zinc-700 text-xs font-semibold">${rates.pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                                <td className="p-2.5 text-center text-zinc-500 text-[10.5px]">
+                                                  {comisionPct}%
+                                                  <span className="text-[9.5px] text-zinc-400 block font-normal">
+                                                    (${rates.comisionB2BVal.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
+                                                  </span>
+                                                </td>
+                                                <td className="p-2.5 text-right text-zinc-850 font-bold text-xs">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                              </>
+                                            )}
                                           </tr>
                                         );
                                       })}
@@ -5203,14 +5295,20 @@ export default function ReservasView({
                                     <td className="p-3 font-mono text-[10.5px] text-zinc-400">{s.id}</td>
                                     <td className="p-3 font-bold text-zinc-900">{s.tipo}</td>
                                     <td className="p-3 font-medium text-zinc-700 leading-normal">{s.descripcion}</td>
-                                    <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                    <td className="p-3 text-center font-bold text-zinc-650">
-                                      {comisionPct}%
-                                      <span className="text-[10.5px] text-zinc-400 block font-normal">
-                                        (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
-                                      </span>
-                                    </td>
-                                    <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                    {isDirecto ? (
+                                      <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                    ) : (
+                                      <>
+                                        <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-3 text-center font-bold text-zinc-650">
+                                          {comisionPct}%
+                                          <span className="text-[10.5px] text-zinc-400 block font-normal">
+                                            (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
+                                          </span>
+                                        </td>
+                                        <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                      </>
+                                    )}
                                   </tr>
                                 );
                               })
@@ -5226,14 +5324,20 @@ export default function ReservasView({
                                     <td className="p-3 font-medium text-zinc-700 leading-normal">
                                       {activeRes.hotelName} - 7 noches - {activeRes.pax} Pax - Check-in: {formatDate(activeRes.checkIn)} ➔ Out: {formatDate(activeRes.checkOut)}
                                     </td>
-                                    <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                    <td className="p-3 text-center font-bold text-zinc-600">
-                                      10%
-                                      <span className="text-[10.5px] text-zinc-400 block font-normal">
-                                        (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
-                                      </span>
-                                    </td>
-                                    <td className="p-3 text-right font-bold text-zinc-950">${activeRes.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                    {isDirecto ? (
+                                      <td className="p-3 text-right font-bold text-zinc-950">${activeRes.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                    ) : (
+                                      <>
+                                        <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-3 text-center font-bold text-zinc-600">
+                                          10%
+                                          <span className="text-[10.5px] text-zinc-400 block font-normal">
+                                            (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
+                                          </span>
+                                        </td>
+                                        <td className="p-3 text-right font-bold text-zinc-950">${activeRes.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                      </>
+                                    )}
                                   </tr>
                                 );
                               })()
@@ -5256,19 +5360,28 @@ export default function ReservasView({
                     {/* Totals Summary Card */}
                     <div className="mt-8 flex justify-end font-sans">
                       <div className="w-full sm:w-80 bg-zinc-50 border border-zinc-200 p-4.5 rounded-lg space-y-2.5">
-                        <div className="flex justify-between items-center text-xs text-zinc-550 uppercase font-bold tracking-wider">
-                          <span>Total Venta Final (PVP):</span>
-                          <span className="text-zinc-900 font-bold">${totalPvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs text-zinc-550 uppercase font-bold tracking-wider">
-                          <span>Comisión de Agencia B2B:</span>
-                          <span className="text-zinc-900 font-bold">-${totalComisionesB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
-                        </div>
-                        <div className="h-[1px] bg-zinc-200"></div>
-                        <div className="flex justify-between items-end">
-                          <span className="text-xs text-zinc-655 uppercase font-black tracking-wide">Neto a Pagar a Foratour:</span>
-                          <span className="text-lg font-black text-zinc-955 font-mono">${totalVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
-                        </div>
+                        {isDirecto ? (
+                          <div className="flex justify-between items-end">
+                            <span className="text-xs text-zinc-655 uppercase font-black tracking-wide">Total a Pagar:</span>
+                            <span className="text-lg font-black text-zinc-955 font-mono">${totalPvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex justify-between items-center text-xs text-zinc-550 uppercase font-bold tracking-wider">
+                              <span>Total Venta Final (PVP):</span>
+                              <span className="text-zinc-900 font-bold">${totalPvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs text-zinc-550 uppercase font-bold tracking-wider">
+                              <span>Comisión de Agencia B2B:</span>
+                              <span className="text-zinc-900 font-bold">-${totalComisionesB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                            </div>
+                            <div className="h-[1px] bg-zinc-200"></div>
+                            <div className="flex justify-between items-end">
+                              <span className="text-xs text-zinc-655 uppercase font-black tracking-wide">Neto a Pagar a Foratour:</span>
+                              <span className="text-lg font-black text-zinc-955 font-mono">${totalVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </React.Fragment>
@@ -5277,7 +5390,11 @@ export default function ReservasView({
 
               {/* Legal Disclaimer */}
               <div className="mt-10 border-t border-zinc-200 pt-6 text-center text-[10px] text-zinc-400 font-medium space-y-1 font-sans">
-                <p>Este documento es un comprobante de reserva comercial para uso exclusivo entre {companyConfig.name} y la agencia emisora.</p>
+                <p>
+                  {isDirecto
+                    ? `Este documento es una cotización de viaje emitida por ${companyConfig.name} para uso exclusivo del pasajero.`
+                    : <>Este documento es un comprobante de reserva comercial para uso exclusivo entre {companyConfig.name} y la agencia emisora.</>}
+                </p>
                 <p>{companyConfig.name} | RIF: {companyConfig.rif} | {companyConfig.address} | Email: {companyConfig.email}</p>
               </div>
 
@@ -5302,14 +5419,15 @@ export default function ReservasView({
                   className="px-5 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs flex items-center gap-1.5 font-sans"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Imprimir / PDF B2B</span>
+                  <span>{isDirecto ? "Imprimir / PDF Cotización" : "Imprimir / PDF B2B"}</span>
                 </button>
               </div>
             </div>
 
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {showB2BModal && (
         <style dangerouslySetInnerHTML={{ __html: `

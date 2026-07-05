@@ -66,6 +66,11 @@ export interface Reservation {
   telefono?: string;
   email?: string;
   agenciaName?: string;
+  // Undefined is treated as "B2B" (all historical reservations) — no migration needed.
+  // "Directo" means no B2B agency involved: Comisión B2B is forced to 0% when adding services,
+  // and the shareable document ("Formato B2B") renders a client-facing variant with no agency
+  // or commission wording.
+  canalVenta?: "B2B" | "Directo";
   createdAt?: string; // YYYY-MM-DD
   mercado?: "NACIONAL" | "INTERNACIONAL";
   servicios?: ServiceItem[];

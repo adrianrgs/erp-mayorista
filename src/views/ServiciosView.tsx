@@ -42,6 +42,13 @@ export default function ServiciosView({
     return Math.round((neto / (1 - pct / 100)) * 100) / 100;
   };
 
+  // Reverse of calculatePVP — used when the provider gives the PVP/venta directly (commission
+  // already included) and the neto needs to be derived from the margin instead.
+  const calculateNeto = (venta: number | undefined, pct: number) => {
+    if (!venta) return 0;
+    return Math.round((venta * (1 - pct / 100)) * 100) / 100;
+  };
+
   const filteredServices = extraServices.filter(s => {
     const matchesSearch = s.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           s.providerName.toLowerCase().includes(searchTerm.toLowerCase());
@@ -501,11 +508,14 @@ export default function ServiciosView({
                           </div>
                           <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-green-600 uppercase tracking-widest block">Venta Adulto ($)</label>
-                            <input 
-                              type="number" 
-                              value={rateForm.ventaAdulto || ""} 
-                              onChange={e => setRateForm({...rateForm, ventaAdulto: parseFloat(e.target.value)})} 
-                              className="w-full px-3 py-2 border border-green-200 rounded text-sm font-mono" 
+                            <input
+                              type="number"
+                              value={rateForm.ventaAdulto || ""}
+                              onChange={e => {
+                                const val = parseFloat(e.target.value);
+                                setRateForm({...rateForm, ventaAdulto: val, netoAdulto: calculateNeto(val, margen)});
+                              }}
+                              className="w-full px-3 py-2 border border-green-200 rounded text-sm font-mono"
                             />
                           </div>
                           <div className="space-y-1.5">
@@ -522,11 +532,14 @@ export default function ServiciosView({
                           </div>
                           <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-green-600 uppercase tracking-widest block">Venta Niño ($)</label>
-                            <input 
-                              type="number" 
-                              value={rateForm.ventaNino || ""} 
-                              onChange={e => setRateForm({...rateForm, ventaNino: parseFloat(e.target.value)})} 
-                              className="w-full px-3 py-2 border border-green-200 rounded text-sm font-mono" 
+                            <input
+                              type="number"
+                              value={rateForm.ventaNino || ""}
+                              onChange={e => {
+                                const val = parseFloat(e.target.value);
+                                setRateForm({...rateForm, ventaNino: val, netoNino: calculateNeto(val, margen)});
+                              }}
+                              className="w-full px-3 py-2 border border-green-200 rounded text-sm font-mono"
                             />
                           </div>
                         </div>
@@ -550,11 +563,14 @@ export default function ServiciosView({
                           </div>
                           <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-green-600 uppercase tracking-widest block">Venta Total (PVP) ($)</label>
-                            <input 
-                              type="number" 
-                              value={rateForm.ventaTotal || ""} 
-                              onChange={e => setRateForm({...rateForm, ventaTotal: parseFloat(e.target.value)})} 
-                              className="w-full px-3 py-2 border border-green-200 rounded text-sm font-mono" 
+                            <input
+                              type="number"
+                              value={rateForm.ventaTotal || ""}
+                              onChange={e => {
+                                const val = parseFloat(e.target.value);
+                                setRateForm({...rateForm, ventaTotal: val, netoTotal: calculateNeto(val, margen)});
+                              }}
+                              className="w-full px-3 py-2 border border-green-200 rounded text-sm font-mono"
                             />
                           </div>
                         </div>
