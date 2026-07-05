@@ -80,7 +80,10 @@ interface ReservasViewProps {
   currentExchangeRate?: number;
 }
 
-// Helper to calculate pricing for an individual room
+// Helper to calculate pricing for an individual room. Usa el mismo prorrateo por tramos de
+// tarifa que el formulario de configuración (getRateSegments/calculateRoomPvpBySegments más
+// abajo) para que el desglose por habitación siempre sume igual al total ya guardado del
+// servicio, incluso cuando la estadía cruza más de una temporada.
 const calculateRoomRates = (
   room: any,
   detalles: any,
@@ -88,49 +91,86 @@ const calculateRoomRates = (
   ratePlans: RatePlan[],
   roomTypes: RoomType[]
 ) => {
-  const { hotelId, selectedPromoName, checkInDate, checkOutDate, comisionB2B = 10, comisionPropia = 5 } = detalles;
-  
-  const start = new Date(checkInDate);
-  const end = new Date(checkOutDate);
-  let nights = 1;
-  if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-    const diff = end.getTime() - start.getTime();
-    nights = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-  }
+  const { hotelId, checkInDate, checkOutDate, comisionB2B = 10, comisionPropia = 5 } = detalles;
 
-  const roomRatePlan = ratePlans.find(rp => 
-    rp.property_id === hotelId && 
-    rp.mercado === mercado && 
-    rp.nombrePromocion === selectedPromoName && 
-    rp.roomType_id === room.roomTypeId
-  );
-  
-  const rate = roomRatePlan || ratePlans.find(rp => rp.roomType_id === room.roomTypeId);
-  if (!rate) return { pvp: 0, sale: 0, net: 0, comisionB2BVal: 0 };
-  
-  let roomRatePerNight = 0;
-  if (rate.tipoCobro === TipoCobro.POR_HABITACION) {
-    roomRatePerNight = rate.tarifaBase;
-  } else {
-    const adults = room.guests.filter((g: any) => g.type === "Adulto").length;
-    const children = room.guests.filter((g: any) => g.type === "Niño").length;
-    
-    const rt = roomTypes.find(type => type.id === room.roomTypeId);
-    const baseOcc = rt?.ocupacionBase || 2;
-    const baseOccupants = Math.min(baseOcc, adults);
-    const extraAdults = Math.max(0, adults - baseOccupants);
-    
-    roomRatePerNight = (rate.tarifaBase * baseOccupants) + 
-                      (rate.tarifaExtraAdulto * extraAdults) + 
-                      (rate.tarifaExtraNino * children);
-  }
-  
-  const pvp = roomRatePerNight * nights;
+  const segments = getRateSegments(hotelId, room.roomTypeId, mercado, checkInDate, checkOutDate, ratePlans);
+  if (segments.length === 0) return { pvp: 0, sale: 0, net: 0, comisionB2BVal: 0 };
+
+  const pvp = calculateRoomPvpBySegments(room, segments, roomTypes);
   const sale = Math.round(pvp * (1 - comisionB2B / 100) * 100) / 100;
   const net = Math.round(pvp * (1 - (comisionB2B + comisionPropia) / 100) * 100) / 100;
   const comisionB2BVal = pvp - sale;
 
   return { pvp, sale, net, comisionB2BVal };
+};
+
+// Segmenta una estadía en tramos de noches consecutivas cubiertas por el mismo RatePlan,
+// para que una estadía que cruce dos temporadas (ej. Temporada Alta → Temporada Baja) se
+// cobre proporcionalmente por noche en vez de aplicar una sola tarifa a toda la estadía.
+// Si alguna noche no cae dentro de la vigencia (fechaInicio/fechaFin) de ningún RatePlan,
+// usa como respaldo cualquier tarifa del mismo tipo de habitación (mismo criterio que ya
+// existía cuando no había match exacto).
+const getRateSegments = (
+  propertyId: string,
+  roomTypeId: string,
+  mercado: "NACIONAL" | "INTERNACIONAL",
+  checkInDate: string,
+  checkOutDate: string,
+  ratePlans: RatePlan[]
+): { ratePlan: RatePlan; nights: number }[] => {
+  const start = new Date(checkInDate);
+  const end = new Date(checkOutDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return [];
+
+  const fallback =
+    ratePlans.find(rp => rp.property_id === propertyId && rp.roomType_id === roomTypeId && rp.mercado === mercado) ||
+    ratePlans.find(rp => rp.roomType_id === roomTypeId);
+
+  const segments: { ratePlan: RatePlan; nights: number }[] = [];
+  let cursor = start;
+  while (cursor < end) {
+    const dateStr = cursor.toISOString().split("T")[0];
+    const match = ratePlans.find(rp =>
+      rp.property_id === propertyId &&
+      rp.roomType_id === roomTypeId &&
+      rp.mercado === mercado &&
+      dateStr >= rp.fechaInicio &&
+      dateStr < rp.fechaFin
+    ) || fallback;
+
+    if (match) {
+      const last = segments[segments.length - 1];
+      if (last && last.ratePlan.id === match.id) {
+        last.nights += 1;
+      } else {
+        segments.push({ ratePlan: match, nights: 1 });
+      }
+    }
+    cursor = new Date(cursor.getTime() + 86400000);
+  }
+  return segments;
+};
+
+// Calcula el PVP de una habitación sumando cada tramo de tarifa por su cantidad de noches.
+const calculateRoomPvpBySegments = (
+  room: { roomTypeId: string; guests: { name: string; type: "Adulto" | "Niño" }[] },
+  segments: { ratePlan: RatePlan; nights: number }[],
+  roomTypes: RoomType[]
+): number => {
+  const rt = roomTypes.find(type => type.id === room.roomTypeId);
+  const baseOcc = rt?.ocupacionBase || 2;
+  const adults = room.guests.filter(g => g.type === "Adulto").length;
+  const children = room.guests.filter(g => g.type === "Niño").length;
+  const baseOccupants = Math.min(baseOcc, adults);
+  const extraAdults = Math.max(0, adults - baseOccupants);
+
+  return segments.reduce((sum, seg) => {
+    const rate = seg.ratePlan;
+    const perNight = rate.tipoCobro === TipoCobro.POR_HABITACION
+      ? rate.tarifaBase
+      : (rate.tarifaBase * baseOccupants) + (rate.tarifaExtraAdulto * extraAdults) + (rate.tarifaExtraNino * children);
+    return sum + perNight * seg.nights;
+  }, 0);
 };
 
 export default function ReservasView({ 
@@ -301,6 +341,28 @@ export default function ReservasView({
   const [hotelSearchQuery, setHotelSearchQuery] = useState("");
   const [showHotelDropdown, setShowHotelDropdown] = useState(false);
   const [selectedPromoName, setSelectedPromoName] = useState("");
+
+  // Auto-selecciona el plan de tarifa vigente para la fecha de check-in apenas se conocen
+  // hotel/fechas/mercado, en vez de forzar al usuario a elegirlo manualmente. Si la estadía
+  // cruza más de una temporada, calculateTotalPvpLodgingPrice ya reparte el costo por tramos
+  // de noches sin depender de esta selección — esto solo define la tarifa "principal" que se
+  // muestra y que filtra los tipos de habitación disponibles.
+  React.useEffect(() => {
+    if (!hotelId || !checkInDate || !cartMercado) return;
+    const defaultRoomTypeId = lodgingRooms[0]?.roomTypeId || roomTypes.find(rt => rt.property_id === hotelId)?.id;
+    if (!defaultRoomTypeId) return;
+    const match = ratePlans.find(rp =>
+      rp.property_id === hotelId &&
+      rp.roomType_id === defaultRoomTypeId &&
+      rp.mercado === cartMercado &&
+      checkInDate >= rp.fechaInicio &&
+      checkInDate < rp.fechaFin
+    );
+    if (match && match.id !== selectedRatePlanId) {
+      setSelectedPromoName(match.nombrePromocion);
+      setSelectedRatePlanId(match.id);
+    }
+  }, [hotelId, checkInDate, cartMercado, ratePlans, roomTypes]);
 
   // Transfer states
   const [transPickup, setTransPickup] = useState("");
@@ -700,41 +762,26 @@ export default function ReservasView({
     return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   };
 
+  // Tramos de tarifa por habitación para la estadía actual — una habitación puede cruzar más
+  // de una temporada (ej. 3 noches Temporada Alta + 4 noches Temporada Baja).
+  const getRoomSegments = (room: { roomTypeId: string }) =>
+    getRateSegments(hotelId, room.roomTypeId, cartMercado, checkInDate, checkOutDate, ratePlans);
+
+  // Etiqueta de tarifa para un servicio de alojamiento ya guardado (resumen de carrito, PDF de
+  // cotización): recalcula los tramos a partir de sus `detalles` guardados, para que también
+  // se vea el desglose de tarifa mixta al reabrir/compartir un expediente ya existente.
+  const formatTarifaLabel = (detalles: any, roomTypeId: string, mercado: "NACIONAL" | "INTERNACIONAL") => {
+    const segments = getRateSegments(detalles.hotelId, roomTypeId, mercado, detalles.checkInDate, detalles.checkOutDate, ratePlans);
+    if (segments.length === 0) return detalles.selectedPromoName || "Tarifa Directa";
+    if (segments.length === 1) return segments[0].ratePlan.nombrePromocion;
+    return segments.map(s => `${s.nights}n ${s.ratePlan.nombrePromocion}`).join(" + ");
+  };
+
   const calculateTotalPvpLodgingPrice = () => {
-    const nights = getStayNights();
     let totalPvp = 0;
-
     lodgingRooms.forEach(room => {
-      const roomRatePlan = ratePlans.find(rp => 
-        rp.property_id === hotelId && 
-        rp.mercado === cartMercado && 
-        rp.nombrePromocion === selectedPromoName && 
-        rp.roomType_id === room.roomTypeId
-      );
-      
-      const rate = roomRatePlan || ratePlans.find(rp => rp.roomType_id === room.roomTypeId);
-      if (!rate) return;
-      
-      let roomRatePerNight = 0;
-      if (rate.tipoCobro === TipoCobro.POR_HABITACION) {
-        roomRatePerNight = rate.tarifaBase;
-      } else {
-        const adults = room.guests.filter(g => g.type === "Adulto").length;
-        const children = room.guests.filter(g => g.type === "Niño").length;
-        
-        // Base occupancy is usually 2, extra adults pay tarifaExtraAdulto
-        const rt = roomTypes.find(type => type.id === room.roomTypeId);
-        const baseOcc = rt?.ocupacionBase || 2;
-        const baseOccupants = Math.min(baseOcc, adults);
-        const extraAdults = Math.max(0, adults - baseOccupants);
-        
-        roomRatePerNight = (rate.tarifaBase * baseOccupants) + 
-                          (rate.tarifaExtraAdulto * extraAdults) + 
-                          (rate.tarifaExtraNino * children);
-      }
-      totalPvp += roomRatePerNight * nights;
+      totalPvp += calculateRoomPvpBySegments(room, getRoomSegments(room), roomTypes);
     });
-
     return totalPvp;
   };
 
@@ -864,7 +911,10 @@ export default function ReservasView({
         const matchedHotel = detailedProperties.find(p => p.id === hotelId);
         const hotelName = matchedHotel ? matchedHotel.nombre : "Hotel Boutique";
         const ratePlan = ratePlans.find(rp => rp.id === selectedRatePlanId);
-        const promoName = ratePlan ? ratePlan.nombrePromocion : "Tarifa Directa";
+        const firstRoomSegments = lodgingRooms[0] ? getRoomSegments(lodgingRooms[0]) : [];
+        const promoName = firstRoomSegments.length > 1
+          ? firstRoomSegments.map(s => `${s.nights}n ${s.ratePlan.nombrePromocion}`).join(" + ")
+          : (ratePlan ? ratePlan.nombrePromocion : "Tarifa Directa");
         const totalRooms = lodgingRooms.length;
         const totalPax = lodgingRooms.reduce((sum, r) => sum + r.adultsCount, 0);
 
@@ -3559,7 +3609,7 @@ export default function ReservasView({
                                   {detailedProperties.find(p => p.id === item.detalles.hotelId)?.nombre || item.descripcion.split(" (")[0]?.replace("Hotel: ", "") || "Hotel"}
                                 </p>
                                 <p className="text-[9.5px] text-zinc-500 font-semibold font-mono text-left">
-                                  IN: {item.detalles.checkInDate} / OUT: {item.detalles.checkOutDate} ({item.detalles.selectedPromoName || "Tarifa Directa"})
+                                  IN: {item.detalles.checkInDate} / OUT: {item.detalles.checkOutDate} ({formatTarifaLabel(item.detalles, item.detalles.lodgingRooms[0]?.roomTypeId, cartMercado)})
                                 </p>
                                 <div className="mt-2 space-y-1.5 pl-3 border-l-2 border-zinc-200">
                                   {item.detalles.lodgingRooms.map((room: any, rIdx: number) => {
@@ -3994,6 +4044,17 @@ export default function ReservasView({
                     <div>
                       <h4 className="text-xs font-black text-zinc-900 uppercase tracking-wider">Distribución de Habitaciones</h4>
                       <p className="text-[10.5px] text-zinc-450 mt-0.5">Estadía calculada: <span className="font-bold text-zinc-805">{getStayNights()} noche(s)</span></p>
+                      {(() => {
+                        const roomTypeId = lodgingRooms[0]?.roomTypeId;
+                        if (!roomTypeId) return null;
+                        const segments = getRateSegments(hotelId, roomTypeId, cartMercado, checkInDate, checkOutDate, ratePlans);
+                        if (segments.length <= 1) return null;
+                        return (
+                          <p className="text-[10.5px] text-blue-700 font-semibold mt-1 bg-blue-50 border border-blue-150 rounded px-2 py-1 inline-block">
+                            Tarifa mixta: {segments.map(s => `${s.nights} noche(s) ${s.ratePlan.nombrePromocion}`).join(" + ")}
+                          </p>
+                        );
+                      })()}
                     </div>
                     <button
                       type="button"
@@ -5331,7 +5392,7 @@ export default function ReservasView({
                                         <td className="p-3 text-left leading-normal">
                                           <span className="text-zinc-900 font-extrabold">{hotelName}</span>
                                           <span className="block text-[9.5px] text-zinc-455 font-medium mt-0.5">
-                                            IN: {formatDate(s.detalles.checkInDate)} / OUT: {formatDate(s.detalles.checkOutDate)} ({s.detalles.selectedPromoName || "Tarifa Directa"})
+                                            IN: {formatDate(s.detalles.checkInDate)} / OUT: {formatDate(s.detalles.checkOutDate)} ({formatTarifaLabel(s.detalles, s.detalles.lodgingRooms[0]?.roomTypeId, activeRes.mercado || "NACIONAL")})
                                           </span>
                                         </td>
                                         {isDirecto ? (
