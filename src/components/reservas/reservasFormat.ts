@@ -4,6 +4,8 @@ export const getStatusBadge = (status: Reservation["status"]) => {
   switch (status) {
     case "Confirmada":
       return "bg-emerald-50 border-emerald-200 text-emerald-700 font-extrabold";
+    case "Pendiente":
+      return "bg-zinc-100 border-zinc-250 text-zinc-600 font-bold";
     case "Pendiente de Pago":
       return "bg-amber-50 border-amber-250 text-amber-700 font-bold";
     case "Petición Especial":

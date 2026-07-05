@@ -29,6 +29,7 @@ export interface HotelProperty {
 
 export type ReservationStatus =
   | 'Confirmada'
+  | 'Pendiente'
   | 'Pendiente de Pago'
   | 'Modificada'
   | 'Cancelada'

@@ -1481,6 +1481,7 @@ onDeleteStopSale={handleDeleteStopSale}
                       onUpdateExtraService={handleUpdateExtraService}
                       serviceRates={serviceRates}
                       onAddServiceRate={handleAddServiceRate}
+                      onUpdateServiceRate={handleUpdateServiceRate}
                       onDeleteServiceRate={handleDeleteServiceRate}
                       proveedores={proveedores}
                     />

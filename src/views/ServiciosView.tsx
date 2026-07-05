@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ExtraService, ServiceRate, ServiceCategory, PricingModel, Proveedor, HISTORICAL_MIN_DATE } from "../types/producto";
 import { nextSequentialId } from "../lib/idGenerator";
 import DateRangePicker from "../components/ui/DateRangePicker";
+import { useDialog } from "../components/ui/DialogProvider";
 import { Search, Plus, MapPin, Edit3, Trash2, Tag, Compass, X, Save } from "lucide-react";
 
 interface ServiciosViewProps {
@@ -10,6 +11,7 @@ interface ServiciosViewProps {
   onAddExtraService: (srv: ExtraService) => void;
   onUpdateExtraService: (srv: ExtraService) => void;
   onAddServiceRate: (rate: ServiceRate) => void;
+  onUpdateServiceRate: (rate: ServiceRate) => void;
   onDeleteServiceRate: (id: string) => void;
   proveedores?: Proveedor[];
 }
@@ -20,9 +22,11 @@ export default function ServiciosView({
   onAddExtraService,
   onUpdateExtraService,
   onAddServiceRate,
+  onUpdateServiceRate,
   onDeleteServiceRate,
   proveedores = []
 }: ServiciosViewProps) {
+  const { showAlert } = useDialog();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState<ServiceCategory | "ALL">("ALL");
   const [providerSearch, setProviderSearch] = useState("");
@@ -36,6 +40,7 @@ export default function ServiciosView({
   const [rateForm, setRateForm] = useState<Partial<ServiceRate>>({
     pricingModel: PricingModel.POR_PERSONA
   });
+  const [editingRateId, setEditingRateId] = useState<string | null>(null);
   const [margen, setMargen] = useState<number>(15);
 
   const calculatePVP = (neto: number | undefined, pct: number) => {
@@ -76,6 +81,8 @@ export default function ServiciosView({
       setProviderSearch("");
     }
     setActiveTab("detalles");
+    setEditingRateId(null);
+    setRateForm({ pricingModel: PricingModel.POR_PERSONA });
   };
 
   const handleSaveService = () => {
@@ -93,12 +100,34 @@ export default function ServiciosView({
 
   const handleSaveRate = () => {
     if (!activeServiceId || activeServiceId === "new") return;
-    const newRate = { ...rateForm, id: nextSequentialId("rate", serviceRates.map(r => r.id)), extraServiceId: activeServiceId } as ServiceRate;
-    onAddServiceRate(newRate);
+    // temporadaInicio/temporadaFin son columnas NOT NULL en el backend (dataconnect/schema/schema.gql) —
+    // sin esta validación, guardar con las fechas vacías falla silenciosamente en el servidor.
+    if (!rateForm.temporadaInicio || !rateForm.temporadaFin) {
+      showAlert({ title: "Atención", message: "Por favor seleccione el inicio y fin de la temporada antes de agregar la tarifa.", type: "warning" });
+      return;
+    }
+    if (editingRateId) {
+      onUpdateServiceRate({ ...rateForm, id: editingRateId, extraServiceId: activeServiceId } as ServiceRate);
+    } else {
+      const newRate = { ...rateForm, id: nextSequentialId("rate", serviceRates.map(r => r.id)), extraServiceId: activeServiceId } as ServiceRate;
+      onAddServiceRate(newRate);
+    }
+    setEditingRateId(null);
     setRateForm({ pricingModel: PricingModel.POR_PERSONA }); // reset
   };
 
+  const handleEditRate = (rate: ServiceRate) => {
+    setEditingRateId(rate.id);
+    setRateForm(rate);
+  };
+
+  const handleCancelEditRate = () => {
+    setEditingRateId(null);
+    setRateForm({ pricingModel: PricingModel.POR_PERSONA });
+  };
+
   const handleDeleteRate = (id: string) => {
+    if (editingRateId === id) handleCancelEditRate();
     onDeleteServiceRate(id);
   };
 
@@ -388,7 +417,7 @@ export default function ServiciosView({
                     ) : (
                       <div className="space-y-3">
                         {activeServiceRates.map(r => (
-                          <div key={r.id} className="bg-white border border-zinc-200 rounded-lg p-4 flex justify-between items-center shadow-sm">
+                          <div key={r.id} className={`bg-white border rounded-lg p-4 flex justify-between items-center shadow-sm ${editingRateId === r.id ? "border-blue-400 ring-1 ring-blue-100" : "border-zinc-200"}`}>
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-[10px] bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded font-black uppercase border border-zinc-200">
@@ -411,20 +440,32 @@ export default function ServiciosView({
                                   </div>
                                 )}
                               </div>
+                              {r.comisionBruta !== undefined && (
+                                <div className="text-[10px] text-zinc-500 font-semibold mt-1.5">
+                                  Comisión Bruta: <span className="text-zinc-800">{r.comisionBruta}%</span> · Cesión a Agencia B2B: <span className="text-zinc-800">{r.comisionCedidaB2B ?? r.comisionBruta}%</span>
+                                </div>
+                              )}
                             </div>
-                            <button onClick={() => handleDeleteRate(r.id)} className="p-2 text-red-500 hover:bg-red-50 rounded transition-colors">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => handleEditRate(r)} className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button onClick={() => handleDeleteRate(r.id)} className="p-2 text-red-500 hover:bg-red-50 rounded transition-colors">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
 
-                  {/* Formulario Nueva Tarifa */}
-                  <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-sm mt-8">
-                    <h4 className="text-xs font-bold text-zinc-800 uppercase tracking-widest mb-4 border-b border-zinc-150 pb-2">Añadir Nueva Temporada / Tarifa</h4>
-                    
+                  {/* Formulario Nueva Tarifa / Edición */}
+                  <div className={`bg-white border rounded-lg p-5 shadow-sm mt-8 ${editingRateId ? "border-blue-300" : "border-zinc-200"}`}>
+                    <h4 className="text-xs font-bold text-zinc-800 uppercase tracking-widest mb-4 border-b border-zinc-150 pb-2">
+                      {editingRateId ? "Editando Temporada / Tarifa" : "Añadir Nueva Temporada / Tarifa"}
+                    </h4>
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Modelo de Precios</label>
@@ -568,12 +609,49 @@ export default function ServiciosView({
                       )}
                     </div>
 
-                    <div className="mt-4 flex justify-end">
-                      <button 
+                    <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                      <label className="text-[10px] font-bold text-amber-700 uppercase tracking-widest block mb-1.5">
+                        Estructura de Comisión
+                      </label>
+                      <p className="text-[10px] text-amber-700 font-medium mb-3">
+                        Se aplica automáticamente al agregar este servicio en Reservas. Para Clientes Directos (sin agencia intermediaria), la comisión bruta completa queda para tu propia agencia.
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest block">Comisión Bruta (%)</label>
+                          <input
+                            type="number"
+                            value={rateForm.comisionBruta ?? ""}
+                            onChange={e => setRateForm({ ...rateForm, comisionBruta: parseFloat(e.target.value) })}
+                            className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-mono bg-white"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest block">Cesión a Agencia B2B (%)</label>
+                          <input
+                            type="number"
+                            value={rateForm.comisionCedidaB2B ?? ""}
+                            onChange={e => setRateForm({ ...rateForm, comisionCedidaB2B: parseFloat(e.target.value) })}
+                            className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-mono bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex justify-end gap-2">
+                      {editingRateId && (
+                        <button
+                          onClick={handleCancelEditRate}
+                          className="bg-white hover:bg-zinc-50 text-zinc-600 border border-zinc-200 px-4 py-2 rounded text-xs font-bold uppercase tracking-wider flex items-center gap-2"
+                        >
+                          <X className="w-4 h-4" /> Cancelar
+                        </button>
+                      )}
+                      <button
                         onClick={handleSaveRate}
                         className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs font-bold uppercase tracking-wider flex items-center gap-2"
                       >
-                        <Plus className="w-4 h-4" /> Agregar Tarifa
+                        {editingRateId ? <><Save className="w-4 h-4" /> Guardar Cambios</> : <><Plus className="w-4 h-4" /> Agregar Tarifa</>}
                       </button>
                     </div>
                   </div>

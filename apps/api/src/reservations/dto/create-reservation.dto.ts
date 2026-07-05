@@ -19,7 +19,7 @@ export class CreateReservationDto {
   @IsNumber()
   pax: number;
 
-  @IsEnum(['Confirmada', 'Pendiente de Pago', 'Modificada', 'Cancelada', 'Petición Especial'])
+  @IsEnum(['Confirmada', 'Pendiente', 'Pendiente de Pago', 'Modificada', 'Cancelada', 'Petición Especial'])
   status: string;
 
   @IsNumber()

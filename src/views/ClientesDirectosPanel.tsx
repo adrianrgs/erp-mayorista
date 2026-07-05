@@ -1021,6 +1021,7 @@ export default function ClientesDirectosPanel({
                     >
                       <option value="ALL">TODOS LOS ESTADOS</option>
                       <option value="Confirmada">CONFIRMADA</option>
+                      <option value="Pendiente">PENDIENTE (COTIZACIÓN)</option>
                       <option value="Pendiente de Pago">PENDIENTE DE PAGO</option>
                       <option value="Modificada">MODIFICADA</option>
                       <option value="Cancelada">CANCELADA</option>

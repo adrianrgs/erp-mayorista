@@ -140,4 +140,9 @@ export interface ServiceRate {
   capacidadMaxima?: number;
   netoTotal?: number;
   ventaTotal?: number;
+
+  // Estructura de comisión de esta tarifa: se propaga automáticamente a Reservas al
+  // seleccionar el servicio, en vez de que el vendedor la tipee a mano cada vez.
+  comisionBruta?: number; // % total de margen sobre el PVP
+  comisionCedidaB2B?: number; // % de esa comisión bruta que se cede a la agencia B2B revendedora (el resto queda para la propia agencia)
 }

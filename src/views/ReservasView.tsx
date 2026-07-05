@@ -47,6 +47,7 @@ import {
 import { FinancialInvoice, PayableObligation, PaymentVoucher } from "../types";
 import { useDialog } from "../components/ui/DialogProvider";
 import DateRangePicker from "../components/ui/DateRangePicker";
+import SearchableSelect from "../components/ui/SearchableSelect";
 import { reconcileDossierUpdate } from "../lib/financialReconciler";
 import { resolveSaleClient, isCreditEligible } from "../lib/clientResolver";
 import { nextSequentialId } from "../lib/idGenerator";
@@ -467,6 +468,50 @@ export default function ReservasView({
   const [svChildren, setSvChildren] = useState(0);
   const [svVehicles, setSvVehicles] = useState(1);
 
+  // Auto-selecciona la tarifa de Servicio Vario vigente para la fecha de check-in del
+  // expediente (cartCheckIn), en vez de forzar al vendedor a elegirla manualmente — mismo
+  // criterio que ya se usa para el plan de tarifa de Alojamiento.
+  React.useEffect(() => {
+    if (activeServiceType !== ServiceType.SERVICIO_VARIO) return;
+    if (!svExtraServiceId || !cartCheckIn) return;
+    const match = (serviceRates || []).find(r =>
+      r.extraServiceId === svExtraServiceId &&
+      cartCheckIn >= r.temporadaInicio &&
+      cartCheckIn <= r.temporadaFin
+    );
+    if (match && match.id !== svRateId) {
+      setSvRateId(match.id);
+      if (match.pricingModel === "Por Persona") {
+        setSalePrice((((match.ventaAdulto || 0) * svAdults) + ((match.ventaNino || 0) * svChildren)).toFixed(2));
+        setNetPrice((((match.netoAdulto || 0) * svAdults) + ((match.netoNino || 0) * svChildren)).toFixed(2));
+      } else {
+        setSalePrice(((match.ventaTotal || 0) * svVehicles).toFixed(2));
+        setNetPrice(((match.netoTotal || 0) * svVehicles).toFixed(2));
+      }
+    }
+  }, [activeServiceType, svExtraServiceId, cartCheckIn, serviceRates]);
+
+  // Propaga la estructura de comisión configurada en la tarifa (ServiceRate.comisionBruta /
+  // comisionCedidaB2B) a los campos de comisión del expediente, en vez de que el vendedor la
+  // tipee a mano cada vez — se dispara al seleccionar/cambiar de tarifa (manual o auto-elegida
+  // arriba) o al cambiar el canal de venta. Tarifas antiguas sin comisión configurada
+  // (comisionBruta === undefined) no tocan los campos, para no pisar la entrada manual existente.
+  // Sin agencia B2B intermediaria (Cliente Directo), la comisión bruta completa queda para la
+  // propia agencia.
+  React.useEffect(() => {
+    if (activeServiceType !== ServiceType.SERVICIO_VARIO && activeServiceType !== ServiceType.TRASLADO) return;
+    const rate = (serviceRates || []).find(r => r.id === svRateId);
+    if (!rate || rate.comisionBruta === undefined) return;
+    if (cartCanalVenta === "Directo") {
+      setComisionB2B(0);
+      setComisionPropia(rate.comisionBruta);
+    } else {
+      const cedida = rate.comisionCedidaB2B ?? rate.comisionBruta;
+      setComisionB2B(cedida);
+      setComisionPropia(Math.max(0, rate.comisionBruta - cedida));
+    }
+  }, [svRateId, cartCanalVenta, activeServiceType, serviceRates]);
+
   // Common Pricing states for Level 4
   const [netPrice, setNetPrice] = useState("");
   const [salePrice, setSalePrice] = useState("");
@@ -620,6 +665,10 @@ export default function ReservasView({
     const updatedRes: Reservation = {
       ...activeRes,
       tipo: "Reserva Real",
+      // Al enviar a Facturación el expediente deja de ser una simple cotización (status
+      // "Pendiente") y pasa a Confirmada — salvo que ya estuviera Cancelada, caso en el que
+      // no tiene sentido reactivarla solo por facturar un ajuste.
+      status: activeRes.status === "Cancelada" ? activeRes.status : "Confirmada",
       servicios: updatedServices,
       variaciones: updatedVariations,
       facturacionTipo: billingFacturacionTipo,
@@ -663,7 +712,7 @@ export default function ReservasView({
   // KPI Calculations (Level 1)
   const totalRes = reservations.length;
   const totalConfirmadas = reservations.filter(r => r.status === "Confirmada").length;
-  const totalPendientes = reservations.filter(r => r.status === "Pendiente de Pago" || r.status === "Petición Especial" || r.status === "Modificada").length;
+  const totalPendientes = reservations.filter(r => r.status === "Pendiente" || r.status === "Pendiente de Pago" || r.status === "Petición Especial" || r.status === "Modificada").length;
   const totalCanceladas = reservations.filter(r => r.status === "Cancelada").length;
 
   const [activeTab, setActiveTab] = useState<"Activos" | "Canceladas">("Activos");
@@ -689,7 +738,7 @@ export default function ReservasView({
       if (filterStatus === "Todas") {
         matchesStatus = true;
       } else if (filterStatus === "Pendientes") {
-        matchesStatus = r.status === "Pendiente de Pago" || r.status === "Petición Especial" || r.status === "Modificada";
+        matchesStatus = r.status === "Pendiente" || r.status === "Pendiente de Pago" || r.status === "Petición Especial" || r.status === "Modificada";
       } else if (filterStatus === "Rechazadas") {
         matchesStatus = !!r.facturacionRechazoMotivo || !!(r.servicios && r.servicios.some(s => s.statusFacturacion === "Rechazado"));
       } else {
@@ -812,6 +861,12 @@ export default function ReservasView({
       setInsPax(paxCount || 1);
       setComisionB2B(getDefaultComisionB2B());
       setComisionPropia(5);
+    } else if (type === ServiceType.SERVICIO_VARIO) {
+      setSvExtraServiceId("");
+      setSvRateId("");
+      setSvAdults(1);
+      setSvChildren(0);
+      setSvVehicles(1);
     }
 
     setViewLevel(3);
@@ -1012,11 +1067,11 @@ export default function ReservasView({
 
         const srv = extraServices?.find(s => s.id === svExtraServiceId);
         const providerText = srv ? srv.nombre : (transSupplier || "Local");
-        desc = `Traslado (${tripTypeLabel} - ${serviceTypeLabel}): ${routeDesc} - ${transPax} Pax - Fecha: ${formatDate(transDate)} (${transVehicle}) - Op. ${providerText}`;
+        desc = `(${tripTypeLabel} - ${serviceTypeLabel}): ${routeDesc} - ${transPax} Pax - Fecha: ${formatDate(transDate)} (${transVehicle}) - Op. ${providerText}`;
         break;
       }
       case ServiceType.RENT_A_CAR:
-        desc = `Rent a Car: ${carCategory} con ${carSupplier} - Alquiler por ${carDays} días`;
+        desc = `${carCategory} con ${carSupplier} - Alquiler por ${carDays} días`;
         sPrice = (parseFloat(salePrice) || 0) * (1 - comisionB2B / 100);
         break;
       case ServiceType.SEGURO: {
@@ -1025,11 +1080,11 @@ export default function ReservasView({
         const ownComVal = comisionPropia;
         sPrice = Math.round(pvpVal * (1 - b2bComVal / 100) * 100) / 100;
         nPrice = Math.round(pvpVal * (1 - (b2bComVal + ownComVal) / 100) * 100) / 100;
-        desc = `Seguro: ${insPlan || "Plan Estándar"} - Cobertura por ${insDays} días (Vigencia: ${formatDate(insStartDate)} ➔ ${formatDate(insEndDate)}) - ${insPax} Pax`;
+        desc = `${insPlan || "Plan Estándar"} - Cobertura por ${insDays} días (Vigencia: ${formatDate(insStartDate)} ➔ ${formatDate(insEndDate)}) - ${insPax} Pax`;
         break;
       }
       case ServiceType.MANUAL:
-        desc = `Entrada Manual: ${manualDescription} (Proveedor: ${manualSupplier || "Directo"})`;
+        desc = `${manualDescription} (Proveedor: ${manualSupplier || "Directo"})`;
         sPrice = (parseFloat(salePrice) || 0) * (1 - comisionB2B / 100);
         break;
       case ServiceType.SERVICIO_VARIO: {
@@ -1042,9 +1097,9 @@ export default function ReservasView({
           // Neto = costo fijo del proveedor según la tarifa (no se deriva del PVP)
           nPrice = parseFloat(netPrice) || 0;
           if (rate.pricingModel === "Por Persona") {
-            desc = `Servicio Adicional: ${srv.nombre} - ${svAdults} Adultos, ${svChildren} Niños (Del ${rate.temporadaInicio} al ${rate.temporadaFin})`;
+            desc = `${srv.nombre} - ${svAdults} Adultos, ${svChildren} Niños (Del ${rate.temporadaInicio} al ${rate.temporadaFin})`;
           } else {
-            desc = `Servicio Adicional: ${srv.nombre} - ${svVehicles} Vehículo(s)/Grupo(s) (Del ${rate.temporadaInicio} al ${rate.temporadaFin})`;
+            desc = `${srv.nombre} - ${svVehicles} Vehículo(s)/Grupo(s) (Del ${rate.temporadaInicio} al ${rate.temporadaFin})`;
           }
         }
         break;
@@ -1570,7 +1625,10 @@ export default function ReservasView({
         checkIn: cartCheckIn || checkInDate,
         checkOut: cartCheckOut || checkOutDate,
         pax: paxCount,
-        status: "Confirmada",
+        // Un expediente nuevo nace como Cotización (cartTipo se resetea a "Cotización" al
+        // empezar uno) — recién pasa a "Confirmada" cuando se envía a Facturación
+        // (ver handleConfirmSendBilling), no antes.
+        status: cartTipo === "Cotización" ? "Pendiente" : "Confirmada",
         totalPrice: totalVenta,
         netPrice: totalNeto,
         specialRequests: cartSpecialRequests,
@@ -1797,6 +1855,7 @@ export default function ReservasView({
                   <option value="Todas">TODOS LOS ESTATUS</option>
                   <option value="Confirmada">CONFIRMADAS</option>
                   <option value="Pendientes">PENDIENTES</option>
+                  <option value="Pendiente">PENDIENTE (COTIZACIÓN)</option>
                   <option value="Pendiente de Pago">PENDIENTES DE PAGO</option>
                   <option value="Petición Especial">PETICIÓN ESPECIAL</option>
                   <option value="Modificada">MODIFICADAS</option>
@@ -2056,6 +2115,7 @@ export default function ReservasView({
                   }}
                   className={`px-2 py-0.5 border rounded-full text-[9.5px] font-black uppercase tracking-wider focus:outline-none cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-all ${getStatusBadge(activeRes.status)}`}
                 >
+                  <option value="Pendiente">Pendiente</option>
                   <option value="Confirmada">Confirmada</option>
                   <option value="Pendiente de Pago">Pendiente de Pago</option>
                   <option value="Modificada">Modificada</option>
@@ -4241,34 +4301,30 @@ export default function ReservasView({
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block flex items-center gap-1">
                       <Search className="w-3 h-3" /> Seleccionar del Catálogo
                     </label>
-                    <select
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
+                    <SearchableSelect
                       value={svExtraServiceId}
-                      onChange={(e) => {
-                        setSvExtraServiceId(e.target.value);
+                      onChange={(val) => {
+                        setSvExtraServiceId(val);
                         setSvRateId("");
-                        const selected = extraServices?.find(s => s.id === e.target.value);
-                        if(selected) {
+                        const selected = extraServices?.find(s => s.id === val);
+                        if (selected) {
                           setTransSupplier(selected.providerName);
                         }
                       }}
-                    >
-                      <option value="">-- Seleccione un Traslado (Opcional) --</option>
-                      {extraServices?.filter(s => s.category === "Traslado").map(s => (
-                        <option key={s.id} value={s.id}>{s.nombre} ({s.providerName})</option>
-                      ))}
-                    </select>
+                      options={(extraServices || []).filter(s => s.category === "Traslado").map(s => ({ value: s.id, label: s.nombre, sublabel: s.providerName }))}
+                      placeholder="-- Seleccione un Traslado (Opcional) --"
+                      emptyLabel="Ningún traslado coincide."
+                    />
                   </div>
-                  
+
                   {svExtraServiceId && (
                     <div className="space-y-1.5 sm:col-span-2">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Tarifa / Temporada</label>
-                      <select
-                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                      <SearchableSelect
                         value={svRateId}
-                        onChange={(e) => {
-                          setSvRateId(e.target.value);
-                          const rate = serviceRates?.find(r => r.id === e.target.value);
+                        onChange={(val) => {
+                          setSvRateId(val);
+                          const rate = serviceRates?.find(r => r.id === val);
                           if (rate) {
                             if (rate.pricingModel === "Por Persona") {
                               const vta = ((rate.ventaAdulto || 0) * transPax).toFixed(2);
@@ -4282,14 +4338,10 @@ export default function ReservasView({
                             }
                           }
                         }}
-                      >
-                        <option value="">-- Seleccione Tarifa --</option>
-                        {serviceRates?.filter(r => r.extraServiceId === svExtraServiceId).map(r => (
-                          <option key={r.id} value={r.id}>
-                            Del {r.temporadaInicio} al {r.temporadaFin}
-                          </option>
-                        ))}
-                      </select>
+                        options={(serviceRates || []).filter(r => r.extraServiceId === svExtraServiceId).map(r => ({ value: r.id, label: `Del ${r.temporadaInicio} al ${r.temporadaFin}` }))}
+                        placeholder="-- Seleccione Tarifa --"
+                        emptyLabel="No hay tarifas cargadas para este traslado."
+                      />
                     </div>
                   )}
 
@@ -4688,30 +4740,26 @@ export default function ReservasView({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Seleccionar Servicio del Catálogo</label>
-                    <select
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                    <SearchableSelect
                       value={svExtraServiceId}
-                      onChange={(e) => {
-                        setSvExtraServiceId(e.target.value);
+                      onChange={(val) => {
+                        setSvExtraServiceId(val);
                         setSvRateId("");
                       }}
-                    >
-                      <option value="">-- Seleccione un Servicio --</option>
-                      {extraServices?.map(s => (
-                        <option key={s.id} value={s.id}>{s.nombre} ({s.providerName})</option>
-                      ))}
-                    </select>
+                      options={(extraServices || []).map(s => ({ value: s.id, label: s.nombre, sublabel: s.providerName }))}
+                      placeholder="-- Seleccione un Servicio --"
+                      emptyLabel="Ningún servicio coincide."
+                    />
                   </div>
-                  
+
                   {svExtraServiceId && (
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Seleccionar Tarifa / Temporada</label>
-                      <select
-                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                      <SearchableSelect
                         value={svRateId}
-                        onChange={(e) => {
-                          setSvRateId(e.target.value);
-                          const rate = serviceRates?.find(r => r.id === e.target.value);
+                        onChange={(val) => {
+                          setSvRateId(val);
+                          const rate = serviceRates?.find(r => r.id === val);
                           if (rate) {
                             if (rate.pricingModel === "Por Persona") {
                               const vta = (rate.ventaAdulto || 0) * svAdults + (rate.ventaNino || 0) * svChildren;
@@ -4724,17 +4772,33 @@ export default function ReservasView({
                             }
                           }
                         }}
-                      >
-                        <option value="">-- Seleccione una Tarifa --</option>
-                        {serviceRates?.filter(r => r.extraServiceId === svExtraServiceId).map(r => (
-                          <option key={r.id} value={r.id}>
-                            Del {r.temporadaInicio} al {r.temporadaFin} - {r.pricingModel}
-                          </option>
-                        ))}
-                      </select>
+                        options={(serviceRates || []).filter(r => r.extraServiceId === svExtraServiceId).map(r => ({ value: r.id, label: `Del ${r.temporadaInicio} al ${r.temporadaFin} - ${r.pricingModel}` }))}
+                        placeholder="-- Seleccione una Tarifa --"
+                        emptyLabel="No hay tarifas cargadas para este servicio."
+                      />
                     </div>
                   )}
                 </div>
+
+                {/* Aviso de tarifa mixta: el rango de fechas del expediente toca más de una
+                    temporada distinta para este servicio — a diferencia de Alojamiento (que
+                    prorratea por noche), acá no hay un concepto de "noches" para repartir el
+                    costo, así que solo se avisa para que el vendedor verifique manualmente. */}
+                {(() => {
+                  if (!svExtraServiceId || !cartCheckIn || !cartCheckOut) return null;
+                  const overlappingRateIds = new Set(
+                    (serviceRates || [])
+                      .filter(r => r.extraServiceId === svExtraServiceId && cartCheckIn < r.temporadaFin && cartCheckOut > r.temporadaInicio)
+                      .map(r => r.id)
+                  );
+                  if (overlappingRateIds.size <= 1) return null;
+                  return (
+                    <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold rounded flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>Tarifa mixta: hay {overlappingRateIds.size} temporadas distintas vigentes dentro del rango de fechas del expediente para este servicio. Verifique cuál corresponde antes de continuar.</span>
+                    </div>
+                  );
+                })()}
 
                 {svRateId && (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

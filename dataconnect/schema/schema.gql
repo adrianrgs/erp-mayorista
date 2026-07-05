@@ -323,6 +323,8 @@ type ServiceRate @table {
   capacidadMaxima: Int
   netoTotal: Float
   ventaTotal: Float
+  comisionBruta: Float
+  comisionCedidaB2B: Float
   updatedAt: String
 }
 

@@ -319,6 +319,8 @@ extraServiceId
     capacidadMaxima
     netoTotal
     ventaTotal
+    comisionBruta
+    comisionCedidaB2B
   }
 }
 

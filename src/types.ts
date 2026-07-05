@@ -59,7 +59,7 @@ export interface Reservation {
   checkIn: string;
   checkOut: string;
   pax: number;
-  status: "Confirmada" | "Pendiente de Pago" | "Modificada" | "Cancelada" | "Petición Especial";
+  status: "Confirmada" | "Pendiente" | "Pendiente de Pago" | "Modificada" | "Cancelada" | "Petición Especial";
   totalPrice: number;
   netPrice: number;
   specialRequests?: string;

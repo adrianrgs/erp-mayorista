@@ -771,11 +771,13 @@ mutation InsertServiceRate(
   $capacidadMaxima: Int
   $netoTotal: Float
   $ventaTotal: Float
+  $comisionBruta: Float
+  $comisionCedidaB2B: Float
 , $updatedAt: String) @auth(level: PUBLIC) {
   serviceRate_insert(
     data: {
       id: $id
-      
+
     updatedAt: $updatedAt,extraServiceId: $extraServiceId
       temporadaInicio: $temporadaInicio
       temporadaFin: $temporadaFin
@@ -787,6 +789,8 @@ mutation InsertServiceRate(
       capacidadMaxima: $capacidadMaxima
       netoTotal: $netoTotal
       ventaTotal: $ventaTotal
+      comisionBruta: $comisionBruta
+      comisionCedidaB2B: $comisionCedidaB2B
     }
   )
 }
@@ -803,10 +807,12 @@ mutation UpdateServiceRate(
   $capacidadMaxima: Int
   $netoTotal: Float
   $ventaTotal: Float
+  $comisionBruta: Float
+  $comisionCedidaB2B: Float
 , $updatedAt: String) @auth(level: PUBLIC) {
   serviceRate_update(
     id: $id
-    
+
     data: {
     updatedAt: $updatedAt,
       temporadaInicio: $temporadaInicio
@@ -819,6 +825,8 @@ mutation UpdateServiceRate(
       capacidadMaxima: $capacidadMaxima
       netoTotal: $netoTotal
       ventaTotal: $ventaTotal
+      comisionBruta: $comisionBruta
+      comisionCedidaB2B: $comisionCedidaB2B
     }
   )
 }
