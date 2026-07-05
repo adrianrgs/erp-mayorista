@@ -18,6 +18,7 @@ export enum ProjectView {
 export interface CompanyConfig {
   name: string;
   subtitle: string;
+  tagline?: string;
   rif: string;
   address: string;
   phone: string;
@@ -66,11 +67,12 @@ export interface Reservation {
   telefono?: string;
   email?: string;
   agenciaName?: string;
-  // Undefined is treated as "B2B" (all historical reservations) — no migration needed.
-  // "Directo" means no B2B agency involved: Comisión B2B is forced to 0% when adding services,
-  // and the shareable document ("Formato B2B") renders a client-facing variant with no agency
-  // or commission wording.
+  // Undefined is treated as "B2B" (all historical reservations). "Directo" means no B2B
+  // agency involved: Comisión B2B is forced to 0% when adding services, and the shareable
+  // document ("Formato B2B") renders a client-facing variant with no agency or commission wording.
   canalVenta?: "B2B" | "Directo";
+  // Localizador/ID propio de otro mayorista cuando este expediente fue comprado a través de él.
+  localizadorProveedor?: string;
   createdAt?: string; // YYYY-MM-DD
   mercado?: "NACIONAL" | "INTERNACIONAL";
   servicios?: ServiceItem[];

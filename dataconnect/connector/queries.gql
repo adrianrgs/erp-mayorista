@@ -27,6 +27,8 @@ holder
     facturacionRechazoArchivos
     variaciones
     pasajeros
+    canalVenta
+    localizadorProveedor
   }
 }
 

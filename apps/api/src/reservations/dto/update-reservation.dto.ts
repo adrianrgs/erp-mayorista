@@ -65,6 +65,14 @@ export class UpdateReservationDto {
   @IsArray()
   pasajeros?: any[];
 
+  @IsOptional()
+  @IsEnum(['B2B', 'Directo'])
+  canalVenta?: string;
+
+  @IsOptional()
+  @IsString()
+  localizadorProveedor?: string;
+
   // Contexto para reconciliación financiera
   @IsOptional()
   previousState?: any;

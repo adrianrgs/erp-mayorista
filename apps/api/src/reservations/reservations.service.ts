@@ -55,6 +55,8 @@ export class ReservationsService {
       servicios: JSON.stringify(dto.servicios || []),
       variaciones: JSON.stringify([]),
       pasajeros: JSON.stringify(dto.pasajeros || []),
+      canalVenta: dto.canalVenta || 'B2B',
+      localizadorProveedor: dto.localizadorProveedor || null,
       createdAt: now.split('T')[0],
       updatedAt: now,
     });
@@ -107,6 +109,8 @@ export class ReservationsService {
         ...(dto.pax && { pax: dto.pax }),
         ...(dto.facturacionTipo && { facturacionTipo: dto.facturacionTipo }),
         ...(dto.specialRequests !== undefined && { specialRequests: dto.specialRequests }),
+        ...(dto.canalVenta && { canalVenta: dto.canalVenta }),
+        ...(dto.localizadorProveedor !== undefined && { localizadorProveedor: dto.localizadorProveedor }),
       });
 
       // Persistir cliente actualizado
@@ -154,6 +158,8 @@ export class ReservationsService {
       ...(dto.servicios && { servicios: JSON.stringify(dto.servicios) }),
       ...(dto.variaciones && { variaciones: JSON.stringify(dto.variaciones) }),
       ...(dto.pasajeros && { pasajeros: JSON.stringify(dto.pasajeros) }),
+      ...(dto.canalVenta && { canalVenta: dto.canalVenta }),
+      ...(dto.localizadorProveedor !== undefined && { localizadorProveedor: dto.localizadorProveedor }),
     });
 
     return { success: true };

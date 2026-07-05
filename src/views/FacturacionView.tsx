@@ -2363,8 +2363,8 @@ export default function FacturacionView({
               {/* Document Header */}
               <div className="flex justify-between items-center border-b-2 border-zinc-900 pb-4 mb-6">
                 <div>
-                  <h2 className="font-black text-lg text-zinc-955 leading-none font-sans">FORATOUR ERP</h2>
-                  <span className="text-[8px] uppercase tracking-widest font-black text-zinc-400 block mt-1 font-sans">LOGÍSTICA MAYORISTA</span>
+                  <h2 className="font-black text-lg text-zinc-955 leading-none font-sans uppercase">{companyConfig.name}</h2>
+                  <span className="text-[8px] uppercase tracking-widest font-black text-zinc-400 block mt-1 font-sans">{companyConfig.subtitle}</span>
                 </div>
                 <div className="text-right">
                   <span className="px-2.5 py-0.5 bg-zinc-900 text-white rounded text-[9px] font-black uppercase tracking-wider font-mono">
@@ -2615,15 +2615,15 @@ export default function FacturacionView({
                 <div>
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded bg-zinc-950 text-white flex items-center justify-center font-black text-base font-sans">
-                      F
+                      {companyConfig.logoLetter}
                     </div>
                     <div>
-                      <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans">FORATOUR ERP</h2>
-                      <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">Wholesale Logistics</span>
+                      <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans uppercase">{companyConfig.name}</h2>
+                      <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">{companyConfig.subtitle}</span>
                     </div>
                   </div>
                   <p className="text-[10px] text-zinc-500 mt-2 font-medium font-sans">
-                    Consolidador Mayorista de Servicios Terrestres
+                    {companyConfig.tagline || companyConfig.subtitle}
                   </p>
                 </div>
                 
@@ -2777,7 +2777,7 @@ export default function FacturacionView({
 
               {/* Legal disclaimer */}
               <div className="mt-10 border-t border-zinc-200 pt-6 text-center text-[10px] text-zinc-400 font-medium space-y-1 font-sans">
-                <p>Este voucher sirve como constancia oficial de servicios. {companyConfig.name} opera como consolidador mayorista y no se hace responsable por retrasos, cancelaciones fortuitas o modificaciones imputables directamente a los proveedores de servicio final.</p>
+                <p>Este voucher sirve como constancia oficial de servicios. {companyConfig.name} actúa como intermediario en la prestación de estos servicios y no se hace responsable por retrasos, cancelaciones fortuitas o modificaciones imputables directamente a los proveedores de servicio final.</p>
                 <p>{companyConfig.name} | RIF: {companyConfig.rif} | {companyConfig.address} | Email: {companyConfig.email}</p>
               </div>
             </div>

@@ -179,9 +179,8 @@ export default function ReservasView({
   const [showClientReceiptModal, setShowClientReceiptModal] = useState(false);
   const [selectedVoucherForReceipt, setSelectedVoucherForReceipt] = useState<PaymentVoucher | null>(null);
 
-  // `canalVenta` no se persiste todavía en la base de datos (falta la columna en el esquema), así
-  // que se deriva de `agenciaName` cuando no viene explícito — misma lógica que la restauración del
-  // carrito en loadReservationIntoCart. Usar este helper en todo lado evita que se desincronicen.
+  // Fallback a `agenciaName` solo por si quedan reservas históricas creadas antes de que
+  // `canalVenta` existiera como columna en el esquema.
   const isCanalDirecto = (r: Pick<Reservation, "canalVenta" | "agenciaName">) =>
     (r.canalVenta || (!r.agenciaName ? "Directo" : "B2B")) === "Directo";
 
@@ -232,8 +231,9 @@ export default function ReservasView({
   const [cartSpecialRequests, setCartSpecialRequests] = useState("");
   const [cartFlightNo, setCartFlightNo] = useState("");
   const [cartServices, setCartServices] = useState<ServiceItem[]>([]);
-  const [cartTipo, setCartTipo] = useState<"Cotización" | "Reserva Real">("Reserva Real");
+  const [cartTipo, setCartTipo] = useState<"Cotización" | "Reserva Real">("Cotización");
   const [cartCanalVenta, setCartCanalVenta] = useState<"B2B" | "Directo">("B2B");
+  const [cartLocalizadorProveedor, setCartLocalizadorProveedor] = useState("");
   // Cliente Directo: no hay agencia B2B de por medio, así que la Comisión B2B por defecto es 0%
   // (el cliente paga el PVP completo) en vez del 10% que se asume para una venta B2B.
   const getDefaultComisionB2B = () => cartCanalVenta === "Directo" ? 0 : 10;
@@ -245,29 +245,6 @@ export default function ReservasView({
   const [showBoletoDrawer, setShowBoletoDrawer] = useState(false);
   /** Query de búsqueda dentro del drawer */
   const [boletoSearch, setBoletoSearch] = useState("");
-
-  const handleConvertToRealBooking = () => {
-    if (!activeRes) return;
-    
-    const updatedServices = (activeRes.servicios || []).map(s => ({
-      ...s,
-      statusFacturacion: "Borrador" as const
-    }));
-
-    const updatedRes: Reservation = {
-      ...activeRes,
-      tipo: "Reserva Real",
-      status: "Confirmada",
-      servicios: updatedServices
-    };
-    
-    if (onUpdateReservation) {
-      onUpdateReservation(updatedRes);
-    }
-    
-    setSubmitSuccess("✓ Expediente convertido en Reserva Real. Servicios en Borrador listos para enviar a facturar.");
-    setTimeout(() => setSubmitSuccess(""), 4000);
-  };
 
   // --- B2B Agency Combobox States ---
   const [agencySearch, setAgencySearch] = useState("");
@@ -507,6 +484,7 @@ export default function ReservasView({
 
     const updatedRes: Reservation = {
       ...activeRes,
+      tipo: "Reserva Real",
       servicios: updatedServices,
       variaciones: updatedVariations,
       facturacionTipo: billingFacturacionTipo,
@@ -569,7 +547,8 @@ export default function ReservasView({
         (r.telefono || "").toLowerCase().includes(search.toLowerCase()) ||
         (r.email || "").toLowerCase().includes(search.toLowerCase()) ||
         (r.agenciaName || "").toLowerCase().includes(search.toLowerCase()) ||
-        (r.flightNo || "").toLowerCase().includes(search.toLowerCase());
+        (r.flightNo || "").toLowerCase().includes(search.toLowerCase()) ||
+        (r.localizadorProveedor || "").toLowerCase().includes(search.toLowerCase());
       
       let matchesStatus = false;
       if (filterStatus === "Todas") {
@@ -610,8 +589,9 @@ export default function ReservasView({
     setSelectedClient(null);
     setCartTelefono("");
     setCartEmail("");
-    setCartTipo("Reserva Real");
+    setCartTipo("Cotización");
     setCartCanalVenta("B2B");
+    setCartLocalizadorProveedor("");
 
     setCartSpecialRequests("");
     setCartFlightNo("");
@@ -1107,10 +1087,8 @@ export default function ReservasView({
     setCartTelefono(res.telefono || "");
     setCartEmail(res.email || "");
     setCartTipo(res.tipo || "Reserva Real");
-    // `canalVenta` todavía no se persiste en la base de datos (el esquema de Reservation no tiene
-    // esa columna todavía), así que se deriva de `agenciaName` — que sí persiste — igual que ya
-    // hace el resto del sistema para tratar una reserva sin agencia como "Canal Directo".
     setCartCanalVenta(res.canalVenta || (!res.agenciaName ? "Directo" : "B2B"));
+    setCartLocalizadorProveedor(res.localizadorProveedor || "");
     setCartSpecialRequests(res.specialRequests || "");
     setCartFlightNo(res.flightNo || "");
     setCartPasajeros(derivePassengersFromLegacyReservation(res));
@@ -1396,7 +1374,8 @@ export default function ReservasView({
         servicios: cartServices,
         pasajeros: cartPasajeros,
         tipo: cartTipo,
-        canalVenta: cartCanalVenta
+        canalVenta: cartCanalVenta,
+        localizadorProveedor: cartLocalizadorProveedor || undefined
       };
 
       // ── AUTO-VINCULAR boletos seleccionados (EDICION) ──────────────────────────────
@@ -1464,7 +1443,8 @@ export default function ReservasView({
         servicios: cartServices.map(s => ({ ...s, statusFacturacion: s.statusFacturacion || "Borrador" as const })),
         pasajeros: cartPasajeros,
         tipo: cartTipo,
-        canalVenta: cartCanalVenta
+        canalVenta: cartCanalVenta,
+        localizadorProveedor: cartLocalizadorProveedor || undefined
       };
 
       onAddReservation(newRes);
@@ -1746,6 +1726,11 @@ export default function ReservasView({
                             <User className="w-3 h-3 text-zinc-400 flex-shrink-0" />
                             <span className="truncate">{r.holder}</span>
                           </div>
+                          {r.localizadorProveedor && (
+                            <div className="font-mono font-semibold text-zinc-400 text-[9.5px] truncate normal-case">
+                              Prov: {r.localizadorProveedor}
+                            </div>
+                          )}
                         </td>
                         <td className="px-2 py-2.5 text-zinc-750 font-semibold truncate text-[11px]">
                           {r.hotelName}
@@ -2514,26 +2499,18 @@ export default function ReservasView({
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
                 <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block text-zinc-650">Estado del Expediente</h4>
                 {activeRes.tipo === "Cotización" ? (
-                  <div className="space-y-3">
-                    <div className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-700 text-xs rounded font-semibold leading-relaxed flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-zinc-500" />
-                      <span>Este expediente es una <strong>Cotización (Presupuesto)</strong>.</span>
-                    </div>
-                    <button
-                      onClick={handleConvertToRealBooking}
-                      className="w-full py-2 px-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs uppercase rounded cursor-pointer transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <FileCheck className="w-4.5 h-4.5" />
-                      Confirmar como Reserva Real
-                    </button>
+                  <div className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-700 text-xs rounded font-semibold leading-relaxed flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-zinc-500" />
+                    <span>Este expediente es una <strong>Cotización (Presupuesto)</strong>. Se confirma automáticamente como Reserva Real al enviarlo a facturación.</span>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <div className="p-3 bg-emerald-50 border border-emerald-150 text-emerald-800 text-xs rounded font-semibold leading-relaxed flex items-center gap-2">
-                      <FileCheck className="w-4.5 h-4.5 text-emerald-600" />
-                      <span>Este expediente es una <strong>Reserva Real Confirmada</strong>.</span>
-                    </div>
-                    
+                  <div className="p-3 bg-emerald-50 border border-emerald-150 text-emerald-800 text-xs rounded font-semibold leading-relaxed flex items-center gap-2">
+                    <FileCheck className="w-4.5 h-4.5 text-emerald-600" />
+                    <span>Este expediente es una <strong>Reserva Real Confirmada</strong>.</span>
+                  </div>
+                )}
+
+                <div className="space-y-3">
                     {/* Billed breakdown */}
                     {(() => {
                       const services = activeRes.servicios || [];
@@ -2629,7 +2606,6 @@ export default function ReservasView({
                       );
                     })()}
                   </div>
-                )}
               </div>
 
               {/* Status de Pago + Historial de Comprobantes del Cliente */}
@@ -2952,29 +2928,34 @@ export default function ReservasView({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Tipo de Expediente</label>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Canal de Venta</label>
                     <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-md border border-zinc-200">
                       <button
                         type="button"
-                        onClick={() => setCartTipo("Cotización")}
+                        onClick={() => setCartCanalVenta("B2B")}
                         className={`flex-1 py-1.5 px-3 rounded text-xs font-bold whitespace-nowrap transition-all cursor-pointer text-center ${
-                          cartTipo === "Cotización"
+                          cartCanalVenta === "B2B"
                             ? "bg-zinc-950 text-white shadow-xs"
                             : "text-zinc-500 hover:text-zinc-800"
                         }`}
                       >
-                        Cotización
+                        Agencia B2B
                       </button>
                       <button
                         type="button"
-                        onClick={() => setCartTipo("Reserva Real")}
+                        onClick={() => {
+                          setCartCanalVenta("Directo");
+                          setCartAgencia("");
+                          setAgencySearch("");
+                          setSelectedClient(null);
+                        }}
                         className={`flex-1 py-1.5 px-3 rounded text-xs font-bold whitespace-nowrap transition-all cursor-pointer text-center ${
-                          cartTipo === "Reserva Real"
+                          cartCanalVenta === "Directo"
                             ? "bg-zinc-950 text-white shadow-xs"
                             : "text-zinc-500 hover:text-zinc-800"
                         }`}
                       >
-                        Reserva Real
+                        Cliente Directo
                       </button>
                     </div>
                   </div>
@@ -3013,39 +2994,6 @@ export default function ReservasView({
                   </div>
                 </div>
 
-
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Canal de Venta</label>
-                  <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-md border border-zinc-200 max-w-xs">
-                    <button
-                      type="button"
-                      onClick={() => setCartCanalVenta("B2B")}
-                      className={`flex-1 py-1.5 px-3 rounded text-xs font-bold whitespace-nowrap transition-all cursor-pointer text-center ${
-                        cartCanalVenta === "B2B"
-                          ? "bg-zinc-950 text-white shadow-xs"
-                          : "text-zinc-500 hover:text-zinc-800"
-                      }`}
-                    >
-                      Agencia B2B
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCartCanalVenta("Directo");
-                        setCartAgencia("");
-                        setAgencySearch("");
-                        setSelectedClient(null);
-                      }}
-                      className={`flex-1 py-1.5 px-3 rounded text-xs font-bold whitespace-nowrap transition-all cursor-pointer text-center ${
-                        cartCanalVenta === "Directo"
-                          ? "bg-zinc-950 text-white shadow-xs"
-                          : "text-zinc-500 hover:text-zinc-800"
-                      }`}
-                    >
-                      Cliente Directo
-                    </button>
-                  </div>
-                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1.5 md:col-span-2 relative">
@@ -3206,12 +3154,16 @@ export default function ReservasView({
 
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5 hidden">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Vuelo Asociado (Opcional)</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Localizador del Proveedor (Opcional)</label>
                     <input
                       type="text"
-                      className="hidden"
+                      placeholder="Ej: ABC123 (si se compró a través de otro mayorista)"
+                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                      value={cartLocalizadorProveedor}
+                      onChange={(e) => setCartLocalizadorProveedor(e.target.value)}
                     />
+                    <p className="text-[9.5px] text-zinc-400">Su propio número de reserva, para referencia y búsqueda.</p>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Peticiones / Instrucciones Terrestres</label>
@@ -5101,7 +5053,7 @@ export default function ReservasView({
                     </div>
                   </div>
                   <p className="text-[10px] text-zinc-500 mt-2 font-medium font-sans">
-                    Consolidador Mayorista de Servicios Terrestres
+                    {companyConfig.tagline || companyConfig.subtitle}
                   </p>
                 </div>
 
@@ -5530,7 +5482,7 @@ export default function ReservasView({
                     </div>
                   </div>
                   <p className="text-[10px] text-zinc-500 mt-2 font-medium font-sans">
-                    Consolidador Mayorista de Servicios Terrestres
+                    {companyConfig.tagline || companyConfig.subtitle}
                   </p>
                 </div>
                 
@@ -5684,7 +5636,7 @@ export default function ReservasView({
 
               {/* Legal disclaimer */}
               <div className="mt-10 border-t border-zinc-200 pt-6 text-center text-[10px] text-zinc-400 font-medium space-y-1 font-sans">
-                <p>Este voucher sirve como constancia oficial de servicios. {companyConfig.name} opera como consolidador mayorista y no se hace responsable por retrasos, cancelaciones fortuitas o modificaciones imputables directamente a los proveedores de servicio final.</p>
+                <p>Este voucher sirve como constancia oficial de servicios. {companyConfig.name} actúa como intermediario en la prestación de estos servicios y no se hace responsable por retrasos, cancelaciones fortuitas o modificaciones imputables directamente a los proveedores de servicio final.</p>
                 <p>{companyConfig.name} | RIF: {companyConfig.rif} | {companyConfig.address} | Email: {companyConfig.email}</p>
               </div>
             </div>

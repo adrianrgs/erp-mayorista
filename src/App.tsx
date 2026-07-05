@@ -207,6 +207,7 @@ export default function App() {
     return {
       name: "Foratour Wholesale",
       subtitle: "OPERADOR MAYORISTA DE TURISMO",
+      tagline: "Operador Mayorista de Turismo",
       rif: "J-30495810-9",
       address: "Av. Francisco de Miranda, Edif. Parque Cristal, Piso 8",
       phone: "+58 (212) 285-4521",
@@ -473,6 +474,8 @@ export default function App() {
         facturacionRechazoArchivos: newRes.facturacionRechazoArchivos,
         variaciones: newRes.variaciones ? JSON.parse(JSON.stringify(newRes.variaciones)) : null,
         pasajeros: newRes.pasajeros ? JSON.parse(JSON.stringify(newRes.pasajeros)) : null,
+        canalVenta: newRes.canalVenta,
+        localizadorProveedor: newRes.localizadorProveedor,
         updatedAt: newRes.updatedAt
       });
     } catch (e) {
@@ -771,6 +774,8 @@ export default function App() {
         facturacionRechazoArchivos: finalRes.facturacionRechazoArchivos,
         variaciones: finalRes.variaciones ? JSON.parse(JSON.stringify(finalRes.variaciones)) : null,
         pasajeros: finalRes.pasajeros ? JSON.parse(JSON.stringify(finalRes.pasajeros)) : null,
+        canalVenta: finalRes.canalVenta,
+        localizadorProveedor: finalRes.localizadorProveedor,
         updatedAt: finalRes.updatedAt
       });
       console.log(`[DB] Reservation ${finalRes.id} saved. facturacionTipo=${finalRes.facturacionTipo}, servicios statusList=[${(finalRes.servicios||[]).map((s:any)=>s.statusFacturacion).join(',')}]`);

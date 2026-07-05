@@ -2028,15 +2028,15 @@ function FlightVoucherModal({
               <div>
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded bg-zinc-950 text-white flex items-center justify-center font-black text-base font-sans">
-                    F
+                    {companyConfig.logoLetter}
                   </div>
                   <div>
-                    <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans">FORATOUR ERP</h2>
-                    <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">Wholesale Logistics</span>
+                    <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans uppercase">{companyConfig.name}</h2>
+                    <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">{companyConfig.subtitle}</span>
                   </div>
                 </div>
                 <p className="text-[10px] text-zinc-500 mt-2 font-medium font-sans">
-                  Consolidador Mayorista Aéreo y Terrestre
+                  {companyConfig.tagline || companyConfig.subtitle}
                 </p>
               </div>
               

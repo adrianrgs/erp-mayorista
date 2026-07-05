@@ -24,7 +24,9 @@ mutation InsertReservation(
   $facturacionRechazoMotivo: String,
   $facturacionRechazoArchivos: String,
   $variaciones: Any,
-  $pasajeros: Any
+  $pasajeros: Any,
+  $canalVenta: String,
+  $localizadorProveedor: String
 , $updatedAt: String) @auth(level: PUBLIC) {
   reservation_insert(data: {
     id: $id,
@@ -53,7 +55,9 @@ mutation InsertReservation(
     comprobanteMetodo: $comprobanteMetodo,
     facturacionTipo: $facturacionTipo,
     facturacionRechazoMotivo: $facturacionRechazoMotivo,
-    facturacionRechazoArchivos: $facturacionRechazoArchivos
+    facturacionRechazoArchivos: $facturacionRechazoArchivos,
+    canalVenta: $canalVenta,
+    localizadorProveedor: $localizadorProveedor
   })
 }
 
@@ -89,7 +93,9 @@ mutation UpdateReservation(
   $facturacionRechazoMotivo: String,
   $facturacionRechazoArchivos: String,
   $variaciones: Any,
-  $pasajeros: Any
+  $pasajeros: Any,
+  $canalVenta: String,
+  $localizadorProveedor: String
 , $updatedAt: String) @auth(level: PUBLIC) {
   reservation_update(id: $id,
     data: {
@@ -118,7 +124,9 @@ mutation UpdateReservation(
     comprobanteMetodo: $comprobanteMetodo,
     facturacionTipo: $facturacionTipo,
     facturacionRechazoMotivo: $facturacionRechazoMotivo,
-    facturacionRechazoArchivos: $facturacionRechazoArchivos
+    facturacionRechazoArchivos: $facturacionRechazoArchivos,
+    canalVenta: $canalVenta,
+    localizadorProveedor: $localizadorProveedor
   })
 }
 

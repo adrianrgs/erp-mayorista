@@ -63,4 +63,12 @@ export class CreateReservationDto {
   @IsOptional()
   @IsArray()
   pasajeros?: any[];
+
+  @IsOptional()
+  @IsEnum(['B2B', 'Directo'])
+  canalVenta?: string;
+
+  @IsOptional()
+  @IsString()
+  localizadorProveedor?: string;
 }

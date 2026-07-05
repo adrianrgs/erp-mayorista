@@ -169,6 +169,20 @@ export default function ConfiguracionView({ config, onUpdateConfig }: Configurac
                 />
               </div>
 
+              <div>
+                <label htmlFor="tagline" className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Descripción del Negocio (Documentos)</label>
+                <input
+                  type="text"
+                  id="tagline"
+                  name="tagline"
+                  value={formData.tagline || ""}
+                  onChange={handleInputChange}
+                  placeholder="Ej: Operador Mayorista de Turismo / Agencia de Viajes Minorista"
+                  className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-900 font-semibold"
+                />
+                <p className="text-[10px] text-zinc-400 mt-1">Frase que aparece bajo el nombre en cotizaciones, vouchers y boletos. Ajústala según tu rol real (mayorista o minorista) en cada etapa del negocio.</p>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="rif" className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">RIF / Identificación Fiscal</label>
@@ -250,6 +264,7 @@ export default function ConfiguracionView({ config, onUpdateConfig }: Configurac
                   <div>
                     <h1 className="text-xl font-black tracking-tight text-zinc-900 uppercase leading-none">{formData.name || "Sin Nombre"}</h1>
                     <p className="text-[8px] font-mono text-zinc-400 uppercase tracking-wider mt-1">{formData.subtitle || "Sin Subtítulo"}</p>
+                    <p className="text-[9px] text-zinc-500 font-medium mt-1">{formData.tagline || formData.subtitle || "Sin Descripción"}</p>
                   </div>
                   <div className="w-8 h-8 rounded bg-zinc-900 text-white flex items-center justify-center font-black text-base shadow-sm">
                     {formData.logoLetter || "F"}

@@ -89,6 +89,8 @@ type Reservation @table {
   servicios: Any
   variaciones: Any
   pasajeros: Any
+  canalVenta: String
+  localizadorProveedor: String
   updatedAt: String
 }
 
