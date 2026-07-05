@@ -63,6 +63,11 @@ export interface StopSale {
   motivo?: string;
 }
 
+// Fecha mínima permisiva para editar RatePlan/ServiceRate: estos formularios editan
+// temporadas que a menudo ya están en el pasado, así que NO deben usar el minDate por
+// defecto de DateRangePicker (hoy), que bloquearía re-seleccionar esas fechas históricas.
+export const HISTORICAL_MIN_DATE = "2000-01-01";
+
 // ─── SERVICIOS VARIOS (TRASLADOS, EXCURSIONES, ETC.) ─────────────────────────
 
 export enum ServiceCategory {

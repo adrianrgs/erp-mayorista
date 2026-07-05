@@ -2,7 +2,6 @@ import React, { useMemo, useState } from "react";
 import { Reservation, FinancialInvoice, B2BClient, DirectClient, PaymentVoucher, CompanyConfig, WithholdingCertificate } from "../types";
 import type { FlightTicket } from "../types/aereos";
 import { TaxJurisdiction } from "../lib/taxEngine";
-import { Tabs } from "../components/reservas/Tabs";
 import CobranzasB2BPanel from "./CobranzasB2BPanel";
 import CobranzasDirectosPanel from "./CobranzasDirectosPanel";
 
@@ -58,14 +57,30 @@ export default function CobranzasView({
 
   return (
     <div className="space-y-6 font-sans">
-      <Tabs
-        tabs={[
-          { key: "b2b", label: "B2B" },
-          { key: "directos", label: "Directos" }
-        ]}
-        active={activeTab}
-        onChange={(k) => setActiveTab(k as "b2b" | "directos")}
-      />
+      <div className="inline-flex items-center gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
+        <button
+          type="button"
+          onClick={() => setActiveTab("b2b")}
+          className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+            activeTab === "b2b"
+              ? "bg-zinc-950 text-white shadow-sm"
+              : "text-zinc-500 hover:text-zinc-800"
+          }`}
+        >
+          B2B
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("directos")}
+          className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+            activeTab === "directos"
+              ? "bg-zinc-950 text-white shadow-sm"
+              : "text-zinc-500 hover:text-zinc-800"
+          }`}
+        >
+          Directos
+        </button>
+      </div>
 
       {activeTab === "b2b" ? (
         <CobranzasB2BPanel

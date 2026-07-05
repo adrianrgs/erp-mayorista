@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { B2BClient, DirectClient, FinancialInvoice, Reservation } from "../types";
 import { FlightTicket } from "../types/aereos";
 import { RoomType, RatePlan, Property } from "../types/producto";
-import { Tabs } from "../components/reservas/Tabs";
 import ClientesB2BPanel from "./ClientesB2BPanel";
 import ClientesDirectosPanel from "./ClientesDirectosPanel";
 
@@ -41,19 +40,30 @@ export default function ClientesView({
 
   return (
     <div className="space-y-6 font-sans">
-      <div>
-        <h2 className="text-xl font-black text-zinc-900 tracking-tight uppercase">Módulo de Clientes — Ventas &amp; Cuentas por Cobrar</h2>
-        <p className="text-xs text-zinc-400 mt-1">Gestión integral de agencias B2B y clientes directos: crédito, saldos y cartera de cobro.</p>
+      <div className="inline-flex items-center gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
+        <button
+          type="button"
+          onClick={() => setActiveTab("b2b")}
+          className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+            activeTab === "b2b"
+              ? "bg-zinc-950 text-white shadow-sm"
+              : "text-zinc-500 hover:text-zinc-800"
+          }`}
+        >
+          Clientes B2B
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("directos")}
+          className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+            activeTab === "directos"
+              ? "bg-zinc-950 text-white shadow-sm"
+              : "text-zinc-500 hover:text-zinc-800"
+          }`}
+        >
+          Clientes Directos
+        </button>
       </div>
-
-      <Tabs
-        tabs={[
-          { key: "b2b", label: "Clientes B2B" },
-          { key: "directos", label: "Clientes Directos" }
-        ]}
-        active={activeTab}
-        onChange={(k) => setActiveTab(k as "b2b" | "directos")}
-      />
 
       {activeTab === "b2b" ? (
         <ClientesB2BPanel

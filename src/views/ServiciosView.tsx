@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { ExtraService, ServiceRate, ServiceCategory, PricingModel, Proveedor } from "../types/producto";
+import { ExtraService, ServiceRate, ServiceCategory, PricingModel, Proveedor, HISTORICAL_MIN_DATE } from "../types/producto";
 import { nextSequentialId } from "../lib/idGenerator";
+import DateRangePicker from "../components/ui/DateRangePicker";
 import { Search, Plus, MapPin, Edit3, Trash2, Tag, Compass, X, Save } from "lucide-react";
 
 interface ServiciosViewProps {
@@ -424,11 +425,11 @@ export default function ServiciosView({
                   <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-sm mt-8">
                     <h4 className="text-xs font-bold text-zinc-800 uppercase tracking-widest mb-4 border-b border-zinc-150 pb-2">Añadir Nueva Temporada / Tarifa</h4>
                     
-                    <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Modelo de Precios</label>
-                        <select 
-                          value={rateForm.pricingModel} 
+                        <select
+                          value={rateForm.pricingModel}
                           onChange={e => setRateForm({...rateForm, pricingModel: e.target.value as PricingModel})}
                           className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-semibold bg-zinc-50"
                         >
@@ -436,24 +437,14 @@ export default function ServiciosView({
                           <option value={PricingModel.POR_VEHICULO_GRUPO}>Por Vehículo / Grupo</option>
                         </select>
                       </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Inicio Temporada</label>
-                        <input 
-                          type="date" 
-                          value={rateForm.temporadaInicio || ""} 
-                          onChange={e => setRateForm({...rateForm, temporadaInicio: e.target.value})}
-                          className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-semibold"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Fin Temporada</label>
-                        <input 
-                          type="date" 
-                          value={rateForm.temporadaFin || ""} 
-                          onChange={e => setRateForm({...rateForm, temporadaFin: e.target.value})}
-                          className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-semibold"
-                        />
-                      </div>
+                      <DateRangePicker
+                        checkIn={rateForm.temporadaInicio || ""}
+                        checkOut={rateForm.temporadaFin || ""}
+                        onChange={(ci, co) => setRateForm({ ...rateForm, temporadaInicio: ci, temporadaFin: co })}
+                        minDate={HISTORICAL_MIN_DATE}
+                        checkInLabel="Inicio Temporada"
+                        checkOutLabel="Fin Temporada"
+                      />
                     </div>
 
                     <div className="p-4 bg-zinc-50 border border-zinc-200 rounded-lg">

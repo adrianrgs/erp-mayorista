@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient, DirectClient, DirectClientTipo, ClientStatus, FleetVehicle, CompanyConfig, ReservationPassenger, PassengerType } from "../types";
 import { createEmptyPassenger, deriveHolderName, derivePassengersFromLegacyReservation, markTitular } from "../lib/passengers";
 import { Tabs } from "../components/reservas/Tabs";
-import { Property, RoomType, RatePlan, TipoCobro, ExtraService, ServiceRate } from "../types/producto";
+import { Property, RoomType, RatePlan, TipoCobro, ExtraService, ServiceRate, StopSale } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
 import { buildRoute, formatGDSDate } from "../lib/parsers/pnrParser";
 import { 
@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { FinancialInvoice, PayableObligation, PaymentVoucher } from "../types";
 import { useDialog } from "../components/ui/DialogProvider";
+import DateRangePicker from "../components/ui/DateRangePicker";
 import { reconcileDossierUpdate } from "../lib/financialReconciler";
 import { resolveSaleClient, isCreditEligible } from "../lib/clientResolver";
 import { nextSequentialId } from "../lib/idGenerator";
@@ -65,6 +66,7 @@ interface ReservasViewProps {
   detailedProperties: Property[];
   roomTypes: RoomType[];
   ratePlans: RatePlan[];
+  stopSales?: StopSale[];
   invoices: FinancialInvoice[];
   payableObligations: PayableObligation[];
   vouchers?: PaymentVoucher[];
@@ -186,6 +188,7 @@ export default function ReservasView({
   detailedProperties,
   roomTypes,
   ratePlans,
+  stopSales = [],
   invoices,
   payableObligations,
   vouchers = [],
@@ -310,6 +313,14 @@ export default function ReservasView({
     tipo: DirectClientTipo.CONTADO as DirectClientTipo
   });
 
+  // Al seleccionar (o crear) un cliente directo, alimenta Teléfono/Email de la reserva con los
+  // datos ya guardados del cliente, para no tener que volver a tipearlos. "N/A" es el valor
+  // centinela que se guarda cuando el cliente se registró sin esos datos — no sobrescribe con eso.
+  const applyDirectClientContact = (client: DirectClient) => {
+    if (client.telefono && client.telefono !== "N/A") setCartTelefono(client.telefono);
+    if (client.email && client.email !== "N/A") setCartEmail(client.email);
+  };
+
   // --- EDIT MODES ---
   const [isEditingReservationId, setIsEditingReservationId] = useState<string | null>(null);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
@@ -363,6 +374,58 @@ export default function ReservasView({
       setSelectedRatePlanId(match.id);
     }
   }, [hotelId, checkInDate, cartMercado, ratePlans, roomTypes]);
+
+  // Aviso no bloqueante: si el hotel + rango de fechas elegido se solapa con un Stop Sale
+  // vigente, se avisa UNA sola vez por combinación (el vendedor puede seguir igual, a veces
+  // el hotel libera cupo pese al cierre nominal). El ref evita repetir el aviso en cada
+  // render mientras la combinación hotel+fechas no cambie a una nueva que también solape.
+  const lastWarnedStopSaleKeyRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!hotelId || !checkInDate || !checkOutDate) return;
+    const key = `${hotelId}|${checkInDate}|${checkOutDate}`;
+    if (lastWarnedStopSaleKeyRef.current === key) return;
+
+    // Recorre cada noche de la estadía y marca si esa fecha puntual cae dentro de algún
+    // Stop Sale del hotel, para mostrar la secuencia día por día (verde = libre, rojo =
+    // con cierre) en vez de un aviso genérico de "hay solape".
+    const nightDays: { day: number; iso: string; blocked: boolean }[] = [];
+    let cursor = new Date(checkInDate);
+    const end = new Date(checkOutDate);
+    while (cursor < end) {
+      const iso = cursor.toISOString().split("T")[0];
+      const blocked = stopSales.some(s => s.property_id === hotelId && iso >= s.fechaInicio && iso <= s.fechaFin);
+      nightDays.push({ day: cursor.getUTCDate(), iso, blocked });
+      cursor = new Date(cursor.getTime() + 86400000);
+    }
+
+    if (nightDays.some(d => d.blocked)) {
+      lastWarnedStopSaleKeyRef.current = key;
+      showAlert({
+        title: "Stop Sale Registrado",
+        message: (
+          <div className="space-y-2.5">
+            <p>El hotel seleccionado tiene un Stop Sale (cierre de ventas) vigente que se solapa con las fechas elegidas. Puede continuar si el hotel confirma disponibilidad igualmente.</p>
+            <div className="flex flex-wrap gap-1.5">
+              {nightDays.map(d => (
+                <span
+                  key={d.iso}
+                  title={d.iso}
+                  className={`inline-flex items-center justify-center w-7 h-7 rounded-md text-xs font-bold border ${
+                    d.blocked
+                      ? "bg-red-100 text-red-700 border-red-300"
+                      : "bg-emerald-100 text-emerald-700 border-emerald-300"
+                  }`}
+                >
+                  {d.day}
+                </span>
+              ))}
+            </div>
+          </div>
+        ),
+        type: "warning"
+      });
+    }
+  }, [hotelId, checkInDate, checkOutDate, stopSales]);
 
   // Transfer states
   const [transPickup, setTransPickup] = useState("");
@@ -892,6 +955,10 @@ export default function ReservasView({
     if (!activeServiceType) return;
 
     if (activeServiceType === ServiceType.ALOJAMIENTO) {
+      if (!checkInDate || !checkOutDate) {
+        showAlert({ title: "Atención", message: "Por favor seleccione las fechas de check-in y check-out.", type: "warning" });
+        return;
+      }
       if (!hotelId) {
         showAlert({ title: "Atención", message: "Por favor seleccione un hotel.", type: "warning" });
         return;
@@ -1401,6 +1468,10 @@ export default function ReservasView({
       showAlert({ title: "Atención", message: "Por favor ingrese el titular del viaje.", type: "warning" });
       return;
     }
+    if (!cartCheckIn || !cartCheckOut) {
+      showAlert({ title: "Atención", message: "Por favor seleccione las fechas de check-in y check-out del expediente.", type: "warning" });
+      return;
+    }
     if (cartServices.length === 0 && cartLinkedFlights.filter(f => f.facturarConjunto).length === 0) {
       showAlert({ title: "Atención", message: "Debe agregar al menos un servicio o vuelo facturado conjuntamente al carrito para generar el expediente.", type: "warning" });
       return;
@@ -1583,19 +1654,25 @@ export default function ReservasView({
           </div>
 
           {/* Tabs */}
-          <div className="flex items-center gap-4 border-b border-zinc-200">
+          <div className="inline-flex items-center gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
             <button
+              type="button"
               onClick={() => setActiveTab("Activos")}
-              className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors cursor-pointer ${
-                activeTab === "Activos" ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-400 hover:text-zinc-600"
+              className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                activeTab === "Activos"
+                  ? "bg-zinc-950 text-white shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-800"
               }`}
             >
               Activos ({reservations.filter((r) => r.status !== "Cancelada").length})
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab("Canceladas")}
-              className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors cursor-pointer ${
-                activeTab === "Canceladas" ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-400 hover:text-zinc-600"
+              className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                activeTab === "Canceladas"
+                  ? "bg-zinc-950 text-white shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-800"
               }`}
             >
               Anuladas ({totalCanceladas})
@@ -3037,37 +3114,14 @@ export default function ReservasView({
                 </div>
 
                 {/* Fechas de estadía en la cabecera */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Check-In General</label>
-                    <input
-                      type="date"
-                      required
-                      min={new Date().toISOString().split("T")[0]}
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
-                      value={cartCheckIn}
-                      onChange={(e) => {
-                        const newIn = e.target.value;
-                        setCartCheckIn(newIn);
-                        if (newIn) {
-                          const nextDay = new Date(new Date(newIn).getTime() + 86400000).toISOString().split('T')[0];
-                          if (!cartCheckOut || cartCheckOut <= newIn) setCartCheckOut(nextDay);
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Check-Out General</label>
-                    <input
-                      type="date"
-                      required
-                      min={cartCheckIn || new Date().toISOString().split("T")[0]}
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
-                      value={cartCheckOut}
-                      onChange={(e) => setCartCheckOut(e.target.value)}
-                    />
-                  </div>
-                </div>
+                <DateRangePicker
+                  checkIn={cartCheckIn}
+                  checkOut={cartCheckOut}
+                  onChange={(ci, co) => { setCartCheckIn(ci); setCartCheckOut(co); }}
+                  checkInLabel="Fecha Check-In General"
+                  checkOutLabel="Fecha Check-Out General"
+                  required
+                />
 
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -3090,6 +3144,7 @@ export default function ReservasView({
                           const matched = directClients.find(c => c.nombre.toLowerCase() === val.toLowerCase());
                           setSelectedDirectClient(matched || null);
                           setCartClienteDirectoId(matched?.id || "");
+                          if (matched) applyDirectClientContact(matched);
                           setShowDirectClientDropdown(true);
                         }}
                         onFocus={() => setShowDirectClientDropdown(true)}
@@ -3137,6 +3192,7 @@ export default function ReservasView({
                               setDirectClientSearch(c.nombre);
                               setSelectedDirectClient(c);
                               setCartClienteDirectoId(c.id);
+                              applyDirectClientContact(c);
                               setShowDirectClientDropdown(false);
                             }}
                             className="w-full text-left p-3 hover:bg-zinc-50 flex items-center justify-between text-xs transition-colors cursor-pointer border-none font-sans"
@@ -3863,37 +3919,14 @@ export default function ReservasView({
             {activeServiceType === ServiceType.ALOJAMIENTO && (
               <div className="space-y-5">
                 {/* Fechas de estadía */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Check-In</label>
-                    <input
-                      type="date"
-                      required
-                      min={new Date().toISOString().split("T")[0]}
-                      className="w-full p-2.5 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800 focus:outline-none"
-                      value={checkInDate}
-                      onChange={(e) => {
-                        const newIn = e.target.value;
-                        setCheckInDate(newIn);
-                        if (newIn) {
-                          const nextDay = new Date(new Date(newIn).getTime() + 86400000).toISOString().split('T')[0];
-                          if (!checkOutDate || checkOutDate <= newIn) setCheckOutDate(nextDay);
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Check-Out</label>
-                    <input
-                      type="date"
-                      required
-                      min={checkInDate || new Date().toISOString().split("T")[0]}
-                      className="w-full p-2.5 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800 focus:outline-none"
-                      value={checkOutDate}
-                      onChange={(e) => setCheckOutDate(e.target.value)}
-                    />
-                  </div>
-                </div>
+                <DateRangePicker
+                  checkIn={checkInDate}
+                  checkOut={checkOutDate}
+                  onChange={(ci, co) => { setCheckInDate(ci); setCheckOutDate(co); }}
+                  checkInLabel="Fecha Check-In"
+                  checkOutLabel="Fecha Check-Out"
+                  required
+                />
 
                 {/* Hotel and Rate Plan selection */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -6766,6 +6799,7 @@ export default function ReservasView({
                 setSelectedDirectClient(newClient);
                 setCartClienteDirectoId(newClient.id);
                 setDirectClientSearch(newClient.nombre);
+                applyDirectClientContact(newClient);
                 setShowNewDirectClientModal(false);
                 setNewDirectClientForm({ nombre: "", cedula: "", telefono: "", email: "", tipo: DirectClientTipo.CONTADO });
               }}

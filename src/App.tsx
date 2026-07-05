@@ -1514,6 +1514,7 @@ onDeleteStopSale={handleDeleteStopSale}
                       detailedProperties={detailedProperties}
                       roomTypes={roomTypes}
                       ratePlans={ratePlans}
+                      stopSales={stopSales}
                       invoices={invoices}
                       payableObligations={payableObligations}
                       vouchers={vouchers}

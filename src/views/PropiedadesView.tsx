@@ -8,8 +8,11 @@ import {
   Property,
   RoomType,
   RatePlan,
-  StopSale
+  StopSale,
+  HISTORICAL_MIN_DATE
 } from "../types/producto";
+import DateRangePicker from "../components/ui/DateRangePicker";
+import MultiDayCalendar from "../components/ui/MultiDayCalendar";
 import {
   Building2,
   MapPin,
@@ -325,11 +328,6 @@ export default function PropiedadesView({
     "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?auto=format&fit=crop&w=800&q=80",
     "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=80"
   ]);
-  const [newStopSaleForm, setNewStopSaleForm] = useState({
-    fechaInicio: "",
-    fechaFin: "",
-    motivo: ""
-  });
 
   // Level 3 Forms & Actions
   const [isPredefinedPick, setIsPredefinedPick] = useState(true);
@@ -495,23 +493,8 @@ export default function PropiedadesView({
   };
 
   // Level 2: Tab Stop Sales - Add Stop Sale
-  const handleAddStopSale = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newStopSaleForm.fechaInicio || !newStopSaleForm.fechaFin) {
-      triggerNotification("✕ Por favor, ingresa fechas válidas de inicio y fin.");
-      return;
-    }
-
-    const newStop: StopSale = {
-      id: nextSequentialId("stop", stopSales.map(s => s.id)),
-      property_id: activePropertyId,
-      fechaInicio: newStopSaleForm.fechaInicio,
-      fechaFin: newStopSaleForm.fechaFin,
-      motivo: newStopSaleForm.motivo || "Corte de ventas contractual"
-    };
-
-    onAddStopSale(newStop);
-    setNewStopSaleForm({ fechaInicio: "", fechaFin: "", motivo: "" });
+  const handleAddStopSaleWithNotify = (stop: StopSale) => {
+    onAddStopSale(stop);
     triggerNotification("✓ Stop Sale (Corte de Venta) aplicado a los calendarios del hotel.");
   };
 
@@ -1201,61 +1184,19 @@ export default function PropiedadesView({
             {activeTab === "stopsales" && (
               <div className="space-y-6">
 
-                {/* Formulario rápido para Bloquear Ventas */}
-                <form onSubmit={handleAddStopSale} className="bg-zinc-50 p-4 border border-zinc-200 rounded-lg space-y-4">
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-5 text-zinc-800" />
-                    <h5 className="font-bold text-zinc-900 text-xs uppercase tracking-wider">Declarar Cierre Temporal de Ventas (Stop Sale)</h5>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha de Inicio</label>
-                      <input
-                        id="stopsale-start-date"
-                        type="date"
-                        required
-                        className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white focus:outline-none"
-                        value={newStopSaleForm.fechaInicio}
-                        onChange={(e) => setNewStopSaleForm(prev => ({ ...prev, fechaInicio: e.target.value }))}
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha de Cierre (Fin)</label>
-                      <input
-                        id="stopsale-end-date"
-                        type="date"
-                        required
-                        className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white focus:outline-none"
-                        value={newStopSaleForm.fechaFin}
-                        onChange={(e) => setNewStopSaleForm(prev => ({ ...prev, fechaFin: e.target.value }))}
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block">Motivo o Justificación contractual</label>
-                      <input
-                        id="stopsale-reason-input"
-                        type="text"
-                        placeholder="Ej: Mantenimiento, Reservas Bloqueadas"
-                        className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white focus:outline-none"
-                        value={newStopSaleForm.motivo}
-                        onChange={(e) => setNewStopSaleForm(prev => ({ ...prev, motivo: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-1">
-                    <button
-                      id="submit-stopsale-btn"
-                      type="submit"
-                      className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
-                    >
-                      Bloquear Reservas en Fechas
-                    </button>
-                  </div>
-                </form>
+                {/* Calendario de Stop Sales: rojo = ya cerrado, ámbar = selección pendiente.
+                    Permite marcar días salteados (no consecutivos) en una sola acción — cada
+                    tramo consecutivo se guarda como un Stop Sale independiente. */}
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-5 text-zinc-800" />
+                  <h5 className="font-bold text-zinc-900 text-xs uppercase tracking-wider">Declarar Cierre Temporal de Ventas (Stop Sale)</h5>
+                </div>
+                <MultiDayCalendar
+                  propertyId={activePropertyId}
+                  stopSales={stopSales}
+                  onAddStopSale={handleAddStopSaleWithNotify}
+                  onDeleteStopSale={handleDeleteStopSale}
+                />
 
                 {/* List of active Stop Sales for active property */}
                 <div className="space-y-3">
@@ -1657,30 +1598,15 @@ export default function PropiedadesView({
 
 
                   {/* Fechas */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha de Inicio</label>
-                      <input
-                        id="rateplan-start-date"
-                        type="date"
-                        required
-                        className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-850"
-                        value={newRateForm.fechaInicio}
-                        onChange={(e) => setNewRateForm(prev => ({ ...prev, fechaInicio: e.target.value }))}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha de Fin</label>
-                      <input
-                        id="rateplan-end-date"
-                        type="date"
-                        required
-                        className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-850"
-                        value={newRateForm.fechaFin}
-                        onChange={(e) => setNewRateForm(prev => ({ ...prev, fechaFin: e.target.value }))}
-                      />
-                    </div>
-                  </div>
+                  <DateRangePicker
+                    checkIn={newRateForm.fechaInicio}
+                    checkOut={newRateForm.fechaFin}
+                    onChange={(ci, co) => setNewRateForm(prev => ({ ...prev, fechaInicio: ci, fechaFin: co }))}
+                    minDate={HISTORICAL_MIN_DATE}
+                    checkInLabel="Fecha de Inicio"
+                    checkOutLabel="Fecha de Fin"
+                    required
+                  />
 
                   {/* Multi-room selection with per-room pricing */}
                   <div className="space-y-2">

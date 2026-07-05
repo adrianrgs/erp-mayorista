@@ -252,19 +252,25 @@ function ListadoView({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-4 border-b border-zinc-200">
+      <div className="inline-flex items-center gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
         <button
+          type="button"
           onClick={() => setActiveTab("Activos")}
-          className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${
-            activeTab === "Activos" ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-400 hover:text-zinc-600 cursor-pointer"
+          className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+            activeTab === "Activos"
+              ? "bg-zinc-950 text-white shadow-sm"
+              : "text-zinc-500 hover:text-zinc-800"
           }`}
         >
           Activos ({boletos.filter((b) => b.expedienteAereo?.status !== "Anulado").length})
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab("Anulados")}
-          className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${
-            activeTab === "Anulados" ? "border-zinc-900 text-zinc-900" : "border-transparent text-zinc-400 hover:text-zinc-600 cursor-pointer"
+          className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+            activeTab === "Anulados"
+              ? "bg-zinc-950 text-white shadow-sm"
+              : "text-zinc-500 hover:text-zinc-800"
           }`}
         >
           Anulados ({boletos.filter((b) => b.expedienteAereo?.status === "Anulado").length})
