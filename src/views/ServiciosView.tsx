@@ -24,6 +24,8 @@ export default function ServiciosView({
 }: ServiciosViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState<ServiceCategory | "ALL">("ALL");
+  const [providerSearch, setProviderSearch] = useState("");
+  const [showProviderDropdown, setShowProviderDropdown] = useState(false);
 
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"detalles" | "tarifas">("detalles");
@@ -51,6 +53,7 @@ export default function ServiciosView({
     if (s) {
       setActiveServiceId(s.id);
       setServiceForm(s);
+      setProviderSearch(s.providerName || "");
     } else {
       setActiveServiceId("new");
       setServiceForm({
@@ -62,6 +65,7 @@ export default function ServiciosView({
         politicasCancelacion: "",
         status: "Activo"
       });
+      setProviderSearch("");
     }
     setActiveTab("detalles");
   };
@@ -238,35 +242,76 @@ export default function ServiciosView({
                         className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-semibold bg-white"
                       />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 relative">
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Proveedor Local (DMC)</label>
-                      {proveedores.length > 0 ? (
-                        <select
-                          value={serviceForm.providerId || ""}
-                          onChange={e => {
-                            const prov = proveedores.find(p => p.id === e.target.value);
-                            setServiceForm({
-                              ...serviceForm,
-                              providerId: e.target.value,
-                              providerName: prov?.nombre || ""
-                            });
-                          }}
-                          className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-semibold bg-white"
-                        >
-                          <option value="">— Seleccionar proveedor —</option>
-                          {proveedores.filter(p => p.status === "Activo").map(p => (
-                            <option key={p.id} value={p.id}>{p.nombre} ({p.tipo})</option>
-                          ))}
-                        </select>
-                      ) : (
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
                         <input
                           type="text"
-                          value={serviceForm.providerName || ""}
-                          onChange={e => setServiceForm({ ...serviceForm, providerName: e.target.value })}
-                          className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-semibold bg-white"
-                          placeholder="Nombre del proveedor"
+                          value={providerSearch}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setProviderSearch(val);
+                            setShowProviderDropdown(true);
+                            // Free typing without picking a suggestion just records the name as-is,
+                            // same fallback behavior as before when no proveedores catalog existed.
+                            const matched = proveedores.find(p => p.nombre.toLowerCase() === val.toLowerCase());
+                            setServiceForm({
+                              ...serviceForm,
+                              providerName: val,
+                              providerId: matched?.id
+                            });
+                          }}
+                          onFocus={() => setShowProviderDropdown(true)}
+                          placeholder="Buscar o escribir proveedor..."
+                          className="w-full pl-8 pr-7 py-2 border border-zinc-200 rounded text-sm font-semibold bg-white"
                         />
+                        {providerSearch && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProviderSearch("");
+                              setServiceForm({ ...serviceForm, providerName: "", providerId: undefined });
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-zinc-100 rounded text-zinc-400 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {showProviderDropdown && (
+                        <div className="fixed inset-0 z-40" onClick={() => setShowProviderDropdown(false)} />
                       )}
+
+                      {showProviderDropdown && proveedores.length > 0 && (() => {
+                        const query = providerSearch.toLowerCase();
+                        const matches = proveedores.filter(p => p.status === "Activo" && p.nombre.toLowerCase().includes(query));
+                        return (
+                          <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-52 overflow-y-auto divide-y divide-zinc-150">
+                            {matches.length === 0 ? (
+                              <div className="p-3 text-xs text-zinc-400 italic">
+                                Ningún proveedor del catálogo coincide. Se guardará como "{providerSearch || "Manual"}".
+                              </div>
+                            ) : (
+                              matches.map(p => (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setProviderSearch(p.nombre);
+                                    setServiceForm({ ...serviceForm, providerId: p.id, providerName: p.nombre });
+                                    setShowProviderDropdown(false);
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
+                                >
+                                  {p.nombre} <span className="text-zinc-400 font-normal">({p.tipo})</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Categoría</label>

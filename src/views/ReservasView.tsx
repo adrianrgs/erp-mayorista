@@ -2908,14 +2908,14 @@ export default function ReservasView({
 
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Mercado Objetivo</label>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-md border border-zinc-200">
                       <button
                         type="button"
                         onClick={() => setCartMercado("NACIONAL")}
-                        className={`flex-1 py-2 px-3 border rounded text-xs font-bold transition-all cursor-pointer text-center ${
+                        className={`flex-1 py-1.5 px-3 rounded text-xs font-bold whitespace-nowrap transition-all cursor-pointer text-center ${
                           cartMercado === "NACIONAL"
-                            ? "bg-zinc-950 border-zinc-950 text-white shadow-xs"
-                            : "bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50"
+                            ? "bg-zinc-950 text-white shadow-xs"
+                            : "text-zinc-500 hover:text-zinc-800"
                         }`}
                       >
                         Nacional
@@ -2923,10 +2923,10 @@ export default function ReservasView({
                       <button
                         type="button"
                         onClick={() => setCartMercado("INTERNACIONAL")}
-                        className={`flex-1 py-2 px-3 border rounded text-xs font-bold transition-all cursor-pointer text-center ${
+                        className={`flex-1 py-1.5 px-3 rounded text-xs font-bold whitespace-nowrap transition-all cursor-pointer text-center ${
                           cartMercado === "INTERNACIONAL"
-                            ? "bg-zinc-950 border-zinc-950 text-white shadow-xs"
-                            : "bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50"
+                            ? "bg-zinc-950 text-white shadow-xs"
+                            : "text-zinc-500 hover:text-zinc-800"
                         }`}
                       >
                         Internacional
@@ -2936,14 +2936,14 @@ export default function ReservasView({
 
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Tipo de Expediente</label>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-md border border-zinc-200">
                       <button
                         type="button"
                         onClick={() => setCartTipo("Cotización")}
-                        className={`flex-1 py-2 px-3 border rounded text-xs font-bold transition-all cursor-pointer text-center ${
+                        className={`flex-1 py-1.5 px-3 rounded text-xs font-bold whitespace-nowrap transition-all cursor-pointer text-center ${
                           cartTipo === "Cotización"
-                            ? "bg-zinc-950 border-zinc-950 text-white shadow-xs"
-                            : "bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50"
+                            ? "bg-zinc-950 text-white shadow-xs"
+                            : "text-zinc-500 hover:text-zinc-800"
                         }`}
                       >
                         Cotización
@@ -2951,10 +2951,10 @@ export default function ReservasView({
                       <button
                         type="button"
                         onClick={() => setCartTipo("Reserva Real")}
-                        className={`flex-1 py-2 px-3 border rounded text-xs font-bold transition-all cursor-pointer text-center ${
+                        className={`flex-1 py-1.5 px-3 rounded text-xs font-bold whitespace-nowrap transition-all cursor-pointer text-center ${
                           cartTipo === "Reserva Real"
-                            ? "bg-zinc-950 border-zinc-950 text-white shadow-xs"
-                            : "bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50"
+                            ? "bg-zinc-950 text-white shadow-xs"
+                            : "text-zinc-500 hover:text-zinc-800"
                         }`}
                       >
                         Reserva Real

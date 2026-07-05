@@ -30,4 +30,19 @@ export class ServicesService {
     await this.dc.executeMutation('DeleteExtraService', { id });
     return { success: true };
   }
+
+  async createRate(dto: any) {
+    await this.dc.executeMutation('InsertServiceRate', { ...dto, updatedAt: new Date().toISOString() });
+    return { success: true, id: dto.id };
+  }
+
+  async updateRate(id: string, dto: any) {
+    await this.dc.executeMutation('UpdateServiceRate', { id, ...dto, updatedAt: new Date().toISOString() });
+    return { success: true };
+  }
+
+  async removeRate(id: string) {
+    await this.dc.executeMutation('DeleteServiceRate', { id });
+    return { success: true };
+  }
 }

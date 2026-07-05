@@ -341,54 +341,45 @@ export default function CuentasPorPagarView({
 
       {/* --- SECTION 1: HEADER & KPIs --- */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded border border-zinc-200 shadow-3xs">
-        <div>
-          <span className="text-[9px] font-mono tracking-widest text-zinc-400 uppercase font-black">Tesorería Mayorista</span>
-          <h2 className="text-xl font-extrabold text-zinc-900 mt-1 flex items-center gap-2">
-            <TrendingDown className="w-5 h-5 text-red-500" />
-            Dpto. Tesorería y Pagos: Control de Cuentas por Pagar
-          </h2>
-          <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
-            Gestione compromisos de costo neto con proveedores, despache transferencias bancarias a Hoteles, DMC y aerolíneas, y audite libros mayores.
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-red-50 border border-red-100 rounded-lg text-red-600 flex-shrink-0">
+            <TrendingDown className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[9px] font-mono tracking-widest text-zinc-400 uppercase font-black block">Tesorería Mayorista</span>
+            <h2 className="text-xl font-extrabold text-zinc-900 mt-0.5">Cuentas por Pagar</h2>
+          </div>
         </div>
 
         {/* View Selection Buttons */}
         <div className="flex items-center gap-3 self-start lg:self-auto flex-wrap">
-        {onAddObligation && (
-          <button
-            onClick={() => setShowNewObligationForm(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-zinc-900 text-white rounded text-xs font-bold hover:bg-zinc-700 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" /> Nueva Obligación
-          </button>
-        )}
         <div className="bg-zinc-100 p-1 rounded-md flex items-center border border-zinc-200">
           <button
             onClick={() => setActiveTab("obligaciones")}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "obligaciones" 
-                ? "bg-zinc-950 text-white" 
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === "obligaciones"
+                ? "bg-zinc-950 text-white"
                 : "text-zinc-500 hover:text-zinc-800"
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            Bandeja de Obligaciones
+            Obligaciones
           </button>
           <button
             onClick={() => setActiveTab("pagadas")}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-bold transition-all cursor-pointer ${
-              activeTab === "pagadas" 
-                ? "bg-zinc-950 text-white" 
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === "pagadas"
+                ? "bg-zinc-950 text-white"
                 : "text-zinc-500 hover:text-zinc-800"
             }`}
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
-            Cuentas Pagadas
+            Pagadas
           </button>
 
           <button
             onClick={() => setActiveTab("proveedores")}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-sm text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
               activeTab === "proveedores"
                 ? "bg-zinc-950 text-white"
                 : "text-zinc-500 hover:text-zinc-800"
@@ -398,6 +389,18 @@ export default function CuentasPorPagarView({
             Estados de Cuenta
           </button>
         </div>
+
+        {onAddObligation && (
+          <>
+            <div className="w-px h-8 bg-zinc-200 hidden sm:block" />
+            <button
+              onClick={() => setShowNewObligationForm(true)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-zinc-900 text-white rounded text-xs font-bold whitespace-nowrap hover:bg-zinc-700 transition-colors shadow-3xs"
+            >
+              <Plus className="w-3.5 h-3.5" /> Nueva Obligación
+            </button>
+          </>
+        )}
         </div>
       </div>
 

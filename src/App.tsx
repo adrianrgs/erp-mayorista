@@ -83,7 +83,6 @@ import {
   Globe,
   Check,
   Eye,
-  Terminal,
   Users,
   FileText,
   ReceiptText,
@@ -1022,37 +1021,55 @@ export default function App() {
     try {
       setExtraServices(prev => [...prev, newSrv]);
       await insertExtraService(dataConnect, { ...newSrv });
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to insert extra service", e);
+      alert("Error al guardar el servicio. Es posible que no se haya persistido — recarga la página para confirmar.");
+    }
   };
   const handleUpdateExtraService = async (updated: ExtraService) => {
     try {
       setExtraServices(prev => prev.map(s => s.id === updated.id ? updated : s));
       await updateExtraService(dataConnect, { ...updated });
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to update extra service", e);
+      alert("Error al actualizar el servicio. Es posible que no se haya persistido — recarga la página para confirmar.");
+    }
   };
   const handleDeleteExtraService = async (id: string) => {
     try {
       setExtraServices(prev => prev.filter(s => s.id !== id));
       await deleteExtraService(dataConnect, { id });
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to delete extra service", e);
+      alert("Error al eliminar el servicio. Es posible que no se haya eliminado en el servidor — recarga la página para confirmar.");
+    }
   };
   const handleAddServiceRate = async (newRate: ServiceRate) => {
     try {
       setServiceRates(prev => [...prev, newRate]);
       await insertServiceRate(dataConnect, { ...newRate });
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to insert service rate", e);
+      alert("Error al guardar la tarifa. Es posible que no se haya persistido — recarga la página para confirmar.");
+    }
   };
   const handleUpdateServiceRate = async (updated: ServiceRate) => {
     try {
       setServiceRates(prev => prev.map(r => r.id === updated.id ? updated : r));
       await updateServiceRate(dataConnect, { ...updated });
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to update service rate", e);
+      alert("Error al actualizar la tarifa. Es posible que no se haya persistido — recarga la página para confirmar.");
+    }
   };
   const handleDeleteServiceRate = async (id: string) => {
     try {
       setServiceRates(prev => prev.filter(r => r.id !== id));
       await deleteServiceRate(dataConnect, { id });
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to delete service rate", e);
+      alert("Error al eliminar la tarifa. Es posible que no se haya eliminado en el servidor — recarga la página para confirmar.");
+    }
   };
   const handleDeleteRatePlanGroup = async (planName: string, propertyId: string) => {
     try {
@@ -1351,20 +1368,6 @@ export default function App() {
             )}
           </div>
         </nav>
-
-        {/* Footer info showing standard constraints */}
-        <div className="border-t border-zinc-900 pt-5 space-y-3 mt-auto">
-          <div className="bg-zinc-900/65 p-3 rounded-lg border border-zinc-900 text-xs font-sans">
-            <span className="text-zinc-500 text-[9px] uppercase tracking-wider font-extrabold block">Firma del compilador</span>
-            <div className="flex items-center gap-1.5 text-zinc-400 font-mono mt-1 font-semibold">
-              <Terminal className="w-3.5 h-3.5 text-zinc-500" />
-              <span>Next.js App Router (15+)</span>
-            </div>
-          </div>
-          <p className="text-[10px] text-zinc-500 font-medium px-1 font-sans">
-            Fase 0: Cascarón de Navegación ERP para Agencia Mayorista.
-          </p>
-        </div>
       </aside>
 
       {/* CONTINENTE DE CONTENIDO PRINCIPAL (COLUMNA DERECHA) */}

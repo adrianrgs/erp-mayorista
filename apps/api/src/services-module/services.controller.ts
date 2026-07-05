@@ -18,4 +18,13 @@ export class ServicesController {
 
   @Delete(':id')
   remove(@Param('id') id: string) { return this.service.remove(id); }
+
+  @Post('rates')
+  createRate(@Body() dto: any) { return this.service.createRate(dto); }
+
+  @Patch('rates/:id')
+  updateRate(@Param('id') id: string, @Body() dto: any) { return this.service.updateRate(id, dto); }
+
+  @Delete('rates/:id')
+  removeRate(@Param('id') id: string) { return this.service.removeRate(id); }
 }
