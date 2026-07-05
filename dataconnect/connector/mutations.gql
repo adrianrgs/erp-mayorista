@@ -26,6 +26,7 @@ mutation InsertReservation(
   $variaciones: Any,
   $pasajeros: Any,
   $canalVenta: String,
+  $clienteDirectoId: String,
   $localizadorProveedor: String
 , $updatedAt: String) @auth(level: PUBLIC) {
   reservation_insert(data: {
@@ -57,6 +58,7 @@ mutation InsertReservation(
     facturacionRechazoMotivo: $facturacionRechazoMotivo,
     facturacionRechazoArchivos: $facturacionRechazoArchivos,
     canalVenta: $canalVenta,
+    clienteDirectoId: $clienteDirectoId,
     localizadorProveedor: $localizadorProveedor
   })
 }
@@ -95,6 +97,7 @@ mutation UpdateReservation(
   $variaciones: Any,
   $pasajeros: Any,
   $canalVenta: String,
+  $clienteDirectoId: String,
   $localizadorProveedor: String
 , $updatedAt: String) @auth(level: PUBLIC) {
   reservation_update(id: $id,
@@ -126,6 +129,7 @@ mutation UpdateReservation(
     facturacionRechazoMotivo: $facturacionRechazoMotivo,
     facturacionRechazoArchivos: $facturacionRechazoArchivos,
     canalVenta: $canalVenta,
+    clienteDirectoId: $clienteDirectoId,
     localizadorProveedor: $localizadorProveedor
   })
 }
@@ -479,6 +483,79 @@ mutation DeleteInvoice($id: String!) @auth(level: PUBLIC) {
 
 mutation DeleteClient($id: String!) @auth(level: PUBLIC) {
   b2BClient_delete(id: $id
+    )
+}
+
+mutation InsertDirectClient(
+  $id: String!,
+  $nombre: String!,
+  $cedula: String,
+  $tipo: String!,
+  $status: String!,
+  $email: String!,
+  $telefono: String!,
+  $saldoFavor: Float!,
+  $saldoDeber: Float!,
+  $moroso: Boolean!,
+  $limiteCredito: Float,
+  $diasCredito: Int,
+  $observaciones: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  directClient_insert(data: {
+    id: $id,
+    updatedAt: $updatedAt,
+    nombre: $nombre,
+    cedula: $cedula,
+    tipo: $tipo,
+    status: $status,
+    email: $email,
+    telefono: $telefono,
+    saldoFavor: $saldoFavor,
+    saldoDeber: $saldoDeber,
+    moroso: $moroso,
+    limiteCredito: $limiteCredito,
+    diasCredito: $diasCredito,
+    observaciones: $observaciones
+  })
+}
+
+mutation UpdateDirectClient(
+  $id: String!
+  $nombre: String
+  $cedula: String
+  $tipo: String
+  $status: String
+  $email: String
+  $telefono: String
+  $saldoFavor: Float
+  $saldoDeber: Float
+  $moroso: Boolean
+  $limiteCredito: Float
+  $diasCredito: Int
+  $observaciones: String
+, $updatedAt: String) @auth(level: PUBLIC) {
+  directClient_update(
+    id: $id
+    data: {
+      updatedAt: $updatedAt,
+      nombre: $nombre
+      cedula: $cedula
+      tipo: $tipo
+      status: $status
+      email: $email
+      telefono: $telefono
+      saldoFavor: $saldoFavor
+      saldoDeber: $saldoDeber
+      moroso: $moroso
+      limiteCredito: $limiteCredito
+      diasCredito: $diasCredito
+      observaciones: $observaciones
+    }
+  )
+}
+
+mutation DeleteDirectClient($id: String!) @auth(level: PUBLIC) {
+  directClient_delete(id: $id
     )
 }
 

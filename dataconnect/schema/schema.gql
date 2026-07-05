@@ -90,6 +90,7 @@ type Reservation @table {
   variaciones: Any
   pasajeros: Any
   canalVenta: String
+  clienteDirectoId: String
   localizadorProveedor: String
   updatedAt: String
 }
@@ -181,6 +182,23 @@ type B2BClient @table {
   balance: Float
   tier: String
   type: String
+  updatedAt: String
+}
+
+type DirectClient @table {
+  id: String! @col(dataType: "varchar(50)")
+  nombre: String!
+  cedula: String
+  tipo: String!
+  status: String!
+  email: String!
+  telefono: String!
+  saldoFavor: Float!
+  saldoDeber: Float!
+  moroso: Boolean!
+  limiteCredito: Float
+  diasCredito: Int
+  observaciones: String
   updatedAt: String
 }
 

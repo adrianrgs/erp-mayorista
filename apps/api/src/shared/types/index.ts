@@ -50,6 +50,9 @@ export interface Reservation {
   telefono?: string;
   email?: string;
   agenciaName?: string;
+  canalVenta?: 'B2B' | 'Directo';
+  clienteDirectoId?: string;
+  localizadorProveedor?: string;
   createdAt?: string;
   mercado?: 'NACIONAL' | 'INTERNACIONAL';
   servicios?: ServiceItem[];
@@ -128,6 +131,25 @@ export interface B2BClient {
   tipo: ClientType;
   status: ClientStatus;
   contactoNombre: string;
+  email: string;
+  telefono: string;
+  saldoFavor: number;
+  saldoDeber: number;
+  moroso: boolean;
+  limiteCredito?: number;
+  diasCredito?: number;
+  observaciones?: string;
+}
+
+export type DirectClientTipo = 'A Crédito' | 'Contado';
+
+export interface DirectClient {
+  updatedAt?: string;
+  id: string;
+  nombre: string;
+  cedula?: string;
+  tipo: DirectClientTipo;
+  status: ClientStatus;
   email: string;
   telefono: string;
   saldoFavor: number;

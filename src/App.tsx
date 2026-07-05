@@ -1,12 +1,13 @@
 import { FlightTicket } from "./types/aereos";
 import React, { useState } from "react";
-import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, OperationalTransfer, mapToOperationalTransfer, mapToTransferService, FinancialInvoice, B2BClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement, PaymentVoucher, CompanyConfig, ExchangeRate, WithholdingCertificate, JournalEntry } from "./types";
+import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, OperationalTransfer, mapToOperationalTransfer, mapToTransferService, FinancialInvoice, B2BClient, DirectClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement, PaymentVoucher, CompanyConfig, ExchangeRate, WithholdingCertificate, JournalEntry } from "./types";
 import { TaxJurisdiction, DEFAULT_JURISDICTION } from "./lib/taxEngine";
 import { Property, RoomType, RatePlan, StopSale, ExtraService, ServiceRate, Proveedor } from "./types/producto";
 
 import {
   listReservations, insertReservation, updateReservation, deleteReservation,
   listClients, insertClient,
+  listDirectClients, insertDirectClient, updateDirectClient,
   listInvoices, insertInvoice,
   listDetailedProperties, insertDetailedProperty, updateDetailedProperty, deleteDetailedProperty,
   listRoomTypes, insertRoomType, updateRoomType, deleteRoomType,
@@ -58,6 +59,7 @@ import CobranzasView from "./views/CobranzasView";
 import CuentasPorPagarView from "./views/CuentasPorPagarView";
 import ConfiguracionView from "./views/ConfiguracionView";
 import { reconcileDossierUpdate } from "./lib/financialReconciler";
+import { resolveSaleClient } from "./lib/clientResolver";
 import { nextSequentialId } from "./lib/idGenerator";
 
 import ServiciosView from "./views/ServiciosView";
@@ -116,6 +118,7 @@ export default function App() {
   const [transfers, setTransfers] = useState<TransferService[]>(initialTransfers);
   const [invoices, setInvoices] = useState<FinancialInvoice[]>(initialInvoices);
   const [clients, setClients] = useState<B2BClient[]>(initialClients);
+  const [directClients, setDirectClients] = useState<DirectClient[]>([]);
   const [exchangeRates, setExchangeRates] = useState({ usdToEur: 0.92, usdToVes: 45.50 });
 
   // Accounting & Fiscal module state
@@ -344,6 +347,14 @@ export default function App() {
         if (res.data.reservations.length > 0) setReservations(res.data.reservations);
         const cli = await listClients(dataConnect);
         if (cli.data.b2BClients.length > 0) setClients(cli.data.b2BClients);
+        // Aislado en su propio try: un fallo aquí (p.ej. backend sin reiniciar tras agregar
+        // el módulo direct-clients) no debe abortar la carga del resto de los datos.
+        try {
+          const dcli = await listDirectClients(dataConnect);
+          if (dcli.data.directClients.length > 0) setDirectClients(dcli.data.directClients);
+        } catch (e) {
+          console.error("Failed to load direct clients", e);
+        }
         const inv = await listInvoices(dataConnect);
         if (inv.data.financialInvoices.length > 0) setInvoices(inv.data.financialInvoices);
         const props = await listDetailedProperties(dataConnect);
@@ -475,6 +486,7 @@ export default function App() {
         variaciones: newRes.variaciones ? JSON.parse(JSON.stringify(newRes.variaciones)) : null,
         pasajeros: newRes.pasajeros ? JSON.parse(JSON.stringify(newRes.pasajeros)) : null,
         canalVenta: newRes.canalVenta,
+        clienteDirectoId: newRes.clienteDirectoId,
         localizadorProveedor: newRes.localizadorProveedor,
         updatedAt: newRes.updatedAt
       });
@@ -566,12 +578,12 @@ export default function App() {
 
     if (oldRes && !isBillingOnlyUpdate) {
       // Run the financial lifecycle reconciler
-      const result = reconcileDossierUpdate(oldRes, updatedRes, clients, payableObligations);
+      const result = reconcileDossierUpdate(oldRes, updatedRes, clients, directClients, payableObligations);
       finalRes = result.updatedRes;
 
-      // 1. Update B2B Client if changed
-      if (result.updatedClient) {
-        const client = result.updatedClient;
+      // 1. Update B2B or Direct client if changed
+      if (result.updatedClient?.kind === "B2B") {
+        const client = result.updatedClient.client;
         setClients(prev => prev.map(c => c.id === client.id ? client : c));
         try {
           await updateClient(dataConnect, {
@@ -594,6 +606,8 @@ export default function App() {
         } catch (err) {
           console.error("Failed to sync client balances to DB", err);
         }
+      } else if (result.updatedClient?.kind === "Directo") {
+        await handleUpdateDirectClient(result.updatedClient.client);
       }
 
       // 2. Update/Insert Payable Obligations if changed
@@ -670,8 +684,8 @@ export default function App() {
           .filter(v => v.type === "Credito" && v.status !== "Borrador")
           .reduce((sum, v) => sum + Math.abs(v.amountSale), 0);
 
-        const agencyName = finalRes.agenciaName;
-        const clientObj = clients.find(c => c.nombre.toLowerCase() === (agencyName || "").toLowerCase());
+        const saleClient = resolveSaleClient(finalRes, clients, directClients);
+        const clientObj = saleClient.client;
 
         if (clientObj && totalCredit > 0) {
           const isCreditClient =
@@ -728,11 +742,11 @@ export default function App() {
           }
 
           if (newSaldoDeber !== clientObj.saldoDeber || newSaldoFavor !== clientObj.saldoFavor) {
-            await handleUpdateClient({
-              ...clientObj,
-              saldoDeber: newSaldoDeber,
-              saldoFavor: newSaldoFavor
-            });
+            if (saleClient.kind === "B2B") {
+              await handleUpdateClient({ ...saleClient.client, saldoDeber: newSaldoDeber, saldoFavor: newSaldoFavor });
+            } else if (saleClient.kind === "Directo") {
+              await handleUpdateDirectClient({ ...saleClient.client, saldoDeber: newSaldoDeber, saldoFavor: newSaldoFavor });
+            }
           }
         }
       }
@@ -775,6 +789,7 @@ export default function App() {
         variaciones: finalRes.variaciones ? JSON.parse(JSON.stringify(finalRes.variaciones)) : null,
         pasajeros: finalRes.pasajeros ? JSON.parse(JSON.stringify(finalRes.pasajeros)) : null,
         canalVenta: finalRes.canalVenta,
+        clienteDirectoId: finalRes.clienteDirectoId,
         localizadorProveedor: finalRes.localizadorProveedor,
         updatedAt: finalRes.updatedAt
       });
@@ -974,6 +989,28 @@ export default function App() {
       });
     } catch (e) {
       console.error("Failed to insert client", e);
+    }
+  };
+
+  // A diferencia de handleUpdateClient (B2B), UpdateDirectClient acepta el set completo de
+  // campos editables — se persiste el objeto completo, no solo saldo/status/moroso.
+  const handleUpdateDirectClient = async (updated: DirectClient) => {
+    updated.updatedAt = new Date().toISOString();
+    setDirectClients(prev => prev.map(c => c.id === updated.id ? updated : c));
+    try {
+      await updateDirectClient(dataConnect, { ...updated });
+    } catch (e) {
+      console.error("Failed to update direct client", e);
+    }
+  };
+
+  const handleAddDirectClient = async (newClient: DirectClient) => {
+    newClient.updatedAt = new Date().toISOString();
+    setDirectClients(prev => [newClient, ...prev]);
+    try {
+      await insertDirectClient(dataConnect, { ...newClient });
+    } catch (e) {
+      console.error("Failed to insert direct client", e);
     }
   };
 
@@ -1331,7 +1368,7 @@ export default function App() {
               <div className="space-y-1 mt-1 pl-1">
                 <button id="nav-clientes" onClick={() => setCurrentSection(ProjectView.CLIENTES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.CLIENTES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
                   <Users className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Clientes B2B</span>
+                  <span className="text-xs font-semibold">Clientes</span>
                 </button>
                 <button id="nav-proveedores" onClick={() => setCurrentSection(ProjectView.PROVEEDORES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.PROVEEDORES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
                   <Briefcase className="w-4 h-4 flex-shrink-0" />
@@ -1469,6 +1506,8 @@ onDeleteStopSale={handleDeleteStopSale}
                       reservations={reservations}
                       properties={properties}
                       clients={clients}
+                      directClients={directClients}
+                      onAddDirectClient={handleAddDirectClient}
                       onAddReservation={handleAddReservation}
                       onUpdateReservation={handleUpdateReservation}
                       onAddInvoice={handleAddInvoice}
@@ -1496,10 +1535,12 @@ onDeleteStopSale={handleDeleteStopSale}
                        onAddInvoice={handleAddInvoice}
                        onUpdateInvoice={handleUpdateInvoice}
                        clients={clients}
+                       directClients={directClients}
                        roomTypes={roomTypes}
                        ratePlans={ratePlans}
                        detailedProperties={detailedProperties}
                        onUpdateClient={handleUpdateClient}
+                       onUpdateDirectClient={handleUpdateDirectClient}
                        payableObligations={payableObligations}
                        onAddPayableObligation={handleAddPayableObligation}
                        providerStatements={providerStatements}
@@ -1553,10 +1594,13 @@ onDeleteStopSale={handleDeleteStopSale}
                   />
                 )}
                 {currentSection === ProjectView.CLIENTES && (
-                  <ClientesView 
-                    clients={clients} 
-                    onUpdateClient={handleUpdateClient} 
-                    onAddClient={handleAddClient} 
+                  <ClientesView
+                    clients={clients}
+                    onUpdateClient={handleUpdateClient}
+                    onAddClient={handleAddClient}
+                    directClients={directClients}
+                    onUpdateDirectClient={handleUpdateDirectClient}
+                    onAddDirectClient={handleAddDirectClient}
                     invoices={invoices}
                     reservations={reservations}
                     boletos={boletos}
@@ -1569,6 +1613,8 @@ onDeleteStopSale={handleDeleteStopSale}
                   <CobranzasView
                     clients={clients}
                     onUpdateClient={handleUpdateClient}
+                    directClients={directClients}
+                    onUpdateDirectClient={handleUpdateDirectClient}
                     invoices={invoices}
                     onUpdateInvoice={handleUpdateInvoice}
                     reservations={reservations}

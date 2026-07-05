@@ -28,6 +28,7 @@ holder
     variaciones
     pasajeros
     canalVenta
+    clienteDirectoId
     localizadorProveedor
   }
 }
@@ -53,6 +54,25 @@ query ListClients @auth(level: PUBLIC) {
     vatWithholdingPct
     incomeTaxWithholdingPct
     isInExemptZone
+  }
+}
+
+query ListDirectClients @auth(level: PUBLIC) {
+  directClients {
+    id
+    updatedAt
+    nombre
+    cedula
+    tipo
+    status
+    email
+    telefono
+    saldoFavor
+    saldoDeber
+    moroso
+    limiteCredito
+    diasCredito
+    observaciones
   }
 }
 

@@ -56,6 +56,7 @@ export class ReservationsService {
       variaciones: JSON.stringify([]),
       pasajeros: JSON.stringify(dto.pasajeros || []),
       canalVenta: dto.canalVenta || 'B2B',
+      clienteDirectoId: dto.clienteDirectoId || null,
       localizadorProveedor: dto.localizadorProveedor || null,
       createdAt: now.split('T')[0],
       updatedAt: now,
@@ -68,12 +69,14 @@ export class ReservationsService {
 
     // Si viene estado anterior para reconciliación financiera
     if (dto.previousState && dto.servicios) {
-      const [clientsData, obligationsData] = await Promise.all([
+      const [clientsData, directClientsData, obligationsData] = await Promise.all([
         this.dc.executeQuery<{ b2BClients: any[] }>('ListClients'),
+        this.dc.executeQuery<{ directClients: any[] }>('ListDirectClients'),
         this.dc.executeQuery<{ payableObligations: any[] }>('ListPayableObligations'),
       ]);
 
       const clients = clientsData.b2BClients || [];
+      const directClients = directClientsData.directClients || [];
       const obligations = obligationsData.payableObligations || [];
 
       const oldRes = {
@@ -91,7 +94,7 @@ export class ReservationsService {
         pasajeros: dto.pasajeros || oldRes.pasajeros,
       };
 
-      const result = this.reconciler.reconcileDossierUpdate(oldRes, newRes, clients, obligations);
+      const result = this.reconciler.reconcileDossierUpdate(oldRes, newRes, clients, directClients, obligations);
 
       // Persistir reserva actualizada
       await this.dc.executeMutation('UpdateReservation', {
@@ -110,15 +113,17 @@ export class ReservationsService {
         ...(dto.facturacionTipo && { facturacionTipo: dto.facturacionTipo }),
         ...(dto.specialRequests !== undefined && { specialRequests: dto.specialRequests }),
         ...(dto.canalVenta && { canalVenta: dto.canalVenta }),
+        ...(dto.clienteDirectoId !== undefined && { clienteDirectoId: dto.clienteDirectoId }),
         ...(dto.localizadorProveedor !== undefined && { localizadorProveedor: dto.localizadorProveedor }),
       });
 
       // Persistir cliente actualizado
       if (result.updatedClient) {
-        await this.dc.executeMutation('UpdateClient', {
-          id: result.updatedClient.id,
-          saldoFavor: result.updatedClient.saldoFavor,
-          saldoDeber: result.updatedClient.saldoDeber,
+        const { kind, client } = result.updatedClient;
+        await this.dc.executeMutation(kind === 'Directo' ? 'UpdateDirectClient' : 'UpdateClient', {
+          id: client.id,
+          saldoFavor: client.saldoFavor,
+          saldoDeber: client.saldoDeber,
           updatedAt: now,
         });
       }
@@ -159,6 +164,7 @@ export class ReservationsService {
       ...(dto.variaciones && { variaciones: JSON.stringify(dto.variaciones) }),
       ...(dto.pasajeros && { pasajeros: JSON.stringify(dto.pasajeros) }),
       ...(dto.canalVenta && { canalVenta: dto.canalVenta }),
+      ...(dto.clienteDirectoId !== undefined && { clienteDirectoId: dto.clienteDirectoId }),
       ...(dto.localizadorProveedor !== undefined && { localizadorProveedor: dto.localizadorProveedor }),
     });
 

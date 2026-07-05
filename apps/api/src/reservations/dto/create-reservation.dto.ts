@@ -70,5 +70,9 @@ export class CreateReservationDto {
 
   @IsOptional()
   @IsString()
+  clienteDirectoId?: string;
+
+  @IsOptional()
+  @IsString()
   localizadorProveedor?: string;
 }

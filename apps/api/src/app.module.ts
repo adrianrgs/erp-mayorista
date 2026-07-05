@@ -4,6 +4,7 @@ import { SharedModule } from './shared/shared.module';
 import { AuthModule } from './auth/auth.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { ClientsModule } from './clients/clients.module';
+import { DirectClientsModule } from './direct-clients/direct-clients.module';
 import { PropertiesModule } from './properties/properties.module';
 import { FlightsModule } from './flights/flights.module';
 import { FinancesModule } from './finances/finances.module';
@@ -20,6 +21,7 @@ import { AppController } from './app.controller';
     AuthModule,
     ReservationsModule,
     ClientsModule,
+    DirectClientsModule,
     PropertiesModule,
     FlightsModule,
     FinancesModule,

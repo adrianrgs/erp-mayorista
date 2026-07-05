@@ -3,14 +3,19 @@ import {
   Reservation,
   ServiceItem,
   B2BClient,
+  DirectClient,
   PayableObligation,
   FinancialVariation,
   B2BWalletTransaction,
 } from './types';
 
+export type UpdatedClientRef =
+  | { kind: 'B2B'; client: B2BClient }
+  | { kind: 'Directo'; client: DirectClient };
+
 export interface ReconciliationResult {
   updatedRes: Reservation;
-  updatedClient: B2BClient | null;
+  updatedClient: UpdatedClientRef | null;
   updatedPayableObligations: PayableObligation[];
   newWalletTransactions: B2BWalletTransaction[];
   newVariations: FinancialVariation[];
@@ -23,6 +28,7 @@ export class FinancialReconcilerService {
     oldRes: Reservation,
     newRes: Reservation,
     clients: B2BClient[],
+    directClients: DirectClient[],
     payableObligations: PayableObligation[],
   ): ReconciliationResult {
     const log: string[] = [];
@@ -30,12 +36,19 @@ export class FinancialReconcilerService {
     const newWalletTransactions: B2BWalletTransaction[] = [];
     let updatedPayableObligations = [...payableObligations];
 
-    const agencyName = newRes.agenciaName || oldRes.agenciaName;
-    const clientIndex = clients.findIndex(
-      (c) => c.nombre.toLowerCase() === (agencyName || '').toLowerCase(),
-    );
-    let updatedClient: B2BClient | null =
-      clientIndex !== -1 ? { ...clients[clientIndex] } : null;
+    const isDirecto = (newRes.canalVenta || oldRes.canalVenta) === 'Directo';
+    let updatedClient: UpdatedClientRef | null = null;
+    if (isDirecto) {
+      const clienteDirectoId = newRes.clienteDirectoId || oldRes.clienteDirectoId;
+      const idx = directClients.findIndex((c) => c.id === clienteDirectoId);
+      if (idx !== -1) updatedClient = { kind: 'Directo', client: { ...directClients[idx] } };
+    } else {
+      const agencyName = newRes.agenciaName || oldRes.agenciaName;
+      const idx = clients.findIndex(
+        (c) => c.nombre.toLowerCase() === (agencyName || '').toLowerCase(),
+      );
+      if (idx !== -1) updatedClient = { kind: 'B2B', client: { ...clients[idx] } };
+    }
 
     const isBilled = (oldRes.servicios || []).some(
       (s) => s.statusFacturacion === 'Facturado',
@@ -53,22 +66,23 @@ export class FinancialReconcilerService {
     // invoice and voucher data is available to correctly split debt-clearance vs. overpayment-refund.
     const applyCreditToClient = (amount: number, reason: string) => {
       if (!updatedClient) return;
-      log.push(`[Crédito Registrado] ${updatedClient.nombre}: $${amount.toFixed(2)} crédito pendiente de ajuste de saldo — ${reason}`);
+      log.push(`[Crédito Registrado] ${updatedClient.client.nombre}: $${amount.toFixed(2)} crédito pendiente de ajuste de saldo — ${reason}`);
     };
 
     const applyDebitToClient = (amount: number, reason: string) => {
       if (!updatedClient) return;
+      const client = updatedClient.client;
 
-      if (updatedClient.saldoFavor > 0) {
-        const autoApply = Math.min(updatedClient.saldoFavor, amount);
-        updatedClient.saldoFavor -= autoApply;
+      if (client.saldoFavor > 0) {
+        const autoApply = Math.min(client.saldoFavor, amount);
+        client.saldoFavor -= autoApply;
         amount -= autoApply;
         log.push(
-          `[Billetera Virtual] Se aplicaron $${autoApply.toFixed(2)} del saldo a favor de ${updatedClient.nombre} para pagar el suplemento.`,
+          `[Billetera Virtual] Se aplicaron $${autoApply.toFixed(2)} del saldo a favor de ${client.nombre} para pagar el suplemento.`,
         );
         newWalletTransactions.push({
           id: genId('TX-WLT'),
-          clientId: updatedClient.id,
+          clientId: client.id,
           reservationId: newRes.id,
           type: 'Cargo_Pago',
           amount: autoApply,
@@ -79,10 +93,10 @@ export class FinancialReconcilerService {
       }
 
       if (amount > 0) {
-        const previousDebt = updatedClient.saldoDeber;
-        updatedClient.saldoDeber += amount;
+        const previousDebt = client.saldoDeber;
+        client.saldoDeber += amount;
         log.push(
-          `[Suplemento] ${updatedClient.nombre}: deuda $${previousDebt.toFixed(2)}→$${updatedClient.saldoDeber.toFixed(2)} (${reason})`,
+          `[Suplemento] ${client.nombre}: deuda $${previousDebt.toFixed(2)}→$${client.saldoDeber.toFixed(2)} (${reason})`,
         );
       }
     };

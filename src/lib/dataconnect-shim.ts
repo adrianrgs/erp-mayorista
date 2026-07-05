@@ -17,6 +17,11 @@ export const listClients = async (_dc?: any) => {
   return { data: { b2BClients: r.data } };
 };
 
+export const listDirectClients = async (_dc?: any) => {
+  const r = await api.get("/direct-clients");
+  return { data: { directClients: r.data } };
+};
+
 export const listInvoices = async (_dc?: any) => {
   const r = await api.get("/finances/invoices");
   return { data: { financialInvoices: r.data } };
@@ -115,6 +120,19 @@ export const insertClient = async (_dc: any, vars: any) => {
 export const updateClient = async (_dc: any, vars: any) => {
   const { id, ...rest } = vars;
   await api.patch(`/clients/${id}`, rest);
+  return { data: {} };
+};
+
+// ─── MUTATIONS: DIRECT CLIENTS ────────────────────────────────────────────────
+
+export const insertDirectClient = async (_dc: any, vars: any) => {
+  await api.post("/direct-clients", vars);
+  return { data: {} };
+};
+
+export const updateDirectClient = async (_dc: any, vars: any) => {
+  const { id, ...rest } = vars;
+  await api.patch(`/direct-clients/${id}`, rest);
   return { data: {} };
 };
 

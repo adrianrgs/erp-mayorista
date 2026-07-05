@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Reservation, FinancialInvoice, ServiceItem, B2BClient, ServiceType, PayableObligation, ProviderStatement, CompanyConfig, PaymentVoucher } from "../types";
+import { Reservation, FinancialInvoice, ServiceItem, B2BClient, DirectClient, ServiceType, PayableObligation, ProviderStatement, CompanyConfig, PaymentVoucher } from "../types";
+import { resolveSaleClient, isCreditEligible, SaleClientRef } from "../lib/clientResolver";
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
 import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile } from "../lib/taxEngine";
@@ -46,10 +47,12 @@ interface FacturacionViewProps {
   onAddInvoice?: (newInv: FinancialInvoice) => void;
   onUpdateInvoice?: (updated: FinancialInvoice) => void;
   clients: B2BClient[];
+  directClients?: DirectClient[];
   roomTypes: RoomType[];
   ratePlans: RatePlan[];
   detailedProperties: Property[];
   onUpdateClient?: (updated: B2BClient) => void;
+  onUpdateDirectClient?: (updated: DirectClient) => void;
   payableObligations?: PayableObligation[];
   onAddPayableObligation?: (obligation: PayableObligation) => void;
   providerStatements?: ProviderStatement[];
@@ -70,10 +73,12 @@ export default function FacturacionView({
   onAddInvoice,
   onUpdateInvoice,
   clients,
+  directClients = [],
   roomTypes,
   ratePlans,
   detailedProperties,
   onUpdateClient,
+  onUpdateDirectClient,
   payableObligations = [],
   onAddPayableObligation,
   providerStatements = [],
@@ -90,14 +95,20 @@ export default function FacturacionView({
 
   const activeJurisdiction = jurisdiction ?? DEFAULT_JURISDICTION;
 
-  const buildClientProfile = (client?: B2BClient): ClientTaxProfile => ({
-    isWithheldClient: client?.isWithheldClient ?? false,
-    vatWithholdingPct: client?.vatWithholdingPct ?? 0,
-    incomeTaxWithholdingPct: client?.incomeTaxWithholdingPct ?? 0,
-    isInExemptZone: client?.isInExemptZone ?? false,
-  });
+  // DirectClient no tiene campos de retención fiscal (no aplica a personas naturales) — al
+  // recibir uno, buildClientProfile simplemente cae en los mismos defaults que hoy se usan
+  // cuando no hay match de agencia (sin retención, sin exención).
+  const buildClientProfile = (client?: B2BClient | DirectClient | null): ClientTaxProfile => {
+    const b2b = client as B2BClient | undefined | null;
+    return {
+      isWithheldClient: b2b?.isWithheldClient ?? false,
+      vatWithholdingPct: b2b?.vatWithholdingPct ?? 0,
+      incomeTaxWithholdingPct: b2b?.incomeTaxWithholdingPct ?? 0,
+      isInExemptZone: b2b?.isInExemptZone ?? false,
+    };
+  };
 
-  const computeTax = (amount: number, res?: Reservation, client?: B2BClient, forceExempt?: boolean) => {
+  const computeTax = (amount: number, res?: Reservation, client?: B2BClient | DirectClient | null, forceExempt?: boolean) => {
     const profile = buildClientProfile(client);
     if (forceExempt) profile.isInExemptZone = true;
     return calculateTaxes(
@@ -671,8 +682,8 @@ export default function FacturacionView({
 
   const handleInvoiceVariation = async (variation: any) => {
     if (!activeRes) return;
-    const _varAgency = clients.find(c => c.nombre === activeRes.agenciaName);
-    const _varTax = computeTax(variation.amountSale, activeRes, _varAgency);
+    const _varSaleClient = resolveSaleClient(activeRes, clients, directClients);
+    const _varTax = computeTax(variation.amountSale, activeRes, _varSaleClient.client ?? undefined);
     const newInvoice: FinancialInvoice = {
       id: nextSequentialId("SUP", invoices.map(i => i.id)),
       clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Suplemento: ${variation.reason})`,
@@ -696,12 +707,10 @@ export default function FacturacionView({
     }
 
     // Update client's saldoDeber for the supplement amount
-    const agencyRecord = clients.find(c => c.nombre === activeRes.agenciaName);
-    if (agencyRecord && onUpdateClient) {
-      onUpdateClient({
-        ...agencyRecord,
-        saldoDeber: agencyRecord.saldoDeber + variation.amountSale
-      });
+    if (_varSaleClient.kind === "B2B" && onUpdateClient) {
+      onUpdateClient({ ..._varSaleClient.client, saldoDeber: _varSaleClient.client.saldoDeber + variation.amountSale });
+    } else if (_varSaleClient.kind === "Directo" && onUpdateDirectClient) {
+      onUpdateDirectClient({ ..._varSaleClient.client, saldoDeber: _varSaleClient.client.saldoDeber + variation.amountSale });
     }
 
     const updatedVariations = (activeRes.variaciones || []).map((v: any) => {
@@ -723,8 +732,9 @@ export default function FacturacionView({
 
   const handleCreditNoteVariation = async (variation: any) => {
     if (!activeRes) return;
-    const _cnAgency = clients.find(c => c.nombre === activeRes.agenciaName);
-    const _cnTax = computeTax(Math.abs(variation.amountSale), activeRes, _cnAgency);
+    const _cnSaleClient = resolveSaleClient(activeRes, clients, directClients);
+    const _cnAgency = _cnSaleClient.client;
+    const _cnTax = computeTax(Math.abs(variation.amountSale), activeRes, _cnAgency ?? undefined);
     const creditNote: FinancialInvoice = {
       id: nextSequentialId("NC", invoices.map(i => i.id)),
       clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Nota de Crédito: ${variation.reason})`,
@@ -785,7 +795,11 @@ export default function FacturacionView({
       const applyClientBalance = (creditExcessToFavor: boolean) => {
         const finalSaldoFavor = creditExcessToFavor ? _cnAgency.saldoFavor + excess : _cnAgency.saldoFavor;
         if (newSaldoDeber !== _cnAgency.saldoDeber || finalSaldoFavor !== _cnAgency.saldoFavor) {
-          onUpdateClient({ ..._cnAgency, saldoDeber: newSaldoDeber, saldoFavor: finalSaldoFavor });
+          if (_cnSaleClient.kind === "B2B" && onUpdateClient) {
+            onUpdateClient({ ..._cnSaleClient.client, saldoDeber: newSaldoDeber, saldoFavor: finalSaldoFavor });
+          } else if (_cnSaleClient.kind === "Directo" && onUpdateDirectClient) {
+            onUpdateDirectClient({ ..._cnSaleClient.client, saldoDeber: newSaldoDeber, saldoFavor: finalSaldoFavor });
+          }
         }
       };
 
@@ -857,10 +871,12 @@ export default function FacturacionView({
     if (!activeRes) return;
     const excessAmount = variation.excessPendingVerification || 0;
     const creditedAmount = Math.max(0, Math.min(refundedAmount, excessAmount));
-    const agencyRecord = clients.find(c => c.nombre === activeRes.agenciaName);
+    const saleClient = resolveSaleClient(activeRes, clients, directClients);
 
-    if (creditedAmount > 0 && agencyRecord && onUpdateClient) {
-      onUpdateClient({ ...agencyRecord, saldoFavor: agencyRecord.saldoFavor + creditedAmount });
+    if (creditedAmount > 0 && saleClient.kind === "B2B" && onUpdateClient) {
+      onUpdateClient({ ...saleClient.client, saldoFavor: saleClient.client.saldoFavor + creditedAmount });
+    } else if (creditedAmount > 0 && saleClient.kind === "Directo" && onUpdateDirectClient) {
+      onUpdateDirectClient({ ...saleClient.client, saldoFavor: saleClient.client.saldoFavor + creditedAmount });
     }
 
     const updatedVariations = (activeRes.variaciones || []).map((v: any) =>
@@ -895,7 +911,9 @@ export default function FacturacionView({
 
     const pendingTotal = pendingServices.reduce((sum, s) => sum + s.precioVenta, 0) + jointFlights.reduce((sum, b) => sum + b.precioVenta, 0);
 
-    const agencyRecord = clients.find(c => c.nombre === activeRes.agenciaName);
+    const saleClient = resolveSaleClient(activeRes, clients, directClients);
+    const agencyRecord = saleClient.client;
+    const agencyExemptZone = (agencyRecord as B2BClient | null)?.isInExemptZone;
     const appliedSaldoFavor = (useSaldoFavor && agencyRecord) ? Math.min(pendingTotal, agencyRecord.saldoFavor) : 0;
     const remainingToPay = pendingTotal - appliedSaldoFavor;
 
@@ -1130,7 +1148,7 @@ export default function FacturacionView({
           exchangeRate: taxSaldo.exchangeRate,
           localCurrencyAmount: taxSaldo.localCurrencyAmount,
           paymentMethod: activeRes.comprobanteMetodo,
-          isExempt: overrideExempt || agencyRecord?.isInExemptZone,
+          isExempt: overrideExempt || agencyExemptZone,
           type: "Cobro",
           status: "Pagado"
         };
@@ -1155,7 +1173,7 @@ export default function FacturacionView({
           exchangeRate: taxRemaining.exchangeRate,
           localCurrencyAmount: taxRemaining.localCurrencyAmount,
           paymentMethod: activeRes.comprobanteMetodo,
-          isExempt: overrideExempt || agencyRecord?.isInExemptZone,
+          isExempt: overrideExempt || agencyExemptZone,
           type: "Cobro",
           status: invoiceStatus
         };
@@ -1181,7 +1199,7 @@ export default function FacturacionView({
           exchangeRate: taxMain.exchangeRate,
           localCurrencyAmount: taxMain.localCurrencyAmount,
           paymentMethod: activeRes.comprobanteMetodo,
-          isExempt: overrideExempt || agencyRecord?.isInExemptZone,
+          isExempt: overrideExempt || agencyExemptZone,
           type: "Cobro",
           status: appliedSaldoFavor > 0 ? "Pagado" : invoiceStatus
         };
@@ -1204,7 +1222,7 @@ export default function FacturacionView({
     }
 
     // Update Client balance: deduct saldoFavor used, add debt if Credit, add excess if Contado
-    if (agencyRecord && onUpdateClient) {
+    if (agencyRecord) {
       let nextSaldoFavor = agencyRecord.saldoFavor;
       let nextSaldoDeber = agencyRecord.saldoDeber;
 
@@ -1222,11 +1240,11 @@ export default function FacturacionView({
         }
       }
 
-      onUpdateClient({
-        ...agencyRecord,
-        saldoFavor: nextSaldoFavor,
-        saldoDeber: nextSaldoDeber
-      });
+      if (saleClient.kind === "B2B" && onUpdateClient) {
+        onUpdateClient({ ...saleClient.client, saldoFavor: nextSaldoFavor, saldoDeber: nextSaldoDeber });
+      } else if (saleClient.kind === "Directo" && onUpdateDirectClient) {
+        onUpdateDirectClient({ ...saleClient.client, saldoFavor: nextSaldoFavor, saldoDeber: nextSaldoDeber });
+      }
     }
 
     let modeMessage = "";
@@ -1384,10 +1402,11 @@ export default function FacturacionView({
       .reduce((sum, inv) => sum + inv.amount, 0);
 
     const invoicedTotal = paidInvoicedAmount + unpaidInvoicedAmount;
+    const _cancelSaleClient = resolveSaleClient(activeRes, clients, directClients);
+    const _cancelAgency = _cancelSaleClient.client;
 
     // Emit Credit Note in Financial Log for the total amount that was invoiced
     if (onAddInvoice && invoicedTotal > 0) {
-      const _cancelAgency = clients.find(c => c.nombre === activeRes.agenciaName);
       const _cancelTax = computeTax(invoicedTotal, activeRes, _cancelAgency);
       const creditNote: FinancialInvoice = {
         id: nextSequentialId("NC", invoices.map(i => i.id)),
@@ -1409,10 +1428,9 @@ export default function FacturacionView({
     }
 
     // Revert Client Balances
-    const agencyRecord = clients.find(c => c.nombre === activeRes.agenciaName);
-    if (agencyRecord && onUpdateClient) {
-      let nextSaldoFavor = agencyRecord.saldoFavor;
-      let nextSaldoDeber = agencyRecord.saldoDeber;
+    if (_cancelAgency) {
+      let nextSaldoFavor = _cancelAgency.saldoFavor;
+      let nextSaldoDeber = _cancelAgency.saldoDeber;
 
       if (paidInvoicedAmount > 0) {
         nextSaldoFavor += paidInvoicedAmount;
@@ -1421,11 +1439,11 @@ export default function FacturacionView({
         nextSaldoDeber = Math.max(0, nextSaldoDeber - unpaidInvoicedAmount);
       }
 
-      onUpdateClient({
-        ...agencyRecord,
-        saldoFavor: nextSaldoFavor,
-        saldoDeber: nextSaldoDeber
-      });
+      if (_cancelSaleClient.kind === "B2B" && onUpdateClient) {
+        onUpdateClient({ ..._cancelSaleClient.client, saldoFavor: nextSaldoFavor, saldoDeber: nextSaldoDeber });
+      } else if (_cancelSaleClient.kind === "Directo" && onUpdateDirectClient) {
+        onUpdateDirectClient({ ..._cancelSaleClient.client, saldoFavor: nextSaldoFavor, saldoDeber: nextSaldoDeber });
+      }
     }
 
     const typeMsg = paidInvoicedAmount > 0 && unpaidInvoicedAmount > 0
@@ -1710,15 +1728,18 @@ export default function FacturacionView({
               </div>
             </div>
 
-            {/* B2B Client Details Check */}
+            {/* Client Details Check (B2B o Directo) */}
             {(() => {
-              const matchedClientName = activeRes.agenciaName || "Canal Directo";
-              const agencyRecord = clients.find(c => c.nombre === activeRes.agenciaName);
-              
+              const saleClient = resolveSaleClient(activeRes, clients, directClients);
+              const agencyRecord = saleClient.client;
+              const matchedClientName = saleClient.kind === "Directo"
+                ? agencyRecord.nombre
+                : (activeRes.agenciaName || "Canal Directo");
+
               return (
                 <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-lg space-y-2 text-xs font-semibold text-zinc-750">
                   <div className="flex justify-between items-center border-b border-zinc-200 pb-1.5 mb-1.5">
-                    <h5 className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Validación de Agencia B2B</h5>
+                    <h5 className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Validación de Cliente</h5>
                     {agencyRecord ? (
                       <div className="flex items-center gap-2">
                         <span className="text-[9.5px] text-emerald-850 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
@@ -1747,13 +1768,20 @@ export default function FacturacionView({
                     {agencyRecord && (
                       <>
                         <div>
-                          <span className="text-zinc-400 block text-[9.5px] uppercase font-bold">Tipo de Agencia</span>
+                          <span className="text-zinc-400 block text-[9.5px] uppercase font-bold">Tipo de Cliente</span>
                           <span className="text-zinc-900 font-extrabold text-zinc-800">{agencyRecord.tipo}</span>
                         </div>
-                        <div>
-                          <span className="text-zinc-400 block text-[9.5px] uppercase font-bold">RIF Agencia</span>
-                          <span className="text-zinc-900 font-mono font-bold">{agencyRecord.rif}</span>
-                        </div>
+                        {saleClient.kind === "B2B" ? (
+                          <div>
+                            <span className="text-zinc-400 block text-[9.5px] uppercase font-bold">RIF Agencia</span>
+                            <span className="text-zinc-900 font-mono font-bold">{saleClient.client.rif}</span>
+                          </div>
+                        ) : (saleClient.kind === "Directo" && saleClient.client.cedula) ? (
+                          <div>
+                            <span className="text-zinc-400 block text-[9.5px] uppercase font-bold">Cédula</span>
+                            <span className="text-zinc-900 font-mono font-bold">{saleClient.client.cedula}</span>
+                          </div>
+                        ) : null}
                         <div>
                           <span className="text-zinc-400 block text-[9.5px] uppercase font-bold">Crédito Dispo / Límite</span>
                           <span className={`font-bold ${agencyRecord.saldoDeber > (agencyRecord.limiteCredito || 0) ? "text-red-650" : "text-zinc-900"}`}>
@@ -2069,13 +2097,13 @@ export default function FacturacionView({
                       {paidInvoicedAmount > 0 && (
                         <p className="text-emerald-900 flex items-start gap-1.5 leading-snug">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                          <span>Se reintegrarán <strong>${paidInvoicedAmount.toLocaleString("es-ES")} USD</strong> como saldo a favor de la agencia B2B <strong>{activeRes.agenciaName || "Canal Directo"}</strong>.</span>
+                          <span>Se reintegrarán <strong>${paidInvoicedAmount.toLocaleString("es-ES")} USD</strong> como saldo a favor de <strong>{activeRes.agenciaName || "Canal Directo"}</strong>.</span>
                         </p>
                       )}
                       {unpaidInvoicedAmount > 0 && (
                         <p className="text-zinc-700 flex items-start gap-1.5 leading-snug">
                           <CheckCircle2 className="w-4 h-4 text-zinc-500 flex-shrink-0 mt-0.5" />
-                          <span>Se anulará la deuda por cobrar de <strong>${unpaidInvoicedAmount.toLocaleString("es-ES")} USD</strong> de la cuenta de la agencia B2B <strong>{activeRes.agenciaName || "Canal Directo"}</strong> (reduciendo su saldo deudor).</span>
+                          <span>Se anulará la deuda por cobrar de <strong>${unpaidInvoicedAmount.toLocaleString("es-ES")} USD</strong> de la cuenta de <strong>{activeRes.agenciaName || "Canal Directo"}</strong> (reduciendo su saldo deudor).</span>
                         </p>
                       )}
                       {invoicedTotal === 0 && (
@@ -2109,7 +2137,7 @@ export default function FacturacionView({
                                   boletos.some(b => b.expedienteId === activeRes.id && b.facturarConjunto && (!b.expedienteAereo || b.expedienteAereo.status === "Borrador"));
               const hasRechazados = (activeRes.servicios || []).some(s => s.statusFacturacion === "Rechazado");
 
-              const agencyRecord = clients.find(c => c.nombre === activeRes.agenciaName);
+              const agencyRecord = resolveSaleClient(activeRes, clients, directClients).client;
               const hasSaldoFavor = agencyRecord && agencyRecord.saldoFavor > 0;
               const appliedSaldoFavor = (useSaldoFavor && agencyRecord) ? Math.min(requestedTotal, agencyRecord.saldoFavor) : 0;
               const remainingToPay = requestedTotal - appliedSaldoFavor;
@@ -2155,7 +2183,7 @@ export default function FacturacionView({
                           El comprobante adjunto ($${receiptAmount.toLocaleString("es-ES")} USD) supera el neto a liquidar ($${remainingToPay.toLocaleString("es-ES")} USD).
                         </p>
                         <p className="text-[11px] leading-snug mt-1 font-medium text-blue-900">
-                          Al aprobar, el saldo excedente de <strong>${excess.toLocaleString("es-ES")} USD</strong> será abonado automáticamente al Saldo a Favor de la agencia.
+                          Al aprobar, el saldo excedente de <strong>${excess.toLocaleString("es-ES")} USD</strong> será abonado automáticamente al Saldo a Favor del cliente.
                         </p>
                       </div>
                     </div>
@@ -2194,7 +2222,7 @@ export default function FacturacionView({
                           className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
                         />
                         <div>
-                          <span className="text-xs font-bold text-emerald-900 block">Aplicar Saldo a Favor de la Agencia</span>
+                          <span className="text-xs font-bold text-emerald-900 block">Aplicar Saldo a Favor del Cliente</span>
                           <span className="text-[10.5px] text-emerald-700 font-semibold leading-tight block mt-0.5">
                             Disponible: <span className="font-extrabold">${agencyRecord.saldoFavor.toLocaleString("es-ES")} USD</span>. 
                             {useSaldoFavor && (
@@ -2390,19 +2418,21 @@ export default function FacturacionView({
                   </div>
                 </div>
 
-                {/* Agency info */}
+                {/* Agency / Direct client info */}
                 {(() => {
-                  const agency = clients.find(c => c.nombre === activeRes.agenciaName);
+                  const saleClient = resolveSaleClient(activeRes, clients, directClients);
+                  const agency = saleClient.client;
+                  const displayName = saleClient.kind === "Directo" ? agency.nombre : (activeRes.agenciaName || "Canal Directo");
                   return (
                     <div className="bg-zinc-50 border border-zinc-200 p-4 rounded-lg space-y-1.5">
                       <h5 className="text-[10px] font-black uppercase text-zinc-455 tracking-wider flex items-center gap-1.5 font-sans">
-                        <Building className="w-3.5 h-3.5 text-zinc-450" /> Información de Agencia B2B
+                        <Building className="w-3.5 h-3.5 text-zinc-450" /> Información de Cliente
                       </h5>
-                      <p className="text-sm font-black text-zinc-950 truncate font-sans">{activeRes.agenciaName || "Canal Directo"}</p>
+                      <p className="text-sm font-black text-zinc-950 truncate font-sans">{displayName}</p>
                       {agency ? (
                         <>
                           <p className="text-xs text-zinc-650 font-semibold font-sans">Tipo: <span className="font-extrabold text-zinc-800">{agency.tipo}</span></p>
-                          <p className="text-xs text-zinc-650 font-mono">RIF: {agency.rif}</p>
+                          {saleClient.kind === "B2B" && <p className="text-xs text-zinc-650 font-mono">RIF: {saleClient.client.rif}</p>}
                           <div className="pt-1.5 border-t border-zinc-200 text-[10px] font-bold text-zinc-400 flex justify-between font-sans uppercase">
                             <span>Estado Cuenta:</span>
                             <span className={`font-black ${agency.moroso ? "text-red-650" : "text-emerald-700"}`}>
@@ -2411,7 +2441,7 @@ export default function FacturacionView({
                           </div>
                         </>
                       ) : (
-                        <p className="text-xs text-zinc-400 italic font-sans">Venta directa sin intermediario B2B.</p>
+                        <p className="text-xs text-zinc-400 italic font-sans">Venta directa sin cliente vinculado.</p>
                       )}
                     </div>
                   );

@@ -71,6 +71,9 @@ export interface Reservation {
   // agency involved: Comisión B2B is forced to 0% when adding services, and the shareable
   // document ("Formato B2B") renders a client-facing variant with no agency or commission wording.
   canalVenta?: "B2B" | "Directo";
+  // FK a DirectClient.id, poblado solo cuando canalVenta === "Directo" (seleccionado o creado
+  // desde el buscador de cliente directo en Reservas).
+  clienteDirectoId?: string;
   // Localizador/ID propio de otro mayorista cuando este expediente fue comprado a través de él.
   localizadorProveedor?: string;
   createdAt?: string; // YYYY-MM-DD
@@ -276,6 +279,34 @@ export interface B2BClient {
   vatWithholdingPct?: number;
   incomeTaxWithholdingPct?: number;
   isInExemptZone?: boolean;
+}
+
+export enum DirectClientTipo {
+  // Mismo literal que ClientType.CREDITO a propósito: permite un único check
+  // `client.tipo === "A Crédito"` que funciona para B2BClient y DirectClient sin
+  // un tipo base compartido ni guards por sitio (ver src/lib/clientResolver.ts).
+  CREDITO = "A Crédito",
+  CONTADO = "Contado"
+}
+
+// Cliente directo (venta al consumidor final, sin agencia B2B intermediaria).
+// Deliberadamente no comparte forma con B2BClient: es una persona natural, no una
+// empresa — sin rif obligatorio, sin contactoNombre, sin campos de retención fiscal.
+export interface DirectClient {
+  updatedAt?: string;
+  id: string;
+  nombre: string;
+  cedula?: string; // opcional, a diferencia del rif obligatorio de B2B
+  tipo: DirectClientTipo;
+  status: ClientStatus;
+  email: string;
+  telefono: string;
+  saldoFavor: number;
+  saldoDeber: number;
+  moroso: boolean;
+  limiteCredito?: number;
+  diasCredito?: number;
+  observaciones?: string;
 }
 
 export enum ServiceType {

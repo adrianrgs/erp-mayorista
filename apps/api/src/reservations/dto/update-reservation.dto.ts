@@ -71,6 +71,10 @@ export class UpdateReservationDto {
 
   @IsOptional()
   @IsString()
+  clienteDirectoId?: string;
+
+  @IsOptional()
+  @IsString()
   localizadorProveedor?: string;
 
   // Contexto para reconciliación financiera

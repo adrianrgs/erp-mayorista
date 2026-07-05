@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient, FleetVehicle, CompanyConfig, ReservationPassenger, PassengerType } from "../types";
+import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient, DirectClient, DirectClientTipo, ClientStatus, FleetVehicle, CompanyConfig, ReservationPassenger, PassengerType } from "../types";
 import { createEmptyPassenger, deriveHolderName, derivePassengersFromLegacyReservation, markTitular } from "../lib/passengers";
 import { Tabs } from "../components/reservas/Tabs";
 import { Property, RoomType, RatePlan, TipoCobro, ExtraService, ServiceRate } from "../types/producto";
@@ -47,6 +47,7 @@ import {
 import { FinancialInvoice, PayableObligation, PaymentVoucher } from "../types";
 import { useDialog } from "../components/ui/DialogProvider";
 import { reconcileDossierUpdate } from "../lib/financialReconciler";
+import { resolveSaleClient, isCreditEligible } from "../lib/clientResolver";
 import { nextSequentialId } from "../lib/idGenerator";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
 import { getStatusBadge, formatDate } from "../components/reservas/reservasFormat";
@@ -55,6 +56,8 @@ interface ReservasViewProps {
   reservations: Reservation[];
   properties: HotelProperty[];
   clients: B2BClient[];
+  directClients: DirectClient[];
+  onAddDirectClient: (newClient: DirectClient) => void;
   onAddReservation: (newRes: Reservation) => void;
   onUpdateReservation?: (updatedRes: Reservation) => void;
   onDeleteReservation?: (id: string) => void;
@@ -131,9 +134,11 @@ const calculateRoomRates = (
 };
 
 export default function ReservasView({ 
-  reservations, 
-  properties, 
-  clients, 
+  reservations,
+  properties,
+  clients,
+  directClients,
+  onAddDirectClient,
   onAddReservation,
   onUpdateReservation,
   onDeleteReservation,
@@ -250,6 +255,20 @@ export default function ReservasView({
   const [agencySearch, setAgencySearch] = useState("");
   const [showAgencyDropdown, setShowAgencyDropdown] = useState(false);
   const [selectedClient, setSelectedClient] = useState<B2BClient | null>(null);
+
+  // --- Direct Client Combobox States ---
+  const [directClientSearch, setDirectClientSearch] = useState("");
+  const [showDirectClientDropdown, setShowDirectClientDropdown] = useState(false);
+  const [selectedDirectClient, setSelectedDirectClient] = useState<DirectClient | null>(null);
+  const [cartClienteDirectoId, setCartClienteDirectoId] = useState("");
+  const [showNewDirectClientModal, setShowNewDirectClientModal] = useState(false);
+  const [newDirectClientForm, setNewDirectClientForm] = useState({
+    nombre: "",
+    cedula: "",
+    telefono: "",
+    email: "",
+    tipo: DirectClientTipo.CONTADO as DirectClientTipo
+  });
 
   // --- EDIT MODES ---
   const [isEditingReservationId, setIsEditingReservationId] = useState<string | null>(null);
@@ -432,18 +451,9 @@ export default function ReservasView({
 
   const handleOpenSendBillingModal = () => {
     if (!activeRes) return;
-    const agency = clients.find(c => c.nombre === activeRes.agenciaName);
-    
-    if (agency) {
-      if (agency.tipo === "A Crédito") {
-        setBillingFacturacionTipo("Crédito");
-      } else {
-        setBillingFacturacionTipo("Pago Contado");
-      }
-    } else {
-      setBillingFacturacionTipo("Pago Contado");
-    }
-    
+    const saleClient = resolveSaleClient(activeRes, clients, directClients);
+    setBillingFacturacionTipo(isCreditEligible(saleClient) ? "Crédito" : "Pago Contado");
+
     setBillingRef("");
     setBillingMetodo("Transferencia Bancaria");
     
@@ -587,6 +597,9 @@ export default function ReservasView({
     setCartAgencia("");
     setAgencySearch("");
     setSelectedClient(null);
+    setCartClienteDirectoId("");
+    setDirectClientSearch("");
+    setSelectedDirectClient(null);
     setCartTelefono("");
     setCartEmail("");
     setCartTipo("Cotización");
@@ -1084,6 +1097,11 @@ export default function ReservasView({
     const matchedClient = clients.find(c => c.nombre.toLowerCase() === (res.agenciaName || "").toLowerCase());
     setSelectedClient(matchedClient || null);
 
+    setCartClienteDirectoId(res.clienteDirectoId || "");
+    const matchedDirectClient = directClients.find(c => c.id === res.clienteDirectoId);
+    setSelectedDirectClient(matchedDirectClient || null);
+    setDirectClientSearch(matchedDirectClient?.nombre || "");
+
     setCartTelefono(res.telefono || "");
     setCartEmail(res.email || "");
     setCartTipo(res.tipo || "Reserva Real");
@@ -1369,6 +1387,7 @@ export default function ReservasView({
         telefono: cartTelefono || "Sin registrar",
         email: cartEmail || "Sin registrar",
         agenciaName: cartCanalVenta === "Directo" ? undefined : cartAgencia,
+        clienteDirectoId: cartCanalVenta === "Directo" ? (cartClienteDirectoId || undefined) : undefined,
         createdAt: activeRes?.createdAt || new Date().toISOString().split("T")[0],
         mercado: cartMercado,
         servicios: cartServices,
@@ -1399,7 +1418,7 @@ export default function ReservasView({
       // ── PREVISUALIZAR IMPACTO FINANCIERO ANTES DE GUARDAR ──
       const oldRes = reservations.find(r => r.id === isEditingReservationId);
       if (oldRes) {
-        const result = reconcileDossierUpdate(oldRes, updatedRes, clients, payableObligations);
+        const result = reconcileDossierUpdate(oldRes, updatedRes, clients, directClients, payableObligations);
         const hasImpact = result.newVariations.length > 0 || 
                           result.newWalletTransactions.length > 0 || 
                           result.updatedPayableObligations.some(o => {
@@ -1438,6 +1457,7 @@ export default function ReservasView({
         telefono: cartTelefono || "Sin registrar",
         email: cartEmail || "Sin registrar",
         agenciaName: cartCanalVenta === "Directo" ? undefined : cartAgencia,
+        clienteDirectoId: cartCanalVenta === "Directo" ? (cartClienteDirectoId || undefined) : undefined,
         createdAt: new Date().toISOString().split("T")[0],
         mercado: cartMercado,
         servicios: cartServices.map(s => ({ ...s, statusFacturacion: s.statusFacturacion || "Borrador" as const })),
@@ -2932,7 +2952,12 @@ export default function ReservasView({
                     <div className="flex items-center gap-1 bg-zinc-100 p-1 rounded-md border border-zinc-200">
                       <button
                         type="button"
-                        onClick={() => setCartCanalVenta("B2B")}
+                        onClick={() => {
+                          setCartCanalVenta("B2B");
+                          setCartClienteDirectoId("");
+                          setDirectClientSearch("");
+                          setSelectedDirectClient(null);
+                        }}
                         className={`flex-1 py-1.5 px-3 rounded text-xs font-bold whitespace-nowrap transition-all cursor-pointer text-center ${
                           cartCanalVenta === "B2B"
                             ? "bg-zinc-950 text-white shadow-xs"
@@ -2997,12 +3022,128 @@ export default function ReservasView({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1.5 md:col-span-2 relative">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Agencia de Origen B2B</label>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">
+                      {cartCanalVenta === "Directo" ? "Cliente Directo" : "Agencia de Origen B2B"}
+                    </label>
 
                     {cartCanalVenta === "Directo" ? (
-                      <div className="w-full p-2.5 border border-dashed border-zinc-250 bg-zinc-50 rounded text-xs font-semibold text-zinc-400 italic">
-                        No aplica — Cliente Directo (sin agencia intermediaria)
+                    <>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Buscar cliente directo por nombre, cédula o teléfono..."
+                        className="w-full p-2.5 pl-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                        value={directClientSearch}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDirectClientSearch(val);
+                          const matched = directClients.find(c => c.nombre.toLowerCase() === val.toLowerCase());
+                          setSelectedDirectClient(matched || null);
+                          setCartClienteDirectoId(matched?.id || "");
+                          setShowDirectClientDropdown(true);
+                        }}
+                        onFocus={() => setShowDirectClientDropdown(true)}
+                      />
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                      {directClientSearch && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDirectClientSearch("");
+                            setSelectedDirectClient(null);
+                            setCartClienteDirectoId("");
+                          }}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 hover:bg-zinc-100 rounded text-zinc-400"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Backdrop to close list */}
+                    {showDirectClientDropdown && (
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowDirectClientDropdown(false)}
+                      />
+                    )}
+
+                    {/* Filtered options dropdown */}
+                    {showDirectClientDropdown && (
+                      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-150">
+                        {directClients.filter(c => {
+                          const query = directClientSearch.toLowerCase();
+                          return (
+                            c.nombre.toLowerCase().includes(query) ||
+                            (c.cedula || "").toLowerCase().includes(query) ||
+                            c.id.toLowerCase().includes(query) ||
+                            (c.telefono || "").toLowerCase().includes(query)
+                          );
+                        }).map(c => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              setDirectClientSearch(c.nombre);
+                              setSelectedDirectClient(c);
+                              setCartClienteDirectoId(c.id);
+                              setShowDirectClientDropdown(false);
+                            }}
+                            className="w-full text-left p-3 hover:bg-zinc-50 flex items-center justify-between text-xs transition-colors cursor-pointer border-none font-sans"
+                          >
+                            <div className="space-y-0.5">
+                              <span className="font-bold text-zinc-900 block">{c.nombre}</span>
+                              <span className="text-[10px] text-zinc-400 font-mono block">
+                                Cod: {c.id} {c.cedula ? `| Cédula: ${c.cedula}` : ""}
+                              </span>
+                              <span className="text-[9.5px] text-zinc-450 font-medium block truncate max-w-[280px] sm:max-w-md">
+                                {c.telefono} {c.email && c.email !== "N/A" ? `| ${c.email}` : ""}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-zinc-100 border border-zinc-200 text-zinc-700">
+                                {c.tipo}
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase border ${
+                                c.status === "Activo"
+                                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                  : c.status === "Lista Negra"
+                                  ? "bg-red-50 border-red-200 text-red-700"
+                                  : "bg-zinc-50 border-zinc-200 text-zinc-500"
+                              }`}>
+                                {c.status}
+                              </span>
+                            </div>
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowDirectClientDropdown(false);
+                            setNewDirectClientForm(f => ({ ...f, nombre: directClientSearch }));
+                            setShowNewDirectClientModal(true);
+                          }}
+                          className="w-full text-left p-3 hover:bg-zinc-50 flex items-center gap-1.5 text-xs font-bold text-zinc-700 cursor-pointer border-none font-sans"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Nuevo Cliente Directo{directClientSearch ? `: "${directClientSearch}"` : ""}
+                        </button>
                       </div>
+                    )}
+
+                    {/* Warnings */}
+                    {selectedDirectClient && selectedDirectClient.status === "Lista Negra" && (
+                      <div className="mt-2 p-2 bg-red-50 border border-red-200 text-red-750 text-[10px] rounded font-bold flex items-center gap-1.5 animate-pulse">
+                        <AlertCircle className="w-3.5 h-3.5 text-red-650" />
+                        <span>ADVERTENCIA: Este cliente está en la LISTA NEGRA.</span>
+                      </div>
+                    )}
+                    {selectedDirectClient && selectedDirectClient.moroso && (
+                      <div className="mt-2 p-2 bg-amber-50 border border-amber-250 text-amber-850 text-[10px] rounded font-bold flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-700" />
+                        <span>ALERTA DE MORA: Cliente con saldo vencido (${selectedDirectClient.saldoDeber.toLocaleString("es-ES")} USD).</span>
+                      </div>
+                    )}
+                    </>
                     ) : (
                     <>
                     <div className="relative">
@@ -5755,25 +5896,28 @@ export default function ReservasView({
               )}
 
               {(() => {
-                const agency = clients.find(c => c.nombre === activeRes.agenciaName);
-                const isCreditAgency = agency?.tipo === "A Crédito";
+                const saleClient = resolveSaleClient(activeRes, clients, directClients);
+                const isCreditAgency = isCreditEligible(saleClient);
+                const clientLabel = saleClient.kind === "Directo"
+                  ? saleClient.client.nombre
+                  : (activeRes.agenciaName || "Directo / Pasajero");
 
                 return (
                   <div className="space-y-4 text-left">
                     {/* Agency Type Label */}
                     <div className="bg-zinc-50 border border-zinc-200 p-3 rounded text-xs font-semibold text-zinc-750 space-y-1">
                       <div className="flex justify-between">
-                        <span>Canal de Venta B2B:</span>
-                        <span className="font-bold text-zinc-900">{activeRes.agenciaName || "Directo / Pasajero"}</span>
+                        <span>Canal de Venta:</span>
+                        <span className="font-bold text-zinc-900">{clientLabel}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Modalidad Comercial:</span>
                         <span className={`px-1.5 py-0.25 rounded text-[9px] font-bold uppercase border ${
-                          isCreditAgency 
-                            ? "bg-purple-50 border-purple-200 text-purple-700" 
+                          isCreditAgency
+                            ? "bg-purple-50 border-purple-200 text-purple-700"
                             : "bg-amber-50 border-amber-200 text-amber-700"
                         }`}>
-                          {isCreditAgency ? "Línea de Crédito" : (agency ? `${agency.tipo} (Pago Contado)` : "Venta Directa (Pago Contado)")}
+                          {isCreditAgency ? "Línea de Crédito" : (saleClient.client ? `${saleClient.client.tipo} (Pago Contado)` : "Venta Directa (Pago Contado)")}
                         </span>
                       </div>
                     </div>
@@ -5810,7 +5954,7 @@ export default function ReservasView({
                     ) : (
                       <div className="space-y-1">
                         <span className="text-[9.5px] uppercase font-black text-amber-750 bg-amber-50/50 border border-amber-200 p-2.5 rounded block text-center leading-normal">
-                          ⚠️ Nota: Esta agencia opera bajo prepago. Es obligatorio adjuntar el comprobante de cobro recibido para enviar a facturación.
+                          ⚠️ Nota: Este cliente opera bajo prepago. Es obligatorio adjuntar el comprobante de cobro recibido para enviar a facturación.
                         </span>
                       </div>
                     )}
@@ -6524,6 +6668,120 @@ export default function ReservasView({
           </>
         );
       })()}
+
+      {/* NUEVO CLIENTE DIRECTO — alta rápida desde el buscador de Reservas */}
+      {showNewDirectClientModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans">
+          <div className="bg-white border border-zinc-200 rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
+            <div className="bg-zinc-950 text-white px-5 py-4 flex items-center justify-between">
+              <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2">
+                <User className="w-4.5 h-4.5" /> Nuevo Cliente Directo
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowNewDirectClientModal(false)}
+                className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!newDirectClientForm.nombre.trim()) return;
+                const newClient: DirectClient = {
+                  id: nextSequentialId("CDI", directClients.map(c => c.id)),
+                  nombre: newDirectClientForm.nombre.trim(),
+                  cedula: newDirectClientForm.cedula || undefined,
+                  tipo: newDirectClientForm.tipo,
+                  status: ClientStatus.ACTIVO,
+                  email: newDirectClientForm.email || "N/A",
+                  telefono: newDirectClientForm.telefono || "N/A",
+                  saldoFavor: 0,
+                  saldoDeber: 0,
+                  moroso: false
+                };
+                onAddDirectClient(newClient);
+                setSelectedDirectClient(newClient);
+                setCartClienteDirectoId(newClient.id);
+                setDirectClientSearch(newClient.nombre);
+                setShowNewDirectClientModal(false);
+                setNewDirectClientForm({ nombre: "", cedula: "", telefono: "", email: "", tipo: DirectClientTipo.CONTADO });
+              }}
+              className="p-6 space-y-4"
+            >
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Nombre Completo</label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                  value={newDirectClientForm.nombre}
+                  onChange={(e) => setNewDirectClientForm(f => ({ ...f, nombre: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Cédula / ID (Opcional)</label>
+                  <input
+                    type="text"
+                    className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-mono font-semibold text-zinc-800 focus:outline-none"
+                    value={newDirectClientForm.cedula}
+                    onChange={(e) => setNewDirectClientForm(f => ({ ...f, cedula: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Tipo de Cliente</label>
+                  <select
+                    className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                    value={newDirectClientForm.tipo}
+                    onChange={(e) => setNewDirectClientForm(f => ({ ...f, tipo: e.target.value as DirectClientTipo }))}
+                  >
+                    <option value={DirectClientTipo.CONTADO}>CONTADO</option>
+                    <option value={DirectClientTipo.CREDITO}>A CRÉDITO</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Teléfono</label>
+                  <input
+                    type="text"
+                    className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                    value={newDirectClientForm.telefono}
+                    onChange={(e) => setNewDirectClientForm(f => ({ ...f, telefono: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Email</label>
+                  <input
+                    type="email"
+                    className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                    value={newDirectClientForm.email}
+                    onChange={(e) => setNewDirectClientForm(f => ({ ...f, email: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewDirectClientModal(false)}
+                  className="px-4 py-2 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                >
+                  Guardar y Seleccionar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );
