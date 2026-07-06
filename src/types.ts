@@ -337,6 +337,10 @@ export interface ServiceItem {
   precioPvp?: number;
   comisionB2B?: number;
   proveedor?: string;
+  // Link opcional al catálogo de Proveedores cuando el texto de `proveedor` matchea uno
+  // existente — puramente informativo/trazabilidad, Cuentas por Pagar sigue resolviendo por
+  // el nombre en `proveedor`, no por este id.
+  proveedorId?: string;
   detalles?: any;
   statusFacturacion?: "Borrador" | "Solicitado" | "Facturado" | "Rechazado";
   status?: "Confirmado" | "Modificado" | "Cancelado";

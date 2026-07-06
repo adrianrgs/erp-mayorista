@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient, DirectClient, DirectClientTipo, ClientStatus, FleetVehicle, CompanyConfig, ReservationPassenger, PassengerType } from "../types";
 import { createEmptyPassenger, deriveHolderName, derivePassengersFromLegacyReservation, markTitular } from "../lib/passengers";
 import { Tabs } from "../components/reservas/Tabs";
-import { Property, RoomType, RatePlan, TipoCobro, ExtraService, ServiceRate, StopSale } from "../types/producto";
+import { Property, RoomType, RatePlan, TipoCobro, ExtraService, ServiceRate, StopSale, Proveedor } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
 import { buildRoute, formatGDSDate } from "../lib/parsers/pnrParser";
 import { 
@@ -48,6 +48,7 @@ import { FinancialInvoice, PayableObligation, PaymentVoucher } from "../types";
 import { useDialog } from "../components/ui/DialogProvider";
 import DateRangePicker from "../components/ui/DateRangePicker";
 import SearchableSelect from "../components/ui/SearchableSelect";
+import ProveedorPicker from "../components/ui/ProveedorPicker";
 import { reconcileDossierUpdate } from "../lib/financialReconciler";
 import { resolveSaleClient, isCreditEligible } from "../lib/clientResolver";
 import { nextSequentialId } from "../lib/idGenerator";
@@ -78,6 +79,7 @@ interface ReservasViewProps {
   fleetVehicles?: FleetVehicle[];
   extraServices?: ExtraService[];
   serviceRates?: ServiceRate[];
+  proveedores?: Proveedor[];
   companyConfig: CompanyConfig;
   jurisdiction?: TaxJurisdiction;
   currentExchangeRate?: number;
@@ -199,6 +201,7 @@ export default function ReservasView({
   fleetVehicles = [],
   extraServices = [],
   serviceRates = [],
+  proveedores = [],
   companyConfig,
   jurisdiction,
   currentExchangeRate,
@@ -353,6 +356,17 @@ export default function ReservasView({
   const [hotelSearchQuery, setHotelSearchQuery] = useState("");
   const [showHotelDropdown, setShowHotelDropdown] = useState(false);
   const [selectedPromoName, setSelectedPromoName] = useState("");
+  // Modo "manual" — para agencias minoristas/freelancers sin contrato propio de hotel: cargan
+  // solo lo que su propio proveedor mayorista les confirma (hotel, fechas, precio), sin que el
+  // hotel exista en el catálogo Property/RoomType/RatePlan. Por defecto siempre "catalogo" —
+  // el flujo existente para quienes sí gestionan su propio contrato de hotel no cambia.
+  const [alojamientoModo, setAlojamientoModo] = useState<"catalogo" | "manual">("catalogo");
+  const [manualHotelName, setManualHotelName] = useState("");
+  const [manualRoomInfo, setManualRoomInfo] = useState("");
+  // Nombre de a quién hay que pagarle por este alojamiento — distinto del hotel en sí (puede
+  // ser una agencia mayorista revendedora). En modo catálogo se sugiere a partir del hotel
+  // elegido (ver el onClick/onChange del selector de hotel), en modo manual queda vacío.
+  const [alojProveedorNombre, setAlojProveedorNombre] = useState("");
 
   // Auto-selecciona el plan de tarifa vigente para la fecha de check-in apenas se conocen
   // hotel/fechas/mercado, en vez de forzar al usuario a elegirlo manualmente. Si la estadía
@@ -494,6 +508,10 @@ export default function ReservasView({
   const [svAdults, setSvAdults] = useState(1);
   const [svChildren, setSvChildren] = useState(0);
   const [svVehicles, setSvVehicles] = useState(1);
+  // Nombre de proveedor y descripción libre para cuando no se elige nada del catálogo — hoy
+  // Servicio Vario no tenía ningún estado propio de proveedor (se derivaba 100% del catálogo).
+  const [svSupplier, setSvSupplier] = useState("");
+  const [svManualDescription, setSvManualDescription] = useState("");
 
   // Auto-selecciona la tarifa de Servicio Vario vigente para la fecha de check-in del
   // expediente (cartCheckIn), en vez de forzar al vendedor a elegirla manualmente — mismo
@@ -542,6 +560,11 @@ export default function ReservasView({
   // Common Pricing states for Level 4
   const [netPrice, setNetPrice] = useState("");
   const [salePrice, setSalePrice] = useState("");
+  // Link al catálogo de Proveedores compartido entre los 6 tipos de servicio — solo un
+  // activeServiceType está visible/editable a la vez, mismo patrón ya usado por netPrice/
+  // salePrice/comisionB2B/comisionPropia. El nombre mostrado vive en el estado propio de cada
+  // tipo (transSupplier, carSupplier, insSupplier, manualSupplier, svSupplier, alojProveedorNombre).
+  const [proveedorId, setProveedorId] = useState<string | undefined>(undefined);
 
   const [submitSuccess, setSubmitSuccess] = useState("");
 
@@ -830,24 +853,29 @@ export default function ReservasView({
     setManualSupplier("");
     setTransPickup("");
     setTransDropoff("");
-    
+    setProveedorId(undefined);
+
     if (type === ServiceType.ALOJAMIENTO) {
       setCheckInDate(cartCheckIn || "2026-06-20");
       setCheckOutDate(cartCheckOut || "2026-06-27");
 
+      setAlojamientoModo("catalogo");
       setHotelId("");
       setHotelSearchQuery("");
       setSelectedPromoName("");
       setSelectedRatePlanId("");
+      setManualHotelName("");
+      setManualRoomInfo("");
+      setAlojProveedorNombre("");
 
-      setLodgingRooms([{ 
-        id: `rm-${Date.now()}-1`, 
-        roomTypeId: "", 
-        adultsCount: 2, 
+      setLodgingRooms([{
+        id: `rm-${Date.now()}-1`,
+        roomTypeId: "",
+        adultsCount: 2,
         guests: [
           { name: cartHolder || "", type: "Adulto" },
           { name: "", type: "Adulto" }
-        ] 
+        ]
       }]);
       setComisionB2B(getDefaultComisionB2B());
       setComisionPropia(5);
@@ -897,6 +925,8 @@ export default function ReservasView({
       setSvAdults(1);
       setSvChildren(0);
       setSvVehicles(1);
+      setSvSupplier("");
+      setSvManualDescription("");
     }
 
     setViewLevel(3);
@@ -1044,14 +1074,34 @@ export default function ReservasView({
         showAlert({ title: "Atención", message: "Por favor seleccione las fechas de check-in y check-out.", type: "warning" });
         return;
       }
-      if (!hotelId) {
-        showAlert({ title: "Atención", message: "Por favor seleccione un hotel.", type: "warning" });
+      if (alojamientoModo === "catalogo") {
+        if (!hotelId) {
+          showAlert({ title: "Atención", message: "Por favor seleccione un hotel.", type: "warning" });
+          return;
+        }
+        if (!selectedRatePlanId) {
+          showAlert({ title: "Atención", message: "Por favor seleccione un plan de tarifa.", type: "warning" });
+          return;
+        }
+      } else if (!manualHotelName.trim()) {
+        showAlert({ title: "Atención", message: "Por favor ingrese el nombre del hotel.", type: "warning" });
         return;
       }
-      if (!selectedRatePlanId) {
-        showAlert({ title: "Atención", message: "Por favor seleccione un plan de tarifa.", type: "warning" });
-        return;
-      }
+    }
+
+    // El proveedor (a quién hay que pagarle) es obligatorio en los 6 tipos de servicio, para
+    // que Cuentas por Pagar siempre sepa a quién se le debe — antes ninguno lo exigía.
+    const proveedorNombreActual = (
+      activeServiceType === ServiceType.ALOJAMIENTO ? alojProveedorNombre :
+      activeServiceType === ServiceType.TRASLADO ? transSupplier :
+      activeServiceType === ServiceType.RENT_A_CAR ? carSupplier :
+      activeServiceType === ServiceType.SEGURO ? insSupplier :
+      activeServiceType === ServiceType.MANUAL ? manualSupplier :
+      activeServiceType === ServiceType.SERVICIO_VARIO ? svSupplier : ""
+    ).trim();
+    if (!proveedorNombreActual) {
+      showAlert({ title: "Atención", message: "Por favor indique el proveedor a quien se le paga por este servicio.", type: "warning" });
+      return;
     }
 
     let desc = "";
@@ -1059,9 +1109,15 @@ export default function ReservasView({
     let sPrice = parseFloat(salePrice) || 0;
 
     switch (activeServiceType) {
-      case ServiceType.ALOJAMIENTO:
+      case ServiceType.ALOJAMIENTO: {
+        if (alojamientoModo === "manual") {
+          desc = `Hotel: ${manualHotelName} - ${paxCount} Pax${manualRoomInfo ? ` (${manualRoomInfo})` : ""} - IN: ${formatDate(checkInDate)} / OUT: ${formatDate(checkOutDate)} (Carga Manual)`;
+          nPrice = parseFloat(netPrice) || 0;
+          sPrice = parseFloat(salePrice) || 0;
+          break;
+        }
         const matchedHotel = detailedProperties.find(p => p.id === hotelId);
-        const hotelName = matchedHotel ? matchedHotel.nombre : "Hotel Boutique";
+        const hotelName = matchedHotel ? matchedHotel.nombre : (hotelSearchQuery || "Hotel Boutique");
         const ratePlan = ratePlans.find(rp => rp.id === selectedRatePlanId);
         const firstRoomSegments = lodgingRooms[0] ? getRoomSegments(lodgingRooms[0]) : [];
         const promoName = firstRoomSegments.length > 1
@@ -1082,6 +1138,7 @@ export default function ReservasView({
         nPrice = calculateTotalNetLodgingPrice();
         sPrice = calculateTotalSaleLodgingPrice();
         break;
+      }
       case ServiceType.TRASLADO: {
         const pvpVal = parseFloat(salePrice) || 0;
         const b2bComVal = comisionB2B;
@@ -1120,25 +1177,35 @@ export default function ReservasView({
       case ServiceType.SERVICIO_VARIO: {
         const srv = extraServices?.find(s => s.id === svExtraServiceId);
         const rate = serviceRates?.find(r => r.id === svRateId);
-        if (srv && rate) {
-          const pvpVal = parseFloat(salePrice) || 0;
-          // Cobro B2B = PVP menos comisión B2B
-          sPrice = Math.round(pvpVal * (1 - comisionB2B / 100) * 100) / 100;
-          // Neto = costo fijo del proveedor según la tarifa (no se deriva del PVP)
-          nPrice = parseFloat(netPrice) || 0;
-          if (rate.pricingModel === "Por Persona") {
-            desc = `${srv.nombre} - ${svAdults} Adultos, ${svChildren} Niños (Del ${rate.temporadaInicio} al ${rate.temporadaFin})`;
-          } else {
-            desc = `${srv.nombre} - ${svVehicles} Vehículo(s)/Grupo(s) (Del ${rate.temporadaInicio} al ${rate.temporadaFin})`;
-          }
-        }
+        // PVP/comisión siempre calculables aunque no haya tarifa de catálogo (carga manual) —
+        // antes este bloque no hacía nada sin `srv && rate`, dejando desc vacío y precio en 0.
+        const pvpVal = parseFloat(salePrice) || 0;
+        sPrice = Math.round(pvpVal * (1 - comisionB2B / 100) * 100) / 100;
+        nPrice = parseFloat(netPrice) || 0;
+        const label = srv?.nombre || svManualDescription || "Servicio Vario";
+        desc = rate
+          ? `${label} - ${rate.pricingModel === "Por Persona" ? `${svAdults} Adultos, ${svChildren} Niños` : `${svVehicles} Vehículo(s)/Grupo(s)`} (Del ${rate.temporadaInicio} al ${rate.temporadaFin})`
+          : label;
         break;
       }
     }
 
     let det: any = {};
     if (activeServiceType === ServiceType.ALOJAMIENTO) {
-      det = {
+      det = alojamientoModo === "manual" ? {
+        // Sin lodgingRooms/hotelId/selectedRatePlanId a propósito: todos los renderers de
+        // solo-lectura (carrito, liquidación, portales de cliente) ya caen a un fallback plano
+        // de descripción/precio cuando estas claves no están, sin necesidad de tocarlos.
+        isManual: true,
+        hotelNombre: manualHotelName,
+        checkInDate,
+        checkOutDate,
+        roomInfo: manualRoomInfo,
+        paxCount,
+        netPrice,
+        salePrice,
+        comisionB2B
+      } : {
         hotelId,
         hotelSearchQuery,
         checkInDate,
@@ -1209,6 +1276,7 @@ export default function ReservasView({
         svAdults,
         svChildren,
         svVehicles,
+        svManualDescription,
         pvp: parseFloat(salePrice) || 0,
         netPrice: nPrice,
         salePrice: sPrice,
@@ -1217,13 +1285,15 @@ export default function ReservasView({
       };
     }
 
-    const calculatedPvp = activeServiceType === ServiceType.ALOJAMIENTO 
-      ? calculateTotalPvpLodgingPrice() 
+    // Servicio Vario usaba antes `sPrice` (ya post-comisión) en vez del PVP pre-comisión, lo
+    // que hacía que la columna "Comisión" del carrito/liquidación mostrara siempre $0 para
+    // este tipo — se corrige dejándolo caer al branch genérico, igual que los demás tipos con
+    // precio manual (parseFloat(salePrice) es el PVP tal cual se tipeó/autocompletó).
+    const calculatedPvp = (activeServiceType === ServiceType.ALOJAMIENTO && alojamientoModo === "catalogo")
+      ? calculateTotalPvpLodgingPrice()
       : activeServiceType === ServiceType.SEGURO
         ? (parseFloat(salePrice) || 0) * insPax
-        : activeServiceType === ServiceType.SERVICIO_VARIO
-          ? sPrice
-          : (parseFloat(salePrice) || 0);
+        : (parseFloat(salePrice) || 0);
 
     if (editingServiceId) {
       setCartServices(prev => prev.map(s => {
@@ -1235,12 +1305,13 @@ export default function ReservasView({
             precioVenta: sPrice,
             precioPvp: calculatedPvp,
             comisionB2B: comisionB2B,
-            proveedor: activeServiceType === ServiceType.ALOJAMIENTO ? (detailedProperties.find(p => p.id === hotelId)?.nombre || hotelSearchQuery || activeRes?.hotelName) :
+            proveedor: activeServiceType === ServiceType.ALOJAMIENTO ? (alojProveedorNombre || detailedProperties.find(p => p.id === hotelId)?.nombre || hotelSearchQuery || activeRes?.hotelName) :
                        activeServiceType === ServiceType.TRASLADO ? transSupplier :
                        activeServiceType === ServiceType.RENT_A_CAR ? carSupplier :
                        activeServiceType === ServiceType.SEGURO ? insSupplier :
                        activeServiceType === ServiceType.MANUAL ? manualSupplier :
-                       activeServiceType === ServiceType.SERVICIO_VARIO ? extraServices?.find(s => s.id === svExtraServiceId)?.providerName : undefined,
+                       activeServiceType === ServiceType.SERVICIO_VARIO ? (svSupplier || extraServices?.find(s => s.id === svExtraServiceId)?.providerName) : undefined,
+            proveedorId,
             detalles: det
           };
         }
@@ -1257,12 +1328,13 @@ export default function ReservasView({
         precioVenta: sPrice,
         precioPvp: calculatedPvp,
         comisionB2B: comisionB2B,
-        proveedor: activeServiceType === ServiceType.ALOJAMIENTO ? (detailedProperties.find(p => p.id === hotelId)?.nombre || hotelSearchQuery || activeRes?.hotelName) :
+        proveedor: activeServiceType === ServiceType.ALOJAMIENTO ? (alojProveedorNombre || detailedProperties.find(p => p.id === hotelId)?.nombre || hotelSearchQuery || activeRes?.hotelName) :
                    activeServiceType === ServiceType.TRASLADO ? transSupplier :
                    activeServiceType === ServiceType.RENT_A_CAR ? carSupplier :
                    activeServiceType === ServiceType.SEGURO ? insSupplier :
                    activeServiceType === ServiceType.MANUAL ? manualSupplier :
-                   activeServiceType === ServiceType.SERVICIO_VARIO ? extraServices?.find(s => s.id === svExtraServiceId)?.providerName : undefined,
+                   activeServiceType === ServiceType.SERVICIO_VARIO ? (svSupplier || extraServices?.find(s => s.id === svExtraServiceId)?.providerName) : undefined,
+        proveedorId,
         detalles: det,
         statusFacturacion: "Borrador"
       };
@@ -1435,19 +1507,35 @@ export default function ReservasView({
   const handleEditService = (service: ServiceItem) => {
     setEditingServiceId(service.id);
     setActiveServiceType(service.tipo);
+    setProveedorId(service.proveedorId);
 
     if (service.detalles) {
       const det = service.detalles;
       if (service.tipo === ServiceType.ALOJAMIENTO) {
-        setHotelId(det.hotelId || "");
-        setHotelSearchQuery(det.hotelSearchQuery || "");
-        setCheckInDate(det.checkInDate || "");
-        setCheckOutDate(det.checkOutDate || "");
-        setSelectedPromoName(det.selectedPromoName || "");
-        setSelectedRatePlanId(det.selectedRatePlanId || "");
-        setLodgingRooms(det.lodgingRooms ? JSON.parse(JSON.stringify(det.lodgingRooms)) : []);
-        setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
-        setComisionPropia(det.comisionPropia !== undefined ? det.comisionPropia : 5);
+        if (det.isManual) {
+          setAlojamientoModo("manual");
+          setManualHotelName(det.hotelNombre || "");
+          setCheckInDate(det.checkInDate || "");
+          setCheckOutDate(det.checkOutDate || "");
+          setManualRoomInfo(det.roomInfo || "");
+          setPaxCount(det.paxCount !== undefined ? det.paxCount : 1);
+          setNetPrice(det.netPrice || "");
+          setSalePrice(det.salePrice || "");
+          setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
+          setAlojProveedorNombre(service.proveedor || "");
+        } else {
+          setAlojamientoModo("catalogo");
+          setHotelId(det.hotelId || "");
+          setHotelSearchQuery(det.hotelSearchQuery || "");
+          setCheckInDate(det.checkInDate || "");
+          setCheckOutDate(det.checkOutDate || "");
+          setSelectedPromoName(det.selectedPromoName || "");
+          setSelectedRatePlanId(det.selectedRatePlanId || "");
+          setLodgingRooms(det.lodgingRooms ? JSON.parse(JSON.stringify(det.lodgingRooms)) : []);
+          setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
+          setComisionPropia(det.comisionPropia !== undefined ? det.comisionPropia : 5);
+          setAlojProveedorNombre(service.proveedor || "");
+        }
       } else if (service.tipo === ServiceType.TRASLADO) {
         setTransPickup(det.transPickup || "");
         setTransDropoff(det.transDropoff || "");
@@ -1497,6 +1585,12 @@ export default function ReservasView({
         setSvAdults(det.svAdults !== undefined ? det.svAdults : 1);
         setSvChildren(det.svChildren !== undefined ? det.svChildren : 0);
         setSvVehicles(det.svVehicles !== undefined ? det.svVehicles : 1);
+        setSvManualDescription(det.svManualDescription || "");
+        setSvSupplier(service.proveedor || "");
+        setNetPrice(det.netPrice !== undefined ? String(det.netPrice) : "");
+        setSalePrice(det.pvp !== undefined ? String(det.pvp) : "");
+        setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
+        setComisionPropia(det.comisionPropia !== undefined ? det.comisionPropia : 5);
       }
     } else {
       // Legacy fallback
@@ -1504,6 +1598,9 @@ export default function ReservasView({
       setSalePrice(service.precioVenta.toString());
 
       if (service.tipo === ServiceType.ALOJAMIENTO) {
+        // Datos legacy (sin `detalles`) predatan el modo manual — siempre catálogo.
+        setAlojamientoModo("catalogo");
+        setAlojProveedorNombre(service.proveedor || "");
         setCheckInDate(cartCheckIn || "2026-06-20");
         setCheckOutDate(cartCheckOut || "2026-06-27");
         const defaultHotel = detailedProperties.find(p => p.nombre.toLowerCase().includes(activeRes?.hotelName.toLowerCase() || "")) || detailedProperties[0];
@@ -4027,6 +4124,31 @@ export default function ReservasView({
                   required
                 />
 
+                {/* Catálogo (mayorista con contrato propio de hotel) vs. Manual (agencia
+                    minorista/freelancer que solo tiene la confirmación de su proveedor) */}
+                <div className="inline-flex items-center gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
+                  <button
+                    type="button"
+                    onClick={() => setAlojamientoModo("catalogo")}
+                    className={`px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                      alojamientoModo === "catalogo" ? "bg-zinc-950 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800"
+                    }`}
+                  >
+                    Catálogo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAlojamientoModo("manual")}
+                    className={`px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                      alojamientoModo === "manual" ? "bg-zinc-950 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800"
+                    }`}
+                  >
+                    Carga Manual
+                  </button>
+                </div>
+
+                {alojamientoModo === "catalogo" && (
+                <>
                 {/* Hotel and Rate Plan selection */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5 relative">
@@ -4049,6 +4171,13 @@ export default function ReservasView({
                             const hotelRooms = roomTypes.filter(rt => rt.property_id === matched.id);
                             const defaultRoomTypeId = hotelRooms[0]?.id || "";
                             setLodgingRooms(prev => prev.map(room => ({ ...room, roomTypeId: defaultRoomTypeId })));
+                            // Sugiere a quién pagarle a partir del hotel elegido (su proveedor
+                            // mayorista registrado, o el propio hotel si no tiene uno) — el
+                            // vendedor puede cambiarlo después si el pagador real es otro.
+                            const supplier = matched.supplierName || matched.nombre;
+                            const matchedProveedor = proveedores.find(p => p.nombre.toLowerCase() === supplier.toLowerCase());
+                            setAlojProveedorNombre(supplier);
+                            setProveedorId(matchedProveedor?.id);
                           }
                           setShowHotelDropdown(true);
                         }}
@@ -4100,14 +4229,18 @@ export default function ReservasView({
                               onClick={() => {
                                 setHotelId(p.id);
                                 setHotelSearchQuery(p.nombre);
-                                
+
                                 setSelectedPromoName("");
                                 setSelectedRatePlanId("");
-                                
+
                                 const hotelRooms = roomTypes.filter(rt => rt.property_id === p.id);
                                 const defaultRoomTypeId = hotelRooms[0]?.id || "";
-                                
+
                                 setLodgingRooms(prev => prev.map(room => ({ ...room, roomTypeId: defaultRoomTypeId })));
+                                const supplier = p.supplierName || p.nombre;
+                                const matchedProveedor = proveedores.find(pr => pr.nombre.toLowerCase() === supplier.toLowerCase());
+                                setAlojProveedorNombre(supplier);
+                                setProveedorId(matchedProveedor?.id);
                                 setShowHotelDropdown(false);
                               }}
                               className="w-full text-left p-3 hover:bg-zinc-50 flex items-center justify-between text-xs transition-colors cursor-pointer border-none font-sans"
@@ -4168,6 +4301,18 @@ export default function ReservasView({
                       })()}
                     </select>
                   </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Proveedor (a quién se le paga)</label>
+                  <ProveedorPicker
+                    nombre={alojProveedorNombre}
+                    proveedorId={proveedorId}
+                    onChange={(n, id) => { setAlojProveedorNombre(n); setProveedorId(id); }}
+                    proveedores={proveedores}
+                    required
+                    placeholder="Ej: el hotel, o el nombre de la agencia mayorista que lo revende"
+                  />
                 </div>
 
                 {/* Rooms Configuration Builder */}
@@ -4329,6 +4474,60 @@ export default function ReservasView({
                     })}
                   </div>
                 </div>
+                </>
+                )}
+
+                {alojamientoModo === "manual" && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Nombre del Hotel</label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ej: Hotel Riu Bambú"
+                          className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                          value={manualHotelName}
+                          onChange={(e) => setManualHotelName(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Cantidad de Pax</label>
+                        <input
+                          type="number"
+                          min="1"
+                          required
+                          className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                          value={paxCount}
+                          onChange={(e) => setPaxCount(Math.max(1, parseInt(e.target.value) || 1))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Habitación / Notas (Opcional)</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: 2 Habitaciones Dobles, Desayuno Incluido"
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                        value={manualRoomInfo}
+                        onChange={(e) => setManualRoomInfo(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Proveedor (a quién se le paga)</label>
+                      <ProveedorPicker
+                        nombre={alojProveedorNombre}
+                        proveedorId={proveedorId}
+                        onChange={(n, id) => { setAlojProveedorNombre(n); setProveedorId(id); }}
+                        proveedores={proveedores}
+                        required
+                        placeholder="Ej: mi agencia mayorista, o el nombre del hotel"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -4433,12 +4632,13 @@ export default function ReservasView({
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Proveedor Operador</label>
-                    <input
-                      type="text"
-                      readOnly={!!svExtraServiceId || transEsPropio}
-                      className={`w-full p-2.5 border border-zinc-200 rounded text-xs font-bold text-zinc-900 focus:outline-none placeholder:text-zinc-300 ${(svExtraServiceId || transEsPropio) ? "bg-zinc-100 cursor-not-allowed text-zinc-600" : "bg-white"}`}
-                      value={transSupplier}
-                      onChange={(e) => setTransSupplier(e.target.value)}
+                    <ProveedorPicker
+                      nombre={transSupplier}
+                      proveedorId={proveedorId}
+                      onChange={(n, id) => { setTransSupplier(n); setProveedorId(id); }}
+                      proveedores={proveedores}
+                      disabled={!!svExtraServiceId || transEsPropio}
+                      required
                       placeholder={svExtraServiceId ? "" : "Escriba el proveedor, o marque la casilla si lo opera su propia agencia"}
                     />
                     {!svExtraServiceId && (
@@ -4647,12 +4847,12 @@ export default function ReservasView({
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Rentadora (Proveedor)</label>
-                    <input
-                      type="text"
+                    <ProveedorPicker
+                      nombre={carSupplier}
+                      proveedorId={proveedorId}
+                      onChange={(n, id) => { setCarSupplier(n); setProveedorId(id); }}
+                      proveedores={proveedores}
                       required
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
-                      value={carSupplier}
-                      onChange={(e) => setCarSupplier(e.target.value)}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -4740,11 +4940,12 @@ export default function ReservasView({
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Proveedor Operador</label>
-                    <input
-                      type="text"
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none placeholder:text-zinc-300"
-                      value={insSupplier}
-                      onChange={(e) => setInsSupplier(e.target.value)}
+                    <ProveedorPicker
+                      nombre={insSupplier}
+                      proveedorId={proveedorId}
+                      onChange={(n, id) => { setInsSupplier(n); setProveedorId(id); }}
+                      proveedores={proveedores}
+                      required
                       placeholder="Ej. Asistencia Global Travel"
                     />
                   </div>
@@ -4779,13 +4980,13 @@ export default function ReservasView({
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Proveedor Local (Supplier)</label>
-                    <input
-                      type="text"
+                    <ProveedorPicker
+                      nombre={manualSupplier}
+                      proveedorId={proveedorId}
+                      onChange={(n, id) => { setManualSupplier(n); setProveedorId(id); }}
+                      proveedores={proveedores}
                       required
                       placeholder="Ej: Disney Ticket Wholesaler"
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
-                      value={manualSupplier}
-                      onChange={(e) => setManualSupplier(e.target.value)}
                     />
                   </div>
                 </div>
@@ -4803,12 +5004,32 @@ export default function ReservasView({
                       onChange={(val) => {
                         setSvExtraServiceId(val);
                         setSvRateId("");
+                        const selected = (extraServices || []).find(s => s.id === val);
+                        if (selected) {
+                          setSvSupplier(selected.providerName);
+                          setProveedorId(undefined);
+                        } else {
+                          setSvSupplier("");
+                        }
                       }}
                       options={(extraServices || []).map(s => ({ value: s.id, label: s.nombre, sublabel: s.providerName }))}
                       placeholder="-- Seleccione un Servicio --"
                       emptyLabel="Ningún servicio coincide."
                     />
                   </div>
+
+                  {!svExtraServiceId && (
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Descripción del Servicio (Carga Manual)</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Excursión Isla de Coche - Día Completo"
+                        className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                        value={svManualDescription}
+                        onChange={(e) => setSvManualDescription(e.target.value)}
+                      />
+                    </div>
+                  )}
 
                   {svExtraServiceId && (
                     <div className="space-y-1.5">
@@ -4836,6 +5057,19 @@ export default function ReservasView({
                       />
                     </div>
                   )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Proveedor (a quién se le paga)</label>
+                  <ProveedorPicker
+                    nombre={svSupplier}
+                    proveedorId={proveedorId}
+                    onChange={(n, id) => { setSvSupplier(n); setProveedorId(id); }}
+                    proveedores={proveedores}
+                    disabled={!!svExtraServiceId}
+                    required
+                    placeholder="Buscar o escribir proveedor..."
+                  />
                 </div>
 
                 {/* Aviso de tarifa mixta: el rango de fechas del expediente toca más de una
@@ -4917,7 +5151,7 @@ export default function ReservasView({
             )}
 
             {/* --- COSTOS COMUNES --- */}
-            {activeServiceType === ServiceType.ALOJAMIENTO ? (
+            {(activeServiceType === ServiceType.ALOJAMIENTO && alojamientoModo === "catalogo") ? (
               <div className="border-t border-zinc-150 pt-4 space-y-4 font-sans">
                 {/* Inputs for Commissions and PVP */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -5020,129 +5254,6 @@ export default function ReservasView({
                     </span>
                   </div>
                 </div>
-              </div>
-            ) : (activeServiceType === ServiceType.SERVICIO_VARIO) ? (
-              <div className="border-t border-zinc-150 pt-4 space-y-4 font-sans">
-                {(() => {
-                  const rate = serviceRates?.find(r => r.id === svRateId);
-                  let pvp = 0;
-                  let costoNeto = 0;
-                  if (rate) {
-                    if (rate.pricingModel === "Por Persona") {
-                      pvp = (rate.ventaAdulto || 0) * svAdults + (rate.ventaNino || 0) * svChildren;
-                      costoNeto = (rate.netoAdulto || 0) * svAdults + (rate.netoNino || 0) * svChildren;
-                    } else {
-                      pvp = (rate.ventaTotal || 0) * svVehicles;
-                      costoNeto = (rate.netoTotal || 0) * svVehicles;
-                    }
-                  }
-                  const cobroB2B = Math.round(pvp * (1 - comisionB2B / 100) * 100) / 100;
-                  const ganancia = cobroB2B - costoNeto;
-
-                  return (
-                    <>
-                      {/* Inputs de comisión */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">PVP del Servicio ($)</label>
-                          <div className="relative">
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
-                            <input
-                              type="text"
-                              readOnly
-                              className="w-full pl-6 pr-3 py-2.5 border border-zinc-150 bg-zinc-50 rounded text-xs font-extrabold text-zinc-700 text-right cursor-not-allowed"
-                              value={pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Comisión Agencia B2B (%)</label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.5"
-                              className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed"
-                              value={comisionB2B}
-                              disabled={cartCanalVenta === "Directo"}
-                              onChange={(e) => setComisionB2B(Math.max(0, parseFloat(e.target.value) || 0))}
-                            />
-                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Comisión Mi Agencia (%)</label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.5"
-                              className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
-                              value={comisionPropia}
-                              onChange={(e) => setComisionPropia(Math.max(0, parseFloat(e.target.value) || 0))}
-                            />
-                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Resumen financiero calculado */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-zinc-100 pt-3.5">
-                        <div className="space-y-1.5">
-                          <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Costo Neto Mayorista (a Pagar)</label>
-                          <div className="relative">
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
-                            <input
-                              type="text"
-                              readOnly
-                              className="w-full pl-6 pr-3 py-2.5 border border-emerald-100 bg-emerald-50/20 rounded text-xs font-black text-emerald-800 text-right cursor-not-allowed"
-                              value={costoNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
-                            />
-                          </div>
-                          <span className="text-[9px] text-zinc-450 font-medium leading-tight block">
-                            Costo fijo del proveedor según tarifa.
-                          </span>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Cobro B2B (A Pagar por Agencia)</label>
-                          <div className="relative">
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
-                            <input
-                              type="text"
-                              readOnly
-                              className="w-full pl-6 pr-3 py-2.5 border border-zinc-200 bg-zinc-50 rounded text-xs font-black text-zinc-900 text-right cursor-not-allowed"
-                              value={cobroB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
-                            />
-                          </div>
-                          <span className="text-[9px] text-zinc-450 font-medium leading-tight block">
-                            {cartCanalVenta === "Directo" ? "Cliente Directo: sin comisión de agencia, precio de venta = PVP." : `Agencia B2B retiene su ${comisionB2B}% de comisión.`}
-                          </span>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Nuestra Ganancia Mayorista</label>
-                          <div className="relative">
-                            <span className={`absolute left-2.5 top-1/2 -translate-y-1/2 font-bold text-[10px] ${ganancia >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>$</span>
-                            <input
-                              type="text"
-                              readOnly
-                              className={`w-full pl-6 pr-3 py-2.5 rounded text-xs font-black text-right cursor-not-allowed ${ganancia >= 0 ? 'border border-emerald-250 bg-emerald-50 text-emerald-700' : 'border border-red-200 bg-red-50 text-red-700'}`}
-                              value={ganancia.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
-                            />
-                          </div>
-                          <span className={`text-[9px] font-bold leading-tight block ${ganancia >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                            Cobro B2B menos costo neto del proveedor.
-                          </span>
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
               </div>
             ) : (activeServiceType === ServiceType.TRASLADO || activeServiceType === ServiceType.SEGURO || activeServiceType === ServiceType.MANUAL) ? (
               <div className="border-t border-zinc-150 pt-4 space-y-4 font-sans">

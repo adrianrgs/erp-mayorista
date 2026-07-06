@@ -1565,6 +1565,7 @@ onDeleteStopSale={handleDeleteStopSale}
                       onUpdateBoleto={handleUpdateBoleto}
                       extraServices={extraServices}
                       serviceRates={serviceRates}
+                      proveedores={proveedores}
                       companyConfig={companyConfig}
                       jurisdiction={jurisdiction}
                       currentExchangeRate={todayExchangeRate}
