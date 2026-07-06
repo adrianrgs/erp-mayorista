@@ -319,7 +319,8 @@ mutation InsertTransferService(
   $dropoffLocation: String!, $date: String!, $time: String!, $provider: String!,
   $driverName: String, $driverId: String, $vehicleId: String, $reservationId: String,
   $flightRef: String, $notes: String, $status: String!, $vehicleType: String!,
-  $direction: String, $legIndex: Int, $tipoTraslado: String, $telefono: String
+  $direction: String, $legIndex: Int, $tipoTraslado: String, $telefono: String,
+  $esOperacionPropia: Boolean
 , $updatedAt: String) @auth(level: PUBLIC) {
   transferService_insert(data: {
     id: $id,
@@ -327,7 +328,8 @@ mutation InsertTransferService(
     dropoffLocation: $dropoffLocation, date: $date, time: $time, provider: $provider,
     driverName: $driverName, driverId: $driverId, vehicleId: $vehicleId, reservationId: $reservationId,
     flightRef: $flightRef, notes: $notes, status: $status, vehicleType: $vehicleType,
-    direction: $direction, legIndex: $legIndex, tipoTraslado: $tipoTraslado, telefono: $telefono
+    direction: $direction, legIndex: $legIndex, tipoTraslado: $tipoTraslado, telefono: $telefono,
+    esOperacionPropia: $esOperacionPropia
   })
 }
 
@@ -336,7 +338,8 @@ mutation UpdateTransferService(
   $dropoffLocation: String, $date: String, $time: String, $provider: String,
   $driverName: String, $driverId: String, $vehicleId: String, $reservationId: String,
   $flightRef: String, $notes: String, $status: String, $vehicleType: String,
-  $direction: String, $legIndex: Int, $tipoTraslado: String, $telefono: String
+  $direction: String, $legIndex: Int, $tipoTraslado: String, $telefono: String,
+  $esOperacionPropia: Boolean
 , $updatedAt: String) @auth(level: PUBLIC) {
   transferService_update(id: $id,
     data: {
@@ -345,7 +348,8 @@ mutation UpdateTransferService(
     dropoffLocation: $dropoffLocation, date: $date, time: $time, provider: $provider,
     driverName: $driverName, driverId: $driverId, vehicleId: $vehicleId, reservationId: $reservationId,
     flightRef: $flightRef, notes: $notes, status: $status, vehicleType: $vehicleType,
-    direction: $direction, legIndex: $legIndex, tipoTraslado: $tipoTraslado, telefono: $telefono
+    direction: $direction, legIndex: $legIndex, tipoTraslado: $tipoTraslado, telefono: $telefono,
+    esOperacionPropia: $esOperacionPropia
   })
 }
 

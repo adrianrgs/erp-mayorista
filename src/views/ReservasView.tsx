@@ -462,7 +462,12 @@ export default function ReservasView({
   const [transReturnTime, setTransReturnTime] = useState("14:00");
   const [transServiceType, setTransServiceType] = useState<"privado" | "compartido">("privado");
   const [transPax, setTransPax] = useState(2);
-  const [transSupplier, setTransSupplier] = useState("Foratour Receptivo S.A.");
+  const [transSupplier, setTransSupplier] = useState("");
+  // Marca si este traslado (cuando no viene de un servicio del catálogo, que ya implica un
+  // proveedor tercero) lo opera la propia agencia — con el catálogo el proveedor se asume
+  // tercero automáticamente; sin catálogo, este checkbox es la única forma de marcarlo como
+  // propio, evitando que el nombre de la agencia se tenga que escribir a mano.
+  const [transEsPropio, setTransEsPropio] = useState(false);
 
   // Car Rental states
   const [carCategory, setCarCategory] = useState("Compacto Automático");
@@ -853,6 +858,9 @@ export default function ReservasView({
       setTransReturnDate(cartCheckOut || "2026-06-27");
       setTransServiceType("privado");
       setTransPax(paxCount || 2);
+      setSvExtraServiceId("");
+      setTransEsPropio(false);
+      setTransSupplier("");
       setComisionB2B(getDefaultComisionB2B());
       setComisionPropia(5);
     } else if (type === ServiceType.RENT_A_CAR) {
@@ -1154,6 +1162,10 @@ export default function ReservasView({
         transReturnTime,
         transServiceType,
         transPax,
+        svExtraServiceId,
+        // true solo si se marcó explícitamente como propio Y no viene de un servicio del
+        // catálogo (el catálogo siempre implica un proveedor tercero, ver checkbox en el form).
+        transEsPropio: !svExtraServiceId && transEsPropio,
         netPrice: nPrice,
         salePrice: salePrice,
         comisionB2B: comisionB2B,
@@ -1446,7 +1458,9 @@ export default function ReservasView({
         setTransReturnDate(det.transReturnDate || "");
         setTransServiceType(det.transServiceType || "privado");
         setTransPax(det.transPax !== undefined ? det.transPax : 2);
-        setTransSupplier(service.proveedor || "Foratour Receptivo S.A.");
+        setSvExtraServiceId(det.svExtraServiceId || "");
+        setTransEsPropio(!!det.transEsPropio);
+        setTransSupplier(service.proveedor || "");
         setNetPrice(det.netPrice || "");
         setSalePrice(det.salePrice || "");
         setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
@@ -1519,6 +1533,9 @@ export default function ReservasView({
         setTransDropoff("");
         setTransDate(cartCheckIn || "2026-06-20");
         setTransVehicle("Berlina Ejecutiva");
+        setSvExtraServiceId("");
+        setTransEsPropio(false);
+        setTransSupplier("");
       } else if (service.tipo === ServiceType.RENT_A_CAR) {
         setCarCategory("Compacto Automático");
         setCarSupplier("Hertz Rent A Car");
@@ -4330,7 +4347,11 @@ export default function ReservasView({
                         setSvRateId("");
                         const selected = extraServices?.find(s => s.id === val);
                         if (selected) {
+                          // Un traslado del catálogo siempre implica un proveedor tercero.
+                          setTransEsPropio(false);
                           setTransSupplier(selected.providerName);
+                        } else {
+                          setTransSupplier("");
                         }
                       }}
                       options={(extraServices || []).filter(s => s.category === "Traslado").map(s => ({ value: s.id, label: s.nombre, sublabel: s.providerName }))}
@@ -4414,11 +4435,26 @@ export default function ReservasView({
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Proveedor Operador</label>
                     <input
                       type="text"
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none placeholder:text-zinc-300"
+                      readOnly={!!svExtraServiceId || transEsPropio}
+                      className={`w-full p-2.5 border border-zinc-200 rounded text-xs font-bold text-zinc-900 focus:outline-none placeholder:text-zinc-300 ${(svExtraServiceId || transEsPropio) ? "bg-zinc-100 cursor-not-allowed text-zinc-600" : "bg-white"}`}
                       value={transSupplier}
                       onChange={(e) => setTransSupplier(e.target.value)}
-                      placeholder="Ej. Foratour Receptivo S.A."
+                      placeholder={svExtraServiceId ? "" : "Escriba el proveedor, o marque la casilla si lo opera su propia agencia"}
                     />
+                    {!svExtraServiceId && (
+                      <label className="flex items-center gap-1.5 text-[10px] font-semibold text-zinc-500 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={transEsPropio}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setTransEsPropio(checked);
+                            setTransSupplier(checked ? companyConfig.name : "");
+                          }}
+                        />
+                        Este traslado lo opera mi propia agencia
+                      </label>
+                    )}
                   </div>
                 </div>
 

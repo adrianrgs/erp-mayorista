@@ -130,6 +130,10 @@ export interface TransferService {
   legIndex?: number; // 1 = primer leg (IN), 2 = segundo leg de un RT (OUT)
   tipoTraslado?: 'Privado' | 'Compartido';
   telefono?: string;
+  // true = lo opera la propia agencia (mayorista), false = subcontratado a un proveedor
+  // tercero. undefined = registro histórico previo a este campo, tratado como propio ya que
+  // antes de esto el proveedor siempre se guardaba fijo como el nombre de la propia agencia.
+  esOperacionPropia?: boolean;
 }
 
 export interface OperationalTransfer {
@@ -155,6 +159,7 @@ export interface OperationalTransfer {
   driverName?: string;
   tipoTraslado?: 'Privado' | 'Compartido';
   telefonoPax?: string;
+  esOperacionPropia?: boolean;
 }
 
 export function mapToOperationalTransfer(ts: TransferService): OperationalTransfer {
@@ -189,7 +194,8 @@ export function mapToOperationalTransfer(ts: TransferService): OperationalTransf
     legIndex: ts.legIndex || undefined,
     driverName: ts.driverName || undefined,
     tipoTraslado: (ts.tipoTraslado as 'Privado' | 'Compartido') || undefined,
-    telefonoPax: ts.telefono
+    telefonoPax: ts.telefono,
+    esOperacionPropia: ts.esOperacionPropia
   };
 }
 
@@ -218,7 +224,8 @@ export function mapToTransferService(ot: OperationalTransfer): TransferService {
     direction: ot.direction,
     legIndex: ot.legIndex,
     tipoTraslado: ot.tipoTraslado || undefined,
-    telefono: ot.telefonoPax
+    telefono: ot.telefonoPax,
+    esOperacionPropia: ot.esOperacionPropia
   };
 }
 

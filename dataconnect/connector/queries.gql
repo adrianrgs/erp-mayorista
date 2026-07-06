@@ -226,6 +226,7 @@ leadPassenger
     legIndex
     tipoTraslado
     telefono
+    esOperacionPropia
   }
 }
 

@@ -133,6 +133,7 @@ type TransferService @table {
   legIndex: Int
   tipoTraslado: String
   telefono: String
+  esOperacionPropia: Boolean
   updatedAt: String
 }
 

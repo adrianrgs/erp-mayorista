@@ -45,6 +45,7 @@ import { DailyDispatchManifest } from "../components/operaciones/DailyDispatchMa
 // ─── TIPOS ────────────────────────────────────────────────────────────────────
 type OpsTab = "despacho" | "flota" | "alertas";
 type FleetSubTab = "vehiculos" | "conductores";
+type DespachoSubTab = "propio" | "terceros";
 
 interface OperacionesViewProps {
   transfers: OperationalTransfer[];
@@ -118,6 +119,10 @@ export default function OperacionesView({
 }: OperacionesViewProps) {
   const [activeTab, setActiveTab] = useState<OpsTab>("despacho");
   const [fleetSubTab, setFleetSubTab] = useState<FleetSubTab>("vehiculos");
+  // "propio" = traslados operados por la propia agencia (los que hay que despachar con la
+  // flota/conductores propios); "terceros" = subcontratados a un proveedor externo, que se
+  // llevan aparte solo para seguimiento de estado, sin mezclarlos con la operación propia.
+  const [despachoSubTab, setDespachoSubTab] = useState<DespachoSubTab>("propio");
   const [selectedTransfer, setSelectedTransfer] = useState<OperationalTransfer | null>(transfers[0] || null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<OperationalTransfer["status"] | "Todos">("Todos");
@@ -194,6 +199,12 @@ export default function OperacionesView({
     salidas:     activeTransfers.filter(t => t.direction === 'OUT').length,
   }), [transfers, todayTransfers]);
 
+  // ── Conteo Propio vs. Terceros (para las pestañas) ─────────────────────────
+  // undefined = registro histórico previo a este campo, se trata como propio (antes de esto
+  // el proveedor siempre se guardaba fijo como el nombre de la propia agencia).
+  const propioCount = useMemo(() => activeTransfers.filter(t => t.esOperacionPropia !== false).length, [activeTransfers]);
+  const tercerosCount = useMemo(() => activeTransfers.filter(t => t.esOperacionPropia === false).length, [activeTransfers]);
+
   // ── Filtrado de traslados ──────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const result = transfers.filter(t => {
@@ -204,7 +215,8 @@ export default function OperacionesView({
         t.id.toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === "Todos" ? t.status !== "Cancelado" : t.status === statusFilter;
       const matchDirection = directionFilter === 'Todos' || t.direction === directionFilter;
-      
+      const matchSubTab = despachoSubTab === "propio" ? t.esOperacionPropia !== false : t.esOperacionPropia === false;
+
       let matchDate = true;
       if (dateFilter !== 'Todos') {
         const tDate = t.fechaHora;
@@ -222,7 +234,7 @@ export default function OperacionesView({
         }
       }
 
-      return matchSearch && matchStatus && matchDirection && matchDate;
+      return matchSearch && matchStatus && matchDirection && matchDate && matchSubTab;
     });
 
     return result.sort((a, b) => {
@@ -230,7 +242,7 @@ export default function OperacionesView({
       const timeB = b.fechaHora.getTime();
       return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
     });
-  }, [transfers, search, statusFilter, directionFilter, dateFilter, sortOrder]);
+  }, [transfers, search, statusFilter, directionFilter, dateFilter, sortOrder, despachoSubTab]);
 
   const handlePrintAll = () => {
     if (filtered.length === 0) {
@@ -698,8 +710,31 @@ export default function OperacionesView({
 
         {/* ── TAB 1: BOARD DE DESPACHO ─────────────────────────────────────── */}
         {activeTab === "despacho" && (
+          <div>
+            {/* Propio vs. Terceros: separa lo que el equipo debe despachar de lo que solo se
+                monitorea de proveedores externos, para no mezclar ambas operaciones. */}
+            <div className="px-4 pt-3 pb-1 bg-white border-b border-zinc-100">
+              <div className="inline-flex items-center gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
+                <button
+                  onClick={() => setDespachoSubTab("propio")}
+                  className={`px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                    despachoSubTab === "propio" ? "bg-zinc-950 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800"
+                  }`}
+                >
+                  Operación Propia ({propioCount})
+                </button>
+                <button
+                  onClick={() => setDespachoSubTab("terceros")}
+                  className={`px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                    despachoSubTab === "terceros" ? "bg-zinc-950 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800"
+                  }`}
+                >
+                  Proveedores Terceros ({tercerosCount})
+                </button>
+              </div>
+            </div>
           <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-zinc-100" style={{ minHeight: "calc(100vh - 22rem)" }}>
-            
+
             {/* Panel izquierdo: Lista de Traslados */}
             <div className="lg:col-span-5 flex flex-col overflow-hidden max-h-[650px]">
               {/* Barra de búsqueda y filtros */}
@@ -955,39 +990,52 @@ export default function OperacionesView({
                       </div>
                     )}
 
-                    {/* Asignación actual */}
-                    <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 shadow-sm">
-                      <h4 className="text-[9px] font-extrabold uppercase tracking-widest text-zinc-400 mb-3 flex items-center gap-1">
-                        <Truck className="w-3.5 h-3.5 text-zinc-500" /> Asignación de Recursos de Flota
-                      </h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-white p-3 rounded-lg border border-zinc-200">
-                          <p className="text-[8px] text-zinc-400 font-extrabold uppercase tracking-wider">Chofer / Operador</p>
-                          <p className={`text-xs font-black mt-1 ${selectedTransfer.driverName ? "text-zinc-955" : "text-amber-600 animate-pulse"}`}>
-                            {selectedTransfer.driverName || "⚠ Sin Asignar"}
-                          </p>
-                          {selectedTransfer.conductorId && (
-                            <p className="text-[9px] text-zinc-400 font-mono mt-0.5">ID: {selectedTransfer.conductorId}</p>
-                          )}
-                        </div>
-                        <div className="bg-white p-3 rounded-lg border border-zinc-200">
-                          <p className="text-[8px] text-zinc-400 font-extrabold uppercase tracking-wider">Vehículo Autorizado</p>
-                          <p className={`text-xs font-black mt-1 ${selectedTransfer.vehiculoId ? "text-zinc-955" : "text-amber-600 animate-pulse"}`}>
-                            {selectedTransfer.vehiculoId
-                              ? (() => { const v = fleetVehicles.find(v => v.id === selectedTransfer.vehiculoId); return v ? `${v.marca} ${v.modelo}` : selectedTransfer.vehicleType; })()
-                              : "⚠ Sin Vehículo"}
-                          </p>
-                          {selectedTransfer.vehiculoId && (
-                            <p className="text-[9px] text-zinc-500 font-semibold mt-0.5">
-                              Placa: <span className="font-mono font-bold text-zinc-700 bg-zinc-100 px-1 rounded">{fleetVehicles.find(v => v.id === selectedTransfer.vehiculoId)?.placa}</span>
-                            </p>
-                          )}
+                    {/* Asignación actual — para traslados de terceros no aplica: los opera el
+                        proveedor externo, no la flota/conductores propios. */}
+                    {selectedTransfer.esOperacionPropia === false ? (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 shadow-sm flex items-center gap-3">
+                        <Truck className="w-6 h-6 text-blue-500 flex-shrink-0" />
+                        <div>
+                          <p className="text-[9px] font-extrabold uppercase tracking-widest text-blue-600">Operado por Proveedor Externo</p>
+                          <p className="text-xs font-black text-blue-900 mt-0.5">{selectedTransfer.provider || "Proveedor sin especificar"}</p>
+                          <p className="text-[9px] text-blue-500 font-semibold mt-1">Este traslado es responsabilidad del proveedor — solo se monitorea su estado, sin asignar flota ni conductores propios.</p>
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 shadow-sm">
+                        <h4 className="text-[9px] font-extrabold uppercase tracking-widest text-zinc-400 mb-3 flex items-center gap-1">
+                          <Truck className="w-3.5 h-3.5 text-zinc-500" /> Asignación de Recursos de Flota
+                        </h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-white p-3 rounded-lg border border-zinc-200">
+                            <p className="text-[8px] text-zinc-400 font-extrabold uppercase tracking-wider">Chofer / Operador</p>
+                            <p className={`text-xs font-black mt-1 ${selectedTransfer.driverName ? "text-zinc-955" : "text-amber-600 animate-pulse"}`}>
+                              {selectedTransfer.driverName || "⚠ Sin Asignar"}
+                            </p>
+                            {selectedTransfer.conductorId && (
+                              <p className="text-[9px] text-zinc-400 font-mono mt-0.5">ID: {selectedTransfer.conductorId}</p>
+                            )}
+                          </div>
+                          <div className="bg-white p-3 rounded-lg border border-zinc-200">
+                            <p className="text-[8px] text-zinc-400 font-extrabold uppercase tracking-wider">Vehículo Autorizado</p>
+                            <p className={`text-xs font-black mt-1 ${selectedTransfer.vehiculoId ? "text-zinc-955" : "text-amber-600 animate-pulse"}`}>
+                              {selectedTransfer.vehiculoId
+                                ? (() => { const v = fleetVehicles.find(v => v.id === selectedTransfer.vehiculoId); return v ? `${v.marca} ${v.modelo}` : selectedTransfer.vehicleType; })()
+                                : "⚠ Sin Vehículo"}
+                            </p>
+                            {selectedTransfer.vehiculoId && (
+                              <p className="text-[9px] text-zinc-500 font-semibold mt-0.5">
+                                Placa: <span className="font-mono font-bold text-zinc-700 bg-zinc-100 px-1 rounded">{fleetVehicles.find(v => v.id === selectedTransfer.vehiculoId)?.placa}</span>
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-                    {/* Formulario de asignación (solo si no está completado/cancelado) */}
-                    {selectedTransfer.status !== "Completado" && selectedTransfer.status !== "Cancelado" && (
+                    {/* Formulario de asignación (solo si no está completado/cancelado, y no es
+                        un traslado subcontratado a un proveedor tercero) */}
+                    {selectedTransfer.esOperacionPropia !== false && selectedTransfer.status !== "Completado" && selectedTransfer.status !== "Cancelado" && (
                       <div className="border border-zinc-200 rounded-xl p-4 bg-zinc-50/30 space-y-4">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-zinc-200 pb-2 mb-2 gap-2">
                           <h4 className="text-[9px] font-extrabold uppercase tracking-widest text-zinc-400">
@@ -1140,7 +1188,7 @@ export default function OperacionesView({
                         <button
                           id="set-enruta-btn"
                           onClick={() => handleSetStatus("En Ruta")}
-                          disabled={!selectedTransfer.driverName || selectedTransfer.status === "En Ruta" || selectedTransfer.status === "Completado" || selectedTransfer.status === "Cancelado"}
+                          disabled={(selectedTransfer.esOperacionPropia !== false && !selectedTransfer.driverName) || selectedTransfer.status === "En Ruta" || selectedTransfer.status === "Completado" || selectedTransfer.status === "Cancelado"}
                           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-100 disabled:text-zinc-400 text-white text-xs font-bold rounded-md transition-colors cursor-pointer uppercase tracking-wide flex items-center gap-1.5"
                         >
                           <Activity className="w-3.5 h-3.5" /> En Ruta
@@ -1148,7 +1196,7 @@ export default function OperacionesView({
                         <button
                           id="set-completado-btn"
                           onClick={() => handleSetStatus("Completado")}
-                          disabled={selectedTransfer.status === "Completado" || !selectedTransfer.driverName || selectedTransfer.status === "Cancelado"}
+                          disabled={selectedTransfer.status === "Completado" || (selectedTransfer.esOperacionPropia !== false && !selectedTransfer.driverName) || selectedTransfer.status === "Cancelado"}
                           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-100 disabled:text-zinc-400 text-white text-xs font-bold rounded-md transition-colors cursor-pointer uppercase tracking-wide flex items-center gap-1.5"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" /> Completado
@@ -1174,6 +1222,7 @@ export default function OperacionesView({
                 </div>
               )}
             </div>
+          </div>
           </div>
         )}
 

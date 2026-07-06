@@ -452,6 +452,74 @@ export default function App() {
     setProperties(prev => prev.map(p => p.id === updated.id ? updated : p));
   };
 
+  // Arma los TransferService (traslado de ida + retorno si aplica) para un expediente que
+  // vendió Traslado/Rent a Car — compartido entre handleAddReservation y handleUpdateReservation
+  // para que agregar un traslado a un expediente YA EXISTENTE también alimente Operaciones
+  // Receptivo (antes solo se generaba al crear el expediente). El proveedor se toma del
+  // ServiceItem realmente guardado (transSupplier/carSupplier elegido en Reservas), no de un
+  // valor fijo, para que Receptivo refleje el proveedor real de cada traslado.
+  const buildTransferServicesForReservation = (
+    res: any,
+    existingTransferIds: string[],
+    flightsList: FlightLeg[]
+  ): TransferService[] => {
+    const tServicio = res.servicios?.find((s: any) => s.tipo === "Traslado" || s.tipo === "Rent a Car");
+    if (!tServicio) return [];
+    const tDet = tServicio.detalles || {};
+    const matchedFlight = flightsList.find(f => f.flightNo === res.flightNo);
+    const defaultAirport = matchedFlight
+      ? `Llegadas Aeropuerto (Vuelo ${matchedFlight.flightNo})`
+      : "Aeropuerto Internacional Local";
+    const provider = tServicio.proveedor || "Foratour Receptivo S.A.";
+    const esOperacionPropia = !!tDet.transEsPropio;
+
+    const idPool = [...existingTransferIds];
+    const built: TransferService[] = [];
+
+    const inTrans: TransferService = {
+      id: nextSequentialId("TR", idPool),
+      leadPassenger: res.holder,
+      paxCount: Number(tDet.transPax || res.pax),
+      pickupLocation: tDet.transPickup || defaultAirport,
+      dropoffLocation: tDet.transDropoff || res.hotelName,
+      date: tDet.transDate || res.checkIn,
+      time: tDet.transTime || "14:00",
+      provider,
+      status: "No Asignado",
+      vehicleType: tDet.transVehicle || (res.pax > 4 ? "Minivan de Línea" : "Berlina Ejecutiva"),
+      tipoTraslado: tDet.transServiceType === "compartido" ? "Compartido" : "Privado",
+      reservationId: res.id,
+      direction: "IN",
+      esOperacionPropia,
+      updatedAt: new Date().toISOString(),
+    };
+    built.push(inTrans);
+    idPool.push(inTrans.id);
+
+    if (tDet.transTripType === "round-trip" && tDet.transReturnDate) {
+      const returnTrans: TransferService = {
+        id: nextSequentialId("TR", idPool),
+        leadPassenger: res.holder,
+        paxCount: Number(tDet.transPax || res.pax),
+        pickupLocation: tDet.transReturnDropoff || tDet.transDropoff || res.hotelName,
+        dropoffLocation: tDet.transPickup || "Aeropuerto Internacional Local",
+        date: tDet.transReturnDate,
+        time: tDet.transReturnTime || "10:00",
+        provider,
+        status: "No Asignado",
+        vehicleType: tDet.transVehicle || (res.pax > 4 ? "Minivan de Línea" : "Berlina Ejecutiva"),
+        tipoTraslado: tDet.transServiceType === "compartido" ? "Compartido" : "Privado",
+        reservationId: res.id,
+        direction: "OUT",
+        esOperacionPropia,
+        updatedAt: new Date().toISOString(),
+      };
+      built.push(returnTrans);
+    }
+
+    return built;
+  };
+
   const handleDeleteReservation = async (id: string) => { setReservations(prev => prev.filter(r => r.id !== id)); try { await deleteReservation(dataConnect, { id }); } catch (e) {} };
   const handleAddReservation = async (newRes: any) => {
     newRes.updatedAt = new Date().toISOString();
@@ -506,60 +574,15 @@ export default function App() {
         });
       }
 
-      // SIDE-EFFECT: Auto-generate ground transfer task ONLY if transfer service was sold!
-      const hasTransfer = newRes.servicios?.some(s => s.tipo === "Traslado" || s.tipo === "Rent a Car");
-      if (hasTransfer) {
-        const matchedFlight = flights.find(f => f.flightNo === newRes.flightNo);
-        const tServicio = newRes.servicios?.find(s => s.tipo === "Traslado" || s.tipo === "Rent a Car");
-        const tDet = tServicio?.detalles || {};
-        const defaultAirport = matchedFlight
-          ? `Llegadas Aeropuerto (Vuelo ${matchedFlight.flightNo})`
-          : "Aeropuerto Internacional Local";
-
-        const newTrans: TransferService = {
-          id: nextSequentialId("TR", transfers.map(t => t.id)),
-          leadPassenger: newRes.holder,
-          paxCount: Number(tDet.transPax || newRes.pax),
-          pickupLocation: tDet.transPickup || defaultAirport,
-          dropoffLocation: tDet.transDropoff || newRes.hotelName,
-          date: tDet.transDate || newRes.checkIn,
-          time: tDet.transTime || "14:00",
-          provider: "Foratour Receptivo S.A.",
-          status: "No Asignado",
-          vehicleType: tDet.transVehicle || (newRes.pax > 4 ? "Minivan de Línea" : "Berlina Ejecutiva"),
-          tipoTraslado: tDet.transServiceType === "compartido" ? "Compartido" : "Privado",
-          reservationId: newRes.id,
-          direction: "IN",
-          updatedAt: new Date().toISOString(),
-        };
-        setTransfers(prev => [newTrans, ...prev]);
-        insertTransferService(dataConnect, { ...newTrans }).catch(e =>
-          console.error("Failed to insert transfer service for reservation", newRes.id, e)
-        );
-
-        // Si es ida y vuelta, generar también el traslado de retorno
-        if (tDet.transTripType === "round-trip" && tDet.transReturnDate) {
-          const returnTrans: TransferService = {
-            id: nextSequentialId("TR", [...transfers.map(t => t.id), newTrans.id]),
-            leadPassenger: newRes.holder,
-            paxCount: Number(tDet.transPax || newRes.pax),
-            pickupLocation: tDet.transReturnDropoff || tDet.transDropoff || newRes.hotelName,
-            dropoffLocation: tDet.transPickup || "Aeropuerto Internacional Local",
-            date: tDet.transReturnDate,
-            time: tDet.transReturnTime || "10:00",
-            provider: "Foratour Receptivo S.A.",
-            status: "No Asignado",
-            vehicleType: tDet.transVehicle || (newRes.pax > 4 ? "Minivan de Línea" : "Berlina Ejecutiva"),
-            tipoTraslado: tDet.transServiceType === "compartido" ? "Compartido" : "Privado",
-            reservationId: newRes.id,
-            direction: "OUT",
-            updatedAt: new Date().toISOString(),
-          };
-          setTransfers(prev => [returnTrans, ...prev]);
-          insertTransferService(dataConnect, { ...returnTrans }).catch(e =>
-            console.error("Failed to insert return transfer service for reservation", newRes.id, e)
+      // SIDE-EFFECT: Auto-generate ground transfer task(s) ONLY if transfer service was sold!
+      const newTransfers = buildTransferServicesForReservation(newRes, transfers.map(t => t.id), flights);
+      if (newTransfers.length > 0) {
+        setTransfers(prev => [...newTransfers, ...prev]);
+        newTransfers.forEach(t => {
+          insertTransferService(dataConnect, { ...t }).catch(e =>
+            console.error("Failed to insert transfer service for reservation", newRes.id, e)
           );
-        }
+        });
       }
     }
   };
@@ -814,6 +837,22 @@ export default function App() {
       }
       return t;
     }));
+
+    // SIDE-EFFECT: Auto-generate ground transfer task(s) if a Traslado/Rent a Car was added to
+    // an expediente que YA EXISTÍA y todavía no tenía ninguno — antes esto solo pasaba al crear
+    // el expediente, por lo que agregar un traslado después nunca aparecía en Operaciones
+    // Receptivo. Se guarda por reservationId, no por el emparejamiento aproximado de arriba.
+    if (finalRes.tipo !== "Cotización" && !transfers.some(t => t.reservationId === finalRes.id)) {
+      const newTransfers = buildTransferServicesForReservation(finalRes, transfers.map(t => t.id), flights);
+      if (newTransfers.length > 0) {
+        setTransfers(prev => [...newTransfers, ...prev]);
+        newTransfers.forEach(t => {
+          insertTransferService(dataConnect, { ...t }).catch(e =>
+            console.error("Failed to insert transfer service for reservation", finalRes.id, e)
+          );
+        });
+      }
+    }
   };
 
   
