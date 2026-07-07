@@ -1,5 +1,8 @@
 import React, { useState } from "react";
-import { Reservation, FinancialInvoice, ServiceItem, B2BClient, DirectClient, ServiceType, PayableObligation, ProviderStatement, CompanyConfig, PaymentVoucher } from "../types";
+import { Reservation, FinancialInvoice, ServiceItem, B2BClient, DirectClient, ServiceType, PayableObligation, ProviderStatement, CompanyConfig, PaymentVoucher, ProjectView } from "../types";
+import { AccionPermiso, ReglaAutorizacion, SolicitudAutorizacion, RegistroAuditoria } from "../types/usuarios";
+import { usePermissions } from "../hooks/usePermissions";
+import { useAutorizacion } from "../hooks/useAutorizacion";
 import { resolveSaleClient, isCreditEligible, SaleClientRef } from "../lib/clientResolver";
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
@@ -64,6 +67,9 @@ interface FacturacionViewProps {
   companyConfig: CompanyConfig;
   jurisdiction?: TaxJurisdiction;
   currentExchangeRate?: number;
+  reglasAutorizacion?: ReglaAutorizacion[];
+  onCreateSolicitudAutorizacion?: (solicitud: SolicitudAutorizacion) => void;
+  onAddRegistroAuditoria?: (registro: Omit<RegistroAuditoria, "createdAt">) => void;
 }
 
 export default function FacturacionView({
@@ -90,8 +96,13 @@ export default function FacturacionView({
   companyConfig,
   jurisdiction,
   currentExchangeRate = 1,
+  reglasAutorizacion = [],
+  onCreateSolicitudAutorizacion = () => {},
+  onAddRegistroAuditoria = () => {},
 }: FacturacionViewProps) {
   const { showAlert } = useDialog();
+  const { puede } = usePermissions();
+  const { intentarAccionSensible } = useAutorizacion(reglasAutorizacion, onCreateSolicitudAutorizacion, onAddRegistroAuditoria);
 
   const activeJurisdiction = jurisdiction ?? DEFAULT_JURISDICTION;
 
@@ -1961,7 +1972,14 @@ export default function FacturacionView({
                             </button>
                           ) : (
                             <button
-                              onClick={() => handleCreditNoteVariation(v)}
+                              onClick={() => intentarAccionSensible({
+                                modulo: ProjectView.FACTURACION,
+                                accion: AccionPermiso.ANULAR,
+                                entidadTipo: "FinancialInvoice",
+                                entidadId: v.id,
+                                descripcion: `Emitir Nota de Crédito por variación ${v.id} del expediente ${activeRes?.id}`,
+                                ejecutar: () => handleCreditNoteVariation(v),
+                              })}
                               className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[9.5px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs flex items-center gap-1 transition-all shrink-0"
                             >
                               Emitir Nota de Crédito
@@ -2276,6 +2294,7 @@ export default function FacturacionView({
                   )}
 
                   {hasRequests ? (
+                    puede(ProjectView.FACTURACION, AccionPermiso.APROBAR) ? (
                     <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={handleRejectBilling}
@@ -2284,12 +2303,12 @@ export default function FacturacionView({
                         <ThumbsDown className="w-4 h-4 text-red-650" />
                         Rechazar
                       </button>
-                      <button 
+                      <button
                         onClick={handleApproveBilling}
                         disabled={isApproveDisabled}
                         className={`py-2.5 text-white text-[11px] font-black uppercase tracking-wider rounded flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all ${
-                          isApproveDisabled 
-                            ? "bg-zinc-200 border-zinc-200 text-zinc-400 cursor-not-allowed opacity-60" 
+                          isApproveDisabled
+                            ? "bg-zinc-200 border-zinc-200 text-zinc-400 cursor-not-allowed opacity-60"
                             : "bg-zinc-950 hover:bg-zinc-800"
                         }`}
                       >
@@ -2306,6 +2325,12 @@ export default function FacturacionView({
                         )}
                       </button>
                     </div>
+                    ) : (
+                      <div className="p-3 text-center text-xs font-bold uppercase rounded leading-relaxed text-zinc-500 bg-zinc-50 border border-zinc-200 flex items-center justify-center gap-1.5">
+                        <AlertCircle className="w-4 h-4" />
+                        Sin permiso para aprobar o rechazar facturación
+                      </div>
+                    )
                   ) : (
                     <div className="p-3 text-center text-xs font-bold uppercase rounded leading-relaxed">
                       {hasBorrador ? (

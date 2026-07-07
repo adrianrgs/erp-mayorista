@@ -27,9 +27,17 @@ import {
   listTaxJurisdictions, listExchangeRates, listWithholdingCertificates, listJournalEntries,
   upsertTaxJurisdiction, insertExchangeRate, insertWithholdingCertificate,
   deleteWithholdingCertificate, insertJournalEntry,
+  listUsuarios, insertUsuario, updateUsuario,
+  listRoles, insertRol, updateRol, deleteRol,
+  listReglasAutorizacion, insertReglaAutorizacion, updateReglaAutorizacion,
+  listSolicitudesAutorizacion, insertSolicitudAutorizacion, resolveSolicitudAutorizacion,
+  listRegistrosAuditoria, insertRegistroAuditoria,
 } from "./lib/dataconnect-shim";
-import { isAuthenticated, logout } from "./lib/api";
+import { isAuthenticated } from "./lib/api";
 import LoginScreen from "./components/LoginScreen";
+import { useAuth } from "./context/AuthContext";
+import { usePermissions } from "./hooks/usePermissions";
+import { Usuario, Rol, ReglaAutorizacion, SolicitudAutorizacion, RegistroAuditoria } from "./types/usuarios";
 const dataConnect = null;
 
 import { 
@@ -88,11 +96,15 @@ import {
   Users,
   FileText,
   ReceiptText,
-  TrendingDown
+  TrendingDown,
+  Lock,
+  LogOut
 } from "lucide-react";
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(isAuthenticated());
+  const { usuario, cerrarSesion } = useAuth();
+  const { puedeVerModulo, esAdministrador } = usePermissions();
 
   if (!authenticated) {
     return <LoginScreen onLogin={() => setAuthenticated(true)} />;
@@ -257,6 +269,107 @@ export default function App() {
       await updateProveedor(dataConnect, p);
     } catch (e) {
       console.error("Failed to update proveedor", e);
+    }
+  };
+
+  // ── Usuarios, Roles y Permisos ────────────────────────────────────────────
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [roles, setRoles] = useState<Rol[]>([]);
+  const [reglasAutorizacion, setReglasAutorizacion] = useState<ReglaAutorizacion[]>([]);
+  const [solicitudesAutorizacion, setSolicitudesAutorizacion] = useState<SolicitudAutorizacion[]>([]);
+  const [registrosAuditoria, setRegistrosAuditoria] = useState<RegistroAuditoria[]>([]);
+
+  const parseRol = (r: any): Rol => ({ ...r, permisos: r.permisosJson ? JSON.parse(r.permisosJson) : {} });
+
+  const handleAddUsuario = async (dto: { id: string; username: string; password: string; nombre: string; email: string; rolId: string }) => {
+    setUsuarios(prev => [...prev, { id: dto.id, username: dto.username, nombre: dto.nombre, email: dto.email, rolId: dto.rolId, activo: true }]);
+    try {
+      await insertUsuario(dataConnect, dto);
+    } catch (e) {
+      console.error("Failed to insert usuario", e);
+    }
+  };
+
+  const handleUpdateUsuario = async (id: string, dto: any) => {
+    setUsuarios(prev => prev.map(u => u.id === id ? { ...u, ...dto } : u));
+    try {
+      await updateUsuario(dataConnect, { id, ...dto });
+    } catch (e) {
+      console.error("Failed to update usuario", e);
+    }
+  };
+
+  const handleAddRol = async (rol: Rol) => {
+    setRoles(prev => [...prev, rol]);
+    try {
+      await insertRol(dataConnect, { ...rol, permisosJson: JSON.stringify(rol.permisos) });
+    } catch (e) {
+      console.error("Failed to insert rol", e);
+    }
+  };
+
+  const handleUpdateRol = async (rol: Rol) => {
+    setRoles(prev => prev.map(r => r.id === rol.id ? rol : r));
+    try {
+      await updateRol(dataConnect, { ...rol, permisosJson: JSON.stringify(rol.permisos) });
+    } catch (e) {
+      console.error("Failed to update rol", e);
+    }
+  };
+
+  const handleDeleteRol = async (id: string) => {
+    setRoles(prev => prev.filter(r => r.id !== id));
+    try {
+      await deleteRol(dataConnect, { id });
+    } catch (e) {
+      console.error("Failed to delete rol", e);
+    }
+  };
+
+  const handleAddRegistroAuditoria = async (registro: Omit<RegistroAuditoria, "createdAt">) => {
+    const full: RegistroAuditoria = { ...registro, createdAt: new Date().toISOString() };
+    setRegistrosAuditoria(prev => [full, ...prev]);
+    try {
+      await insertRegistroAuditoria(dataConnect, full);
+    } catch (e) {
+      console.error("Failed to insert registro de auditoría", e);
+    }
+  };
+
+  const handleAddReglaAutorizacion = async (regla: ReglaAutorizacion) => {
+    setReglasAutorizacion(prev => [...prev, regla]);
+    try {
+      await insertReglaAutorizacion(dataConnect, regla);
+    } catch (e) {
+      console.error("Failed to insert regla de autorización", e);
+    }
+  };
+
+  const handleUpdateReglaAutorizacion = async (regla: ReglaAutorizacion) => {
+    setReglasAutorizacion(prev => prev.map(r => r.id === regla.id ? regla : r));
+    try {
+      await updateReglaAutorizacion(dataConnect, regla);
+    } catch (e) {
+      console.error("Failed to update regla de autorización", e);
+    }
+  };
+
+  const handleCreateSolicitudAutorizacion = async (solicitud: SolicitudAutorizacion) => {
+    setSolicitudesAutorizacion(prev => [solicitud, ...prev]);
+    try {
+      await insertSolicitudAutorizacion(dataConnect, solicitud);
+    } catch (e) {
+      console.error("Failed to insert solicitud de autorización", e);
+    }
+  };
+
+  const handleResolveSolicitudAutorizacion = async (id: string, dto: { estado: "Aprobada" | "Rechazada"; comentarioResolucion?: string; resolutorId: string }) => {
+    const resolvedAt = new Date().toISOString();
+    setSolicitudesAutorizacion(prev => prev.map(s => s.id === id ? { ...s, ...dto, resolvedAt } : s));
+    try {
+      await resolveSolicitudAutorizacion(dataConnect, { id, ...dto });
+    } catch (e) {
+      console.error("Failed to resolve solicitud de autorización", e);
     }
   };
 
@@ -437,6 +550,28 @@ export default function App() {
             setJournalEntries(entries);
             localStorage.setItem("journal_entries", JSON.stringify(entries));
           }
+        } catch (e) {}
+        // Usuarios/Roles/Autorizaciones — cada uno en su propio try para no bloquear
+        // el resto de la carga si el módulo aún no fue desplegado en el backend.
+        try {
+          const rls = await listRoles(dataConnect);
+          if (rls.data.roles.length > 0) setRoles(rls.data.roles.map(parseRol));
+        } catch (e) {}
+        try {
+          const usrs = await listUsuarios(dataConnect);
+          if (usrs.data.usuarios.length > 0) setUsuarios(usrs.data.usuarios);
+        } catch (e) {}
+        try {
+          const reglas = await listReglasAutorizacion(dataConnect);
+          if (reglas.data.reglas.length > 0) setReglasAutorizacion(reglas.data.reglas);
+        } catch (e) {}
+        try {
+          const solicitudes = await listSolicitudesAutorizacion(dataConnect);
+          if (solicitudes.data.solicitudes.length > 0) setSolicitudesAutorizacion(solicitudes.data.solicitudes);
+        } catch (e) {}
+        try {
+          const auditoria = await listRegistrosAuditoria(dataConnect);
+          if (auditoria.data.registros.length > 0) setRegistrosAuditoria(auditoria.data.registros);
         } catch (e) {}
       } catch (err) {
         console.error("Failed to load Firebase data", err);
@@ -1316,6 +1451,39 @@ export default function App() {
     }
   };
 
+  // Botón de navegación del sidebar: si el rol del usuario no tiene "ver" sobre
+  // este módulo, se muestra bloqueado con candado en vez de navegar — mismo
+  // patrón visual que ya usan las pestañas bloqueadas de ConfiguracionView.
+  const renderNavButton = (view: ProjectView, Icon: React.ComponentType<{ className?: string }>, label: string, id: string) => {
+    if (!puedeVerModulo(view)) {
+      return (
+        <button
+          key={id}
+          disabled
+          title="Sin permiso de acceso a este módulo"
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-zinc-600 cursor-not-allowed opacity-60"
+        >
+          <span className="flex items-center gap-3">
+            <Icon className="w-4 h-4 flex-shrink-0" />
+            <span className="text-xs font-semibold">{label}</span>
+          </span>
+          <Lock className="w-3 h-3 text-zinc-500 flex-shrink-0" />
+        </button>
+      );
+    }
+    return (
+      <button
+        key={id}
+        id={id}
+        onClick={() => setCurrentSection(view)}
+        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === view ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}
+      >
+        <Icon className="w-4 h-4 flex-shrink-0" />
+        <span className="text-xs font-semibold">{label}</span>
+      </button>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 flex font-sans antialiased">
       
@@ -1323,10 +1491,10 @@ export default function App() {
       <aside className="w-72 bg-zinc-950 flex flex-col h-screen fixed left-0 top-0 text-white p-5 border-r border-zinc-900 z-20 font-sans">
         
         {/* Brand Header */}
-        <button 
-          onClick={() => setCurrentSection(ProjectView.CONFIGURACION)}
-          className="flex items-center gap-3 mb-9 px-2 py-1.5 hover:bg-zinc-900/40 rounded-lg cursor-pointer transition-all w-full text-left focus:outline-none"
-          title="Configuración de Empresa"
+        <button
+          onClick={() => esAdministrador && setCurrentSection(ProjectView.CONFIGURACION)}
+          className={`flex items-center gap-3 mb-9 px-2 py-1.5 rounded-lg transition-all w-full text-left focus:outline-none ${esAdministrador ? "hover:bg-zinc-900/40 cursor-pointer" : "cursor-default"}`}
+          title={esAdministrador ? "Configuración de Empresa" : companyConfig.name}
         >
           <div className="w-10 h-10 rounded-md bg-white text-zinc-950 flex items-center justify-center font-black text-xl shadow-xs flex-shrink-0">
             {companyConfig.logoLetter}
@@ -1363,14 +1531,8 @@ export default function App() {
             </button>
             {expandedMenus.comercial && (
               <div className="space-y-1 mt-1 pl-1">
-                <button id="nav-propiedades" onClick={() => setCurrentSection(ProjectView.PROPIEDADES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.PROPIEDADES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <Building2 className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Propiedades y Tarifas</span>
-                </button>
-                <button id="nav-servicios" onClick={() => setCurrentSection(ProjectView.SERVICIOS_VARIOS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.SERVICIOS_VARIOS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <Box className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Servicios Varios</span>
-                </button>
+                {renderNavButton(ProjectView.PROPIEDADES, Building2, "Propiedades y Tarifas", "nav-propiedades")}
+                {renderNavButton(ProjectView.SERVICIOS_VARIOS, Box, "Servicios Varios", "nav-servicios")}
               </div>
             )}
           </div>
@@ -1383,18 +1545,9 @@ export default function App() {
             </button>
             {expandedMenus.operaciones && (
               <div className="space-y-1 mt-1 pl-1">
-                <button id="nav-reservas" onClick={() => setCurrentSection(ProjectView.RESERVAS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.RESERVAS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <Calendar className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Reservas (Booking)</span>
-                </button>
-                <button id="nav-vuelos" onClick={() => setCurrentSection(ProjectView.VUELOS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.VUELOS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <Plane className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Vuelos (Air Control)</span>
-                </button>
-                <button id="nav-operaciones" onClick={() => setCurrentSection(ProjectView.OPERACIONES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.OPERACIONES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <Activity className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Ops. Receptivo</span>
-                </button>
+                {renderNavButton(ProjectView.RESERVAS, Calendar, "Reservas (Booking)", "nav-reservas")}
+                {renderNavButton(ProjectView.VUELOS, Plane, "Vuelos (Air Control)", "nav-vuelos")}
+                {renderNavButton(ProjectView.OPERACIONES, Activity, "Ops. Receptivo", "nav-operaciones")}
               </div>
             )}
           </div>
@@ -1407,14 +1560,8 @@ export default function App() {
             </button>
             {expandedMenus.directorio && (
               <div className="space-y-1 mt-1 pl-1">
-                <button id="nav-clientes" onClick={() => setCurrentSection(ProjectView.CLIENTES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.CLIENTES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <Users className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Clientes</span>
-                </button>
-                <button id="nav-proveedores" onClick={() => setCurrentSection(ProjectView.PROVEEDORES)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.PROVEEDORES ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <Briefcase className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Proveedores</span>
-                </button>
+                {renderNavButton(ProjectView.CLIENTES, Users, "Clientes", "nav-clientes")}
+                {renderNavButton(ProjectView.PROVEEDORES, Briefcase, "Proveedores", "nav-proveedores")}
               </div>
             )}
           </div>
@@ -1427,26 +1574,11 @@ export default function App() {
             </button>
             {expandedMenus.finanzas && (
               <div className="space-y-1 mt-1 pl-1">
-                <button id="nav-admin" onClick={() => setCurrentSection(ProjectView.ADMINISTRACION)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.ADMINISTRACION ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <Wallet className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Administración / BI</span>
-                </button>
-                <button id="nav-facturacion" onClick={() => setCurrentSection(ProjectView.FACTURACION)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.FACTURACION ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <Receipt className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Dpto. Facturación</span>
-                </button>
-                <button id="nav-cobranzas" onClick={() => setCurrentSection(ProjectView.COBRANZAS)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.COBRANZAS ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <CreditCard className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Cuentas por Cobrar</span>
-                </button>
-                <button id="nav-pagos" onClick={() => setCurrentSection(ProjectView.CUENTAS_PAGAR)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.CUENTAS_PAGAR ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <ArrowDownRight className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Cuentas por Pagar</span>
-                </button>
-                <button id="nav-contabilidad" onClick={() => setCurrentSection(ProjectView.CONTABILIDAD)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === ProjectView.CONTABILIDAD ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}>
-                  <ReceiptText className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-xs font-semibold">Contabilidad / Fiscal</span>
-                </button>
+                {renderNavButton(ProjectView.ADMINISTRACION, Wallet, "Administración / BI", "nav-admin")}
+                {renderNavButton(ProjectView.FACTURACION, Receipt, "Dpto. Facturación", "nav-facturacion")}
+                {renderNavButton(ProjectView.COBRANZAS, CreditCard, "Cuentas por Cobrar", "nav-cobranzas")}
+                {renderNavButton(ProjectView.CUENTAS_PAGAR, ArrowDownRight, "Cuentas por Pagar", "nav-pagos")}
+                {renderNavButton(ProjectView.CONTABILIDAD, ReceiptText, "Contabilidad / Fiscal", "nav-contabilidad")}
               </div>
             )}
           </div>
@@ -1476,12 +1608,19 @@ export default function App() {
           {/* Profile */}
           <div className="flex items-center gap-3 font-sans">
             <div className="w-8.5 h-8.5 rounded bg-zinc-100 border border-zinc-200 text-zinc-700 font-bold flex items-center justify-center text-xs">
-              JD
+              {(usuario?.nombre || "?").trim().split(/\s+/).map(p => p[0]).slice(0, 2).join("").toUpperCase()}
             </div>
             <div className="hidden xl:block text-left">
-              <p className="text-xs font-bold text-zinc-800 leading-tight">Juan Delgado</p>
-              <p className="text-[10px] text-zinc-400 leading-none">Administrador Senior</p>
+              <p className="text-xs font-bold text-zinc-800 leading-tight">{usuario?.nombre || "Invitado"}</p>
+              <p className="text-[10px] text-zinc-400 leading-none">{usuario?.rol.nombre || "Sin rol"}</p>
             </div>
+            <button
+              onClick={cerrarSesion}
+              title="Cerrar sesión"
+              className="p-1.5 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </header>
 
@@ -1569,6 +1708,9 @@ onDeleteStopSale={handleDeleteStopSale}
                       companyConfig={companyConfig}
                       jurisdiction={jurisdiction}
                       currentExchangeRate={todayExchangeRate}
+                      reglasAutorizacion={reglasAutorizacion}
+                      onCreateSolicitudAutorizacion={handleCreateSolicitudAutorizacion}
+                      onAddRegistroAuditoria={handleAddRegistroAuditoria}
                     />
                   )}
                   {currentSection === ProjectView.FACTURACION && (
@@ -1596,6 +1738,9 @@ onDeleteStopSale={handleDeleteStopSale}
                        companyConfig={companyConfig}
                        jurisdiction={jurisdiction}
                        currentExchangeRate={todayExchangeRate}
+                       reglasAutorizacion={reglasAutorizacion}
+                       onCreateSolicitudAutorizacion={handleCreateSolicitudAutorizacion}
+                       onAddRegistroAuditoria={handleAddRegistroAuditoria}
                      />
                    )}
                 {currentSection === ProjectView.VUELOS && (
@@ -1697,10 +1842,24 @@ onDeleteStopSale={handleDeleteStopSale}
                     currentExchangeRate={todayExchangeRate}
                   />
                 )}
-                {currentSection === ProjectView.CONFIGURACION && (
-                  <ConfiguracionView 
+                {currentSection === ProjectView.CONFIGURACION && esAdministrador && (
+                  <ConfiguracionView
                     config={companyConfig}
                     onUpdateConfig={handleUpdateCompanyConfig}
+                    usuarios={usuarios}
+                    roles={roles}
+                    reglasAutorizacion={reglasAutorizacion}
+                    solicitudesAutorizacion={solicitudesAutorizacion}
+                    registrosAuditoria={registrosAuditoria}
+                    onAddUsuario={handleAddUsuario}
+                    onUpdateUsuario={handleUpdateUsuario}
+                    onAddRol={handleAddRol}
+                    onUpdateRol={handleUpdateRol}
+                    onDeleteRol={handleDeleteRol}
+                    onAddReglaAutorizacion={handleAddReglaAutorizacion}
+                    onUpdateReglaAutorizacion={handleUpdateReglaAutorizacion}
+                    onResolveSolicitudAutorizacion={handleResolveSolicitudAutorizacion}
+                    onAddRegistroAuditoria={handleAddRegistroAuditoria}
                   />
                 )}
               </div>

@@ -2,6 +2,9 @@ import React, { useState } from "react";
 import { Proveedor, TipoProveedor } from "../types/producto";
 import { nextSequentialId } from "../lib/idGenerator";
 import { Search, Plus, Edit3, X, Save, Phone, Mail, MapPin, Tag, DollarSign, Briefcase, Building2 } from "lucide-react";
+import { ProjectView } from "../types";
+import { AccionPermiso } from "../types/usuarios";
+import { usePermissions } from "../hooks/usePermissions";
 
 interface ProveedoresViewProps {
   proveedores: Proveedor[];
@@ -37,6 +40,7 @@ const EMPTY_FORM: Partial<Proveedor> = {
 };
 
 export default function ProveedoresView({ proveedores, onAddProveedor, onUpdateProveedor }: ProveedoresViewProps) {
+  const { puede } = usePermissions();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterTipo, setFilterTipo] = useState<TipoProveedor | "ALL">("ALL");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -86,12 +90,14 @@ export default function ProveedoresView({ proveedores, onAddProveedor, onUpdateP
             Empresas de servicios turísticos: excursiones, traslados, buceo, full day y más.
           </p>
         </div>
-        <button
-          onClick={() => handleOpen()}
-          className="bg-zinc-950 hover:bg-zinc-800 text-white px-4 py-2 rounded shadow-xs text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Nuevo Proveedor
-        </button>
+        {puede(ProjectView.PROVEEDORES, AccionPermiso.CREAR) && (
+          <button
+            onClick={() => handleOpen()}
+            className="bg-zinc-950 hover:bg-zinc-800 text-white px-4 py-2 rounded shadow-xs text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Nuevo Proveedor
+          </button>
+        )}
       </div>
 
       <div className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden flex flex-col min-h-[500px]">
@@ -415,7 +421,8 @@ export default function ProveedoresView({ proveedores, onAddProveedor, onUpdateP
             <div className="px-6 py-4 border-t border-zinc-200 bg-zinc-50 flex justify-end">
               <button
                 onClick={handleSave}
-                className="bg-zinc-950 hover:bg-zinc-800 text-white px-6 py-2 rounded text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors"
+                disabled={!puede(ProjectView.PROVEEDORES, activeId === "new" ? AccionPermiso.CREAR : AccionPermiso.EDITAR)}
+                className="bg-zinc-950 hover:bg-zinc-800 text-white px-6 py-2 rounded text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Save className="w-4 h-4" />
                 {activeId === "new" ? "Crear Proveedor" : "Guardar Cambios"}

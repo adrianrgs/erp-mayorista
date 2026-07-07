@@ -1042,3 +1042,187 @@ mutation InsertJournalEntry(
     updatedAt: $updatedAt
   })
 }
+
+# ── Módulo de Usuarios, Roles y Permisos ──────────────────────────────────────
+
+mutation InsertRol(
+  $id: String!
+  $nombre: String!
+  $descripcion: String
+  $esAdministrador: Boolean!
+  $permisosJson: String
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  rol_insert(data: {
+    id: $id
+    nombre: $nombre
+    descripcion: $descripcion
+    esAdministrador: $esAdministrador
+    permisosJson: $permisosJson
+    updatedAt: $updatedAt
+  })
+}
+
+mutation UpdateRol(
+  $id: String!
+  $nombre: String
+  $descripcion: String
+  $esAdministrador: Boolean
+  $permisosJson: String
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  rol_update(id: $id data: {
+    nombre: $nombre
+    descripcion: $descripcion
+    esAdministrador: $esAdministrador
+    permisosJson: $permisosJson
+    updatedAt: $updatedAt
+  })
+}
+
+mutation DeleteRol($id: String!) @auth(level: PUBLIC) {
+  rol_delete(id: $id)
+}
+
+mutation InsertUsuario(
+  $id: String!
+  $username: String!
+  $passwordHash: String!
+  $nombre: String!
+  $email: String!
+  $rolId: String!
+  $activo: Boolean!
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  usuario_insert(data: {
+    id: $id
+    username: $username
+    passwordHash: $passwordHash
+    nombre: $nombre
+    email: $email
+    rolId: $rolId
+    activo: $activo
+    updatedAt: $updatedAt
+  })
+}
+
+mutation UpdateUsuario(
+  $id: String!
+  $username: String
+  $passwordHash: String
+  $nombre: String
+  $email: String
+  $rolId: String
+  $activo: Boolean
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  usuario_update(id: $id data: {
+    username: $username
+    passwordHash: $passwordHash
+    nombre: $nombre
+    email: $email
+    rolId: $rolId
+    activo: $activo
+    updatedAt: $updatedAt
+  })
+}
+
+mutation InsertReglaAutorizacion(
+  $id: String!
+  $modulo: String!
+  $accion: String!
+  $rolAprobadorId: String!
+  $activa: Boolean!
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  reglaAutorizacion_insert(data: {
+    id: $id
+    modulo: $modulo
+    accion: $accion
+    rolAprobadorId: $rolAprobadorId
+    activa: $activa
+    updatedAt: $updatedAt
+  })
+}
+
+mutation UpdateReglaAutorizacion(
+  $id: String!
+  $modulo: String
+  $accion: String
+  $rolAprobadorId: String
+  $activa: Boolean
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  reglaAutorizacion_update(id: $id data: {
+    modulo: $modulo
+    accion: $accion
+    rolAprobadorId: $rolAprobadorId
+    activa: $activa
+    updatedAt: $updatedAt
+  })
+}
+
+mutation DeleteReglaAutorizacion($id: String!) @auth(level: PUBLIC) {
+  reglaAutorizacion_delete(id: $id)
+}
+
+mutation InsertSolicitudAutorizacion(
+  $id: String!
+  $modulo: String!
+  $accion: String!
+  $entidadTipo: String!
+  $entidadId: String!
+  $descripcion: String!
+  $solicitanteId: String!
+  $solicitanteNombre: String!
+  $rolAprobadorId: String!
+  $estado: String!
+  $createdAt: String!
+) @auth(level: PUBLIC) {
+  solicitudAutorizacion_insert(data: {
+    id: $id
+    modulo: $modulo
+    accion: $accion
+    entidadTipo: $entidadTipo
+    entidadId: $entidadId
+    descripcion: $descripcion
+    solicitanteId: $solicitanteId
+    solicitanteNombre: $solicitanteNombre
+    rolAprobadorId: $rolAprobadorId
+    estado: $estado
+    createdAt: $createdAt
+  })
+}
+
+mutation UpdateSolicitudAutorizacion(
+  $id: String!
+  $estado: String
+  $comentarioResolucion: String
+  $resolutorId: String
+  $resolvedAt: String
+) @auth(level: PUBLIC) {
+  solicitudAutorizacion_update(id: $id data: {
+    estado: $estado
+    comentarioResolucion: $comentarioResolucion
+    resolutorId: $resolutorId
+    resolvedAt: $resolvedAt
+  })
+}
+
+mutation InsertRegistroAuditoria(
+  $id: String!
+  $tipo: String!
+  $usuarioId: String!
+  $usuarioNombre: String!
+  $detalle: String
+  $createdAt: String!
+) @auth(level: PUBLIC) {
+  registroAuditoria_insert(data: {
+    id: $id
+    tipo: $tipo
+    usuarioId: $usuarioId
+    usuarioNombre: $usuarioNombre
+    detalle: $detalle
+    createdAt: $createdAt
+  })
+}

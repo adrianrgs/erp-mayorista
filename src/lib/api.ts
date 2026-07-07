@@ -28,6 +28,11 @@ export async function login(username: string, password: string) {
   return res.data;
 }
 
+export async function getMe() {
+  const res = await axiosInstance.get("/auth/me");
+  return res.data;
+}
+
 export function logout() {
   localStorage.removeItem("jwt_token");
   window.location.reload();

@@ -1,5 +1,8 @@
 import React, { useState } from "react";
-import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient, DirectClient, DirectClientTipo, ClientStatus, FleetVehicle, CompanyConfig, ReservationPassenger, PassengerType } from "../types";
+import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient, DirectClient, DirectClientTipo, ClientStatus, FleetVehicle, CompanyConfig, ReservationPassenger, PassengerType, ProjectView } from "../types";
+import { AccionPermiso, ReglaAutorizacion, SolicitudAutorizacion, RegistroAuditoria } from "../types/usuarios";
+import { usePermissions } from "../hooks/usePermissions";
+import { useAutorizacion } from "../hooks/useAutorizacion";
 import { createEmptyPassenger, deriveHolderName, derivePassengersFromLegacyReservation, markTitular } from "../lib/passengers";
 import { Tabs } from "../components/reservas/Tabs";
 import { Property, RoomType, RatePlan, TipoCobro, ExtraService, ServiceRate, StopSale, Proveedor } from "../types/producto";
@@ -83,6 +86,9 @@ interface ReservasViewProps {
   companyConfig: CompanyConfig;
   jurisdiction?: TaxJurisdiction;
   currentExchangeRate?: number;
+  reglasAutorizacion?: ReglaAutorizacion[];
+  onCreateSolicitudAutorizacion?: (solicitud: SolicitudAutorizacion) => void;
+  onAddRegistroAuditoria?: (registro: Omit<RegistroAuditoria, "createdAt">) => void;
 }
 
 // Helper to calculate pricing for an individual room. Usa el mismo prorrateo por tramos de
@@ -205,9 +211,14 @@ export default function ReservasView({
   companyConfig,
   jurisdiction,
   currentExchangeRate,
+  reglasAutorizacion = [],
+  onCreateSolicitudAutorizacion = () => {},
+  onAddRegistroAuditoria = () => {},
 }: ReservasViewProps) {
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const { showAlert, showConfirm } = useDialog();
+  const { puede } = usePermissions();
+  const { intentarAccionSensible } = useAutorizacion(reglasAutorizacion, onCreateSolicitudAutorizacion, onAddRegistroAuditoria);
   // Navigation inside the module:
   // 1: List (dashboard), 2: Expediente unificado (Resumen/Datos Generales/Pasajeros/Servicios/Administración), 3: Configurar Servicio
   const [viewLevel, setViewLevel] = useState<1 | 2 | 3>(1);
@@ -484,8 +495,8 @@ export default function ReservasView({
   const [transEsPropio, setTransEsPropio] = useState(false);
 
   // Car Rental states
-  const [carCategory, setCarCategory] = useState("Compacto Automático");
-  const [carSupplier, setCarSupplier] = useState("Hertz Rent A Car");
+  const [carCategory, setCarCategory] = useState("");
+  const [carSupplier, setCarSupplier] = useState("");
   const [carStartDate, setCarStartDate] = useState("");
   const [carEndDate, setCarEndDate] = useState("");
   const [carDays, setCarDays] = useState(7);
@@ -496,7 +507,7 @@ export default function ReservasView({
   const [insEndDate, setInsEndDate] = useState("");
   const [insDays, setInsDays] = useState(7);
   const [insPax, setInsPax] = useState(1);
-  const [insSupplier, setInsSupplier] = useState("Asistencia Global Travel");
+  const [insSupplier, setInsSupplier] = useState("");
 
   // Manual Entry states
   const [manualDescription, setManualDescription] = useState("");
@@ -892,6 +903,8 @@ export default function ReservasView({
       setComisionB2B(getDefaultComisionB2B());
       setComisionPropia(5);
     } else if (type === ServiceType.RENT_A_CAR) {
+      setCarCategory("");
+      setCarSupplier("");
       const start = cartCheckIn || "2026-06-20";
       const end = cartCheckOut || "2026-06-27";
       setCarStartDate(start);
@@ -903,12 +916,15 @@ export default function ReservasView({
       } else {
         setCarDays(7);
       }
+      setComisionB2B(getDefaultComisionB2B());
+      setComisionPropia(5);
     } else if (type === ServiceType.SEGURO) {
       const start = cartCheckIn || "2026-06-20";
       const end = cartCheckOut || "2026-06-27";
       setInsStartDate(start);
       setInsEndDate(end);
       setInsPlan("");
+      setInsSupplier("");
       const s = new Date(start);
       const eDate = new Date(end);
       if (!isNaN(s.getTime()) && !isNaN(eDate.getTime())) {
@@ -927,6 +943,8 @@ export default function ReservasView({
       setSvVehicles(1);
       setSvSupplier("");
       setSvManualDescription("");
+      setComisionB2B(getDefaultComisionB2B());
+      setComisionPropia(5);
     }
 
     setViewLevel(3);
@@ -1112,8 +1130,9 @@ export default function ReservasView({
       case ServiceType.ALOJAMIENTO: {
         if (alojamientoModo === "manual") {
           desc = `Hotel: ${manualHotelName} - ${paxCount} Pax${manualRoomInfo ? ` (${manualRoomInfo})` : ""} - IN: ${formatDate(checkInDate)} / OUT: ${formatDate(checkOutDate)} (Carga Manual)`;
-          nPrice = parseFloat(netPrice) || 0;
-          sPrice = parseFloat(salePrice) || 0;
+          const pvpVal = parseFloat(salePrice) || 0;
+          sPrice = Math.round(pvpVal * (1 - comisionB2B / 100) * 100) / 100;
+          nPrice = Math.round(pvpVal * (1 - (comisionB2B + comisionPropia) / 100) * 100) / 100;
           break;
         }
         const matchedHotel = detailedProperties.find(p => p.id === hotelId);
@@ -1157,10 +1176,13 @@ export default function ReservasView({
         desc = `(${tripTypeLabel} - ${serviceTypeLabel}): ${routeDesc} - ${transPax} Pax - Fecha: ${formatDate(transDate)} (${transVehicle}) - Op. ${providerText}`;
         break;
       }
-      case ServiceType.RENT_A_CAR:
+      case ServiceType.RENT_A_CAR: {
         desc = `${carCategory} con ${carSupplier} - Alquiler por ${carDays} días`;
-        sPrice = (parseFloat(salePrice) || 0) * (1 - comisionB2B / 100);
+        const pvpVal = parseFloat(salePrice) || 0;
+        sPrice = Math.round(pvpVal * (1 - comisionB2B / 100) * 100) / 100;
+        nPrice = Math.round(pvpVal * (1 - (comisionB2B + comisionPropia) / 100) * 100) / 100;
         break;
+      }
       case ServiceType.SEGURO: {
         const pvpVal = (parseFloat(salePrice) || 0) * insPax;
         const b2bComVal = comisionB2B;
@@ -1181,7 +1203,7 @@ export default function ReservasView({
         // antes este bloque no hacía nada sin `srv && rate`, dejando desc vacío y precio en 0.
         const pvpVal = parseFloat(salePrice) || 0;
         sPrice = Math.round(pvpVal * (1 - comisionB2B / 100) * 100) / 100;
-        nPrice = parseFloat(netPrice) || 0;
+        nPrice = Math.round(pvpVal * (1 - (comisionB2B + comisionPropia) / 100) * 100) / 100;
         const label = srv?.nombre || svManualDescription || "Servicio Vario";
         desc = rate
           ? `${label} - ${rate.pricingModel === "Por Persona" ? `${svAdults} Adultos, ${svChildren} Niños` : `${svVehicles} Vehículo(s)/Grupo(s)`} (Del ${rate.temporadaInicio} al ${rate.temporadaFin})`
@@ -1204,7 +1226,8 @@ export default function ReservasView({
         paxCount,
         netPrice,
         salePrice,
-        comisionB2B
+        comisionB2B,
+        comisionPropia
       } : {
         hotelId,
         hotelSearchQuery,
@@ -1247,7 +1270,8 @@ export default function ReservasView({
         carDays,
         netPrice: netPrice,
         salePrice: salePrice,
-        comisionB2B: comisionB2B
+        comisionB2B: comisionB2B,
+        comisionPropia: comisionPropia
       };
     } else if (activeServiceType === ServiceType.SEGURO) {
       det = {
@@ -1522,6 +1546,7 @@ export default function ReservasView({
           setNetPrice(det.netPrice || "");
           setSalePrice(det.salePrice || "");
           setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
+          setComisionPropia(det.comisionPropia !== undefined ? det.comisionPropia : 5);
           setAlojProveedorNombre(service.proveedor || "");
         } else {
           setAlojamientoModo("catalogo");
@@ -1554,7 +1579,7 @@ export default function ReservasView({
         setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
         setComisionPropia(det.comisionPropia !== undefined ? det.comisionPropia : 5);
       } else if (service.tipo === ServiceType.RENT_A_CAR) {
-        setCarCategory(det.carCategory || "Compacto Automático");
+        setCarCategory(det.carCategory || "");
         setCarSupplier(service.proveedor || det.carSupplier || "");
         setCarStartDate(det.carStartDate || "");
         setCarEndDate(det.carEndDate || "");
@@ -1562,13 +1587,14 @@ export default function ReservasView({
         setNetPrice(det.netPrice || "");
         setSalePrice(det.salePrice || "");
         setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
+        setComisionPropia(det.comisionPropia !== undefined ? det.comisionPropia : 5);
       } else if (service.tipo === ServiceType.SEGURO) {
         setInsPlan(det.insPlan || "");
         setInsStartDate(det.insStartDate || "");
         setInsEndDate(det.insEndDate || "");
         setInsDays(det.insDays || 7);
         setInsPax(det.insPax !== undefined ? det.insPax : 1);
-        setInsSupplier(service.proveedor || "Asistencia Global Travel");
+        setInsSupplier(service.proveedor || "");
         setNetPrice(det.netPrice || "");
         setSalePrice(det.salePrice || "");
         setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
@@ -1634,16 +1660,19 @@ export default function ReservasView({
         setTransEsPropio(false);
         setTransSupplier("");
       } else if (service.tipo === ServiceType.RENT_A_CAR) {
-        setCarCategory("Compacto Automático");
-        setCarSupplier("Hertz Rent A Car");
+        setCarCategory("");
+        setCarSupplier(service.proveedor || "");
         setCarStartDate(cartCheckIn || "2026-06-20");
         setCarEndDate(cartCheckOut || "2026-06-27");
         setCarDays(7);
+        setComisionB2B(getDefaultComisionB2B());
+        setComisionPropia(5);
       } else if (service.tipo === ServiceType.SEGURO) {
         setInsPlan("Plan Cobertura Total Europa");
         setInsStartDate(cartCheckIn || "2026-06-20");
         setInsEndDate(cartCheckOut || "2026-06-27");
         setInsDays(7);
+        setInsSupplier(service.proveedor || "");
       } else if (service.tipo === ServiceType.MANUAL) {
         setManualDescription(service.descripcion);
         setManualSupplier("Directo");
@@ -1839,12 +1868,14 @@ export default function ReservasView({
               <p className="text-xs text-zinc-400 mt-1">Gestión de expedientes de viaje B2B, allotments de alojamiento y liquidación de costos netos.</p>
             </div>
             
-            <button
-              onClick={handleStartNewExpediente}
-              className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-xs self-start md:self-auto"
-            >
-              <Plus className="w-4 h-4" /> Nuevo Expediente
-            </button>
+            {puede(ProjectView.RESERVAS, AccionPermiso.CREAR) && (
+              <button
+                onClick={handleStartNewExpediente}
+                className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-xs self-start md:self-auto"
+              >
+                <Plus className="w-4 h-4" /> Nuevo Expediente
+              </button>
+            )}
           </div>
 
           {/* Tabs */}
@@ -2766,21 +2797,28 @@ export default function ReservasView({
                 <div className="flex flex-wrap items-center gap-2">
                   {activeRes.status !== "Cancelada" ? (
                     <button
-                      onClick={() => {
-                        showConfirm({
-                          title: "Anular Expediente de Reserva",
-                          message: "Escriba el Localizador exacto para confirmar la anulación. El expediente cambiará a estado Cancelada.",
-                          requireInputToConfirm: activeRes.id,
-                          type: "danger",
-                          confirmText: "Sí, Anular",
-                          onConfirm: () => {
-                            if (onUpdateReservation) {
-                              onUpdateReservation({ ...activeRes, status: "Cancelada" });
-                              showAlert({ title: "Expediente Anulado", message: "El expediente ha sido anulado correctamente.", type: "success" });
+                      onClick={() => intentarAccionSensible({
+                        modulo: ProjectView.RESERVAS,
+                        accion: AccionPermiso.ANULAR,
+                        entidadTipo: "Reservation",
+                        entidadId: activeRes.id,
+                        descripcion: `Anular expediente ${activeRes.id}`,
+                        ejecutar: () => {
+                          showConfirm({
+                            title: "Anular Expediente de Reserva",
+                            message: "Escriba el Localizador exacto para confirmar la anulación. El expediente cambiará a estado Cancelada.",
+                            requireInputToConfirm: activeRes.id,
+                            type: "danger",
+                            confirmText: "Sí, Anular",
+                            onConfirm: () => {
+                              if (onUpdateReservation) {
+                                onUpdateReservation({ ...activeRes, status: "Cancelada" });
+                                showAlert({ title: "Expediente Anulado", message: "El expediente ha sido anulado correctamente.", type: "success" });
+                              }
                             }
-                          }
-                        });
-                      }}
+                          });
+                        },
+                      })}
                       className="px-3 py-1.5 border border-red-200 bg-red-50 hover:bg-red-100 rounded text-red-600 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
                       title="Anular Expediente"
                     >
@@ -2811,22 +2849,29 @@ export default function ReservasView({
                         <span>Reactivar</span>
                       </button>
                       <button
-                        onClick={() => {
-                          showConfirm({
-                            title: "Eliminar Permanentemente",
-                            message: "Esta acción no se puede deshacer. El expediente y sus traslados serán eliminados de la base de datos de manera definitiva, liberando su identificador.",
-                            requireInputToConfirm: activeRes.id,
-                            type: "danger",
-                            confirmText: "Sí, Eliminar Permanentemente",
-                            onConfirm: () => {
-                              if (onDeleteReservation) {
-                                onDeleteReservation(activeRes.id);
-                                showAlert({ title: "Expediente Eliminado", message: "El expediente ha sido eliminado de forma permanente.", type: "success" });
-                                setViewLevel(1);
+                        onClick={() => intentarAccionSensible({
+                          modulo: ProjectView.RESERVAS,
+                          accion: AccionPermiso.ELIMINAR,
+                          entidadTipo: "Reservation",
+                          entidadId: activeRes.id,
+                          descripcion: `Eliminar permanentemente el expediente ${activeRes.id}`,
+                          ejecutar: () => {
+                            showConfirm({
+                              title: "Eliminar Permanentemente",
+                              message: "Esta acción no se puede deshacer. El expediente y sus traslados serán eliminados de la base de datos de manera definitiva, liberando su identificador.",
+                              requireInputToConfirm: activeRes.id,
+                              type: "danger",
+                              confirmText: "Sí, Eliminar Permanentemente",
+                              onConfirm: () => {
+                                if (onDeleteReservation) {
+                                  onDeleteReservation(activeRes.id);
+                                  showAlert({ title: "Expediente Eliminado", message: "El expediente ha sido eliminado de forma permanente.", type: "success" });
+                                  setViewLevel(1);
+                                }
                               }
-                            }
-                          });
-                        }}
+                            });
+                          },
+                        })}
                         className="px-3 py-1.5 border border-red-300 bg-red-100 hover:bg-red-200 rounded text-red-700 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
                         title="Eliminar Permanente"
                       >
@@ -4826,24 +4871,13 @@ export default function ReservasView({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Categoría Vehículo</label>
-                    <select
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
+                    <input
+                      type="text"
+                      placeholder="Ej: Compacto Automático, SUV 4x2, Camioneta Pick-Up..."
+                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
                       value={carCategory}
                       onChange={(e) => setCarCategory(e.target.value)}
-                    >
-                      {fleetVehicles.length > 0 ? (
-                        Array.from(new Set(fleetVehicles.map(v => v.tipo))).map(tipo => (
-                          <option key={tipo} value={tipo}>{tipo}</option>
-                        ))
-                      ) : (
-                        <>
-                          <option value="Económico Mecánico">Económico Mecánico (Ford Ka o similar)</option>
-                          <option value="Compacto Automático">Compacto Automático (Toyota Yaris o similar)</option>
-                          <option value="SUV Familiar 4x2">SUV Familiar 4x2 (Hyundai Tucson o similar)</option>
-                          <option value="Camioneta Pick-Up">Camioneta Pick-Up (Toyota Hilux o similar)</option>
-                        </>
-                      )}
-                    </select>
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Rentadora (Proveedor)</label>
@@ -5383,9 +5417,9 @@ export default function ReservasView({
               </div>
             ) : (
               <>
-                <div className="border-t border-zinc-150 pt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="border-t border-zinc-150 pt-4 grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Costo Neto Mayorista ($)</label>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-tight flex items-end min-h-[28px]">Costo Neto Mayorista ($)</label>
                     <div className="relative">
                       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
                       <input
@@ -5396,13 +5430,20 @@ export default function ReservasView({
                         placeholder="0.00"
                         className="w-full pl-6 pr-3 py-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none text-right"
                         value={netPrice}
-                        onChange={(e) => setNetPrice(e.target.value)}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setNetPrice(raw);
+                          const neto = parseFloat(raw);
+                          if (isNaN(neto)) { setSalePrice(""); return; }
+                          const denom = 1 - (comisionB2B + comisionPropia) / 100;
+                          if (denom > 0) setSalePrice((neto / denom).toFixed(2));
+                        }}
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Precio Venta PVP ($)</label>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-tight flex items-end min-h-[28px]">Precio Venta PVP ($)</label>
                     <div className="relative">
                       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
                       <input
@@ -5413,13 +5454,20 @@ export default function ReservasView({
                         placeholder="0.00"
                         className="w-full pl-6 pr-3 py-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none text-right"
                         value={salePrice}
-                        onChange={(e) => setSalePrice(e.target.value)}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setSalePrice(raw);
+                          const pvp = parseFloat(raw);
+                          if (isNaN(pvp)) { setNetPrice(""); return; }
+                          const denom = 1 - (comisionB2B + comisionPropia) / 100;
+                          if (denom > 0) setNetPrice((pvp * denom).toFixed(2));
+                        }}
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Comisión Agencia B2B (%)</label>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-tight flex items-end min-h-[28px]">Comisión Agencia B2B (%)</label>
                     <div className="relative">
                       <input
                         type="number"
@@ -5430,7 +5478,38 @@ export default function ReservasView({
                         className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed"
                         value={comisionB2B}
                         disabled={cartCanalVenta === "Directo"}
-                        onChange={(e) => setComisionB2B(Math.max(0, parseFloat(e.target.value) || 0))}
+                        onChange={(e) => {
+                          const newB2B = Math.max(0, parseFloat(e.target.value) || 0);
+                          setComisionB2B(newB2B);
+                          const pvp = parseFloat(salePrice);
+                          if (isNaN(pvp)) return;
+                          const denom = 1 - (newB2B + comisionPropia) / 100;
+                          if (denom > 0) setNetPrice((pvp * denom).toFixed(2));
+                        }}
+                      />
+                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-tight flex items-end min-h-[28px]">Comisión Mi Agencia (%)</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        required
+                        className="w-full p-2.5 pr-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                        value={comisionPropia}
+                        onChange={(e) => {
+                          const newOwn = Math.max(0, parseFloat(e.target.value) || 0);
+                          setComisionPropia(newOwn);
+                          const pvp = parseFloat(salePrice);
+                          if (isNaN(pvp)) return;
+                          const denom = 1 - (comisionB2B + newOwn) / 100;
+                          if (denom > 0) setNetPrice((pvp * denom).toFixed(2));
+                        }}
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
                     </div>

@@ -12,6 +12,10 @@ import { OperationsModule } from './operations/operations.module';
 import { TransfersModule } from './transfers/transfers.module';
 import { ServicesModule } from './services-module/services.module';
 import { ProveedoresModule } from './proveedores/proveedores.module';
+import { UsuariosModule } from './usuarios/usuarios.module';
+import { RolesModule } from './roles/roles.module';
+import { AutorizacionesModule } from './autorizaciones/autorizaciones.module';
+import { AuditoriaModule } from './auditoria/auditoria.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -29,6 +33,10 @@ import { AppController } from './app.controller';
     TransfersModule,
     ServicesModule,
     ProveedoresModule,
+    UsuariosModule,
+    RolesModule,
+    AutorizacionesModule,
+    AuditoriaModule,
   ],
   controllers: [AppController],
 })

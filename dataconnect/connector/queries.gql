@@ -417,3 +417,68 @@ query ListJournalEntries @auth(level: PUBLIC) {
     lines
   }
 }
+
+query ListRoles @auth(level: PUBLIC) {
+  rols {
+    id
+    updatedAt
+    nombre
+    descripcion
+    esAdministrador
+    permisosJson
+  }
+}
+
+query ListUsuarios @auth(level: PUBLIC) {
+  usuarios {
+    id
+    updatedAt
+    username
+    passwordHash
+    nombre
+    email
+    rolId
+    activo
+  }
+}
+
+query ListReglasAutorizacion @auth(level: PUBLIC) {
+  reglaAutorizacions {
+    id
+    updatedAt
+    modulo
+    accion
+    rolAprobadorId
+    activa
+  }
+}
+
+query ListSolicitudesAutorizacion @auth(level: PUBLIC) {
+  solicitudAutorizacions {
+    id
+    modulo
+    accion
+    entidadTipo
+    entidadId
+    descripcion
+    solicitanteId
+    solicitanteNombre
+    rolAprobadorId
+    estado
+    comentarioResolucion
+    resolutorId
+    createdAt
+    resolvedAt
+  }
+}
+
+query ListRegistrosAuditoria @auth(level: PUBLIC) {
+  registroAuditorias {
+    id
+    tipo
+    usuarioId
+    usuarioNombre
+    detalle
+    createdAt
+  }
+}

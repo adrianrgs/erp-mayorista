@@ -411,3 +411,60 @@ type JournalEntry @table {
   lines: String!
   updatedAt: String
 }
+
+# ── Módulo de Usuarios, Roles y Permisos ──────────────────────────────────────
+
+type Rol @table {
+  id: String! @col(dataType: "varchar(50)")
+  nombre: String!
+  descripcion: String
+  esAdministrador: Boolean!
+  permisosJson: String
+  updatedAt: String
+}
+
+type Usuario @table {
+  id: String! @col(dataType: "varchar(50)")
+  username: String! @unique
+  passwordHash: String!
+  nombre: String!
+  email: String!
+  rolId: String!
+  activo: Boolean!
+  updatedAt: String
+}
+
+type ReglaAutorizacion @table {
+  id: String! @col(dataType: "varchar(50)")
+  modulo: String!
+  accion: String!
+  rolAprobadorId: String!
+  activa: Boolean!
+  updatedAt: String
+}
+
+type SolicitudAutorizacion @table {
+  id: String! @col(dataType: "varchar(50)")
+  modulo: String!
+  accion: String!
+  entidadTipo: String!
+  entidadId: String!
+  descripcion: String!
+  solicitanteId: String!
+  solicitanteNombre: String!
+  rolAprobadorId: String!
+  estado: String!
+  comentarioResolucion: String
+  resolutorId: String
+  createdAt: String!
+  resolvedAt: String
+}
+
+type RegistroAuditoria @table {
+  id: String! @col(dataType: "varchar(50)")
+  tipo: String!
+  usuarioId: String!
+  usuarioNombre: String!
+  detalle: String
+  createdAt: String!
+}

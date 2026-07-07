@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { login } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 
 interface Props {
   onLogin: () => void;
@@ -10,13 +11,15 @@ export default function LoginScreen({ onLogin }: Props) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const { setUsuario } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await login(username, password);
+      const { user } = await login(username, password);
+      setUsuario(user);
       onLogin();
     } catch (err: any) {
       setError(err.response?.data?.message || "Credenciales incorrectas");

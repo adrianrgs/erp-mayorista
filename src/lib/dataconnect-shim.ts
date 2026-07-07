@@ -441,3 +441,86 @@ export const insertJournalEntry = async (_dc: any, vars: any) => {
   await api.post("/finances/journal-entries", vars);
   return { data: {} };
 };
+
+// ─── USUARIOS Y ROLES ───────────────────────────────────────────────────────
+
+export const listUsuarios = async (_dc?: any) => {
+  const r = await api.get("/usuarios");
+  return { data: { usuarios: r.data } };
+};
+
+export const insertUsuario = async (_dc: any, vars: any) => {
+  await api.post("/usuarios", vars);
+  return { data: {} };
+};
+
+export const updateUsuario = async (_dc: any, vars: any) => {
+  const { id, ...rest } = vars;
+  await api.patch(`/usuarios/${id}`, rest);
+  return { data: {} };
+};
+
+export const listRoles = async (_dc?: any) => {
+  const r = await api.get("/roles");
+  return { data: { roles: r.data } };
+};
+
+export const insertRol = async (_dc: any, vars: any) => {
+  await api.post("/roles", vars);
+  return { data: {} };
+};
+
+export const updateRol = async (_dc: any, vars: any) => {
+  const { id, ...rest } = vars;
+  await api.patch(`/roles/${id}`, rest);
+  return { data: {} };
+};
+
+export const deleteRol = async (_dc: any, vars: { id: string }) => {
+  await api.delete(`/roles/${vars.id}`);
+  return { data: {} };
+};
+
+// ─── AUTORIZACIONES Y AUDITORÍA ─────────────────────────────────────────────
+
+export const listReglasAutorizacion = async (_dc?: any) => {
+  const r = await api.get("/autorizaciones/reglas");
+  return { data: { reglas: r.data } };
+};
+
+export const insertReglaAutorizacion = async (_dc: any, vars: any) => {
+  await api.post("/autorizaciones/reglas", vars);
+  return { data: {} };
+};
+
+export const updateReglaAutorizacion = async (_dc: any, vars: any) => {
+  const { id, ...rest } = vars;
+  await api.patch(`/autorizaciones/reglas/${id}`, rest);
+  return { data: {} };
+};
+
+export const listSolicitudesAutorizacion = async (_dc?: any) => {
+  const r = await api.get("/autorizaciones/solicitudes");
+  return { data: { solicitudes: r.data } };
+};
+
+export const insertSolicitudAutorizacion = async (_dc: any, vars: any) => {
+  await api.post("/autorizaciones/solicitudes", vars);
+  return { data: {} };
+};
+
+export const resolveSolicitudAutorizacion = async (_dc: any, vars: any) => {
+  const { id, ...rest } = vars;
+  await api.patch(`/autorizaciones/solicitudes/${id}`, rest);
+  return { data: {} };
+};
+
+export const listRegistrosAuditoria = async (_dc?: any) => {
+  const r = await api.get("/auditoria");
+  return { data: { registros: r.data } };
+};
+
+export const insertRegistroAuditoria = async (_dc: any, vars: any) => {
+  await api.post("/auditoria", vars);
+  return { data: {} };
+};
