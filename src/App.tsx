@@ -302,7 +302,11 @@ export default function App() {
   const handleAddRol = async (rol: Rol) => {
     setRoles(prev => [...prev, rol]);
     try {
-      await insertRol(dataConnect, { ...rol, permisosJson: JSON.stringify(rol.permisos) });
+      // "permisos" es solo el objeto ya parseado para uso en el frontend — Data Connect
+      // rechaza la mutación si se le manda una variable no declarada ($permisos), así
+      // que solo se envía su versión serializada (permisosJson).
+      const { permisos, ...rest } = rol;
+      await insertRol(dataConnect, { ...rest, permisosJson: JSON.stringify(permisos) });
     } catch (e) {
       console.error("Failed to insert rol", e);
     }
@@ -311,7 +315,8 @@ export default function App() {
   const handleUpdateRol = async (rol: Rol) => {
     setRoles(prev => prev.map(r => r.id === rol.id ? rol : r));
     try {
-      await updateRol(dataConnect, { ...rol, permisosJson: JSON.stringify(rol.permisos) });
+      const { permisos, ...rest } = rol;
+      await updateRol(dataConnect, { ...rest, permisosJson: JSON.stringify(permisos) });
     } catch (e) {
       console.error("Failed to update rol", e);
     }
@@ -326,8 +331,15 @@ export default function App() {
     }
   };
 
-  const handleAddRegistroAuditoria = async (registro: Omit<RegistroAuditoria, "createdAt">) => {
-    const full: RegistroAuditoria = { ...registro, createdAt: new Date().toISOString() };
+  const handleAddRegistroAuditoria = async (registro: Omit<RegistroAuditoria, "id" | "createdAt">) => {
+    // El id se genera acá (no en cada call-site) porque este es el único lugar que tiene
+    // la lista completa y actualizada de registros — generarlo con una lista parcial o
+    // vacía produce el mismo id siempre y choca contra la unique key en el 2do insert.
+    const full: RegistroAuditoria = {
+      ...registro,
+      id: nextSequentialId("AUD", registrosAuditoria.map(r => r.id)),
+      createdAt: new Date().toISOString(),
+    };
     setRegistrosAuditoria(prev => [full, ...prev]);
     try {
       await insertRegistroAuditoria(dataConnect, full);
@@ -354,10 +366,11 @@ export default function App() {
     }
   };
 
-  const handleCreateSolicitudAutorizacion = async (solicitud: SolicitudAutorizacion) => {
-    setSolicitudesAutorizacion(prev => [solicitud, ...prev]);
+  const handleCreateSolicitudAutorizacion = async (solicitud: Omit<SolicitudAutorizacion, "id">) => {
+    const full: SolicitudAutorizacion = { ...solicitud, id: nextSequentialId("SOL", solicitudesAutorizacion.map(s => s.id)) };
+    setSolicitudesAutorizacion(prev => [full, ...prev]);
     try {
-      await insertSolicitudAutorizacion(dataConnect, solicitud);
+      await insertSolicitudAutorizacion(dataConnect, full);
     } catch (e) {
       console.error("Failed to insert solicitud de autorización", e);
     }

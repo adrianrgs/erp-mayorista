@@ -42,7 +42,7 @@ interface ConfiguracionViewProps {
   onAddReglaAutorizacion: (regla: ReglaAutorizacion) => void;
   onUpdateReglaAutorizacion: (regla: ReglaAutorizacion) => void;
   onResolveSolicitudAutorizacion: (id: string, dto: { estado: "Aprobada" | "Rechazada"; comentarioResolucion?: string; resolutorId: string }) => void;
-  onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "createdAt">) => void;
+  onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "id" | "createdAt">) => void;
 }
 
 type TabType = "empresa" | "usuarios" | "permisos" | "autorizaciones";
@@ -307,7 +307,7 @@ function UsuariosTab({
   nombreRol: (rolId: string) => string;
   onAddUsuario: (dto: { id: string; username: string; password: string; nombre: string; email: string; rolId: string }) => void;
   onUpdateUsuario: (id: string, dto: any) => void;
-  onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "createdAt">) => void;
+  onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "id" | "createdAt">) => void;
   sesionUsuarioId: string;
 }) {
   const emptyForm = { nombre: "", username: "", email: "", password: "", rolId: roles[0]?.id || "" };
@@ -336,7 +336,6 @@ function UsuariosTab({
       onUpdateUsuario(editingId, dto);
       if (anterior && anterior.rolId !== form.rolId) {
         onAddRegistroAuditoria({
-          id: nextSequentialId("AUD", []),
           tipo: "CambioRolUsuario",
           usuarioId: sesionUsuarioId,
           usuarioNombre: "Administrador",
@@ -458,7 +457,7 @@ function PermisosTab({
   onAddRol: (rol: Rol) => void;
   onUpdateRol: (rol: Rol) => void;
   onDeleteRol: (id: string) => void;
-  onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "createdAt">) => void;
+  onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "id" | "createdAt">) => void;
   sesionUsuarioId: string;
   sesionUsuarioNombre: string;
 }) {
@@ -494,7 +493,6 @@ function PermisosTab({
       onUpdateRol(editing);
       if (anterior && JSON.stringify(anterior.permisos) !== JSON.stringify(editing.permisos) || anterior?.esAdministrador !== editing.esAdministrador) {
         onAddRegistroAuditoria({
-          id: nextSequentialId("AUD", []),
           tipo: "CambioPermisosRol",
           usuarioId: sesionUsuarioId,
           usuarioNombre: sesionUsuarioNombre,
@@ -634,7 +632,7 @@ function AutorizacionesTab({
   onAddReglaAutorizacion: (regla: ReglaAutorizacion) => void;
   onUpdateReglaAutorizacion: (regla: ReglaAutorizacion) => void;
   onResolveSolicitudAutorizacion: (id: string, dto: { estado: "Aprobada" | "Rechazada"; comentarioResolucion?: string; resolutorId: string }) => void;
-  onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "createdAt">) => void;
+  onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "id" | "createdAt">) => void;
   sesion: { id: string; nombre: string; rol: Rol } | null;
 }) {
   const [nuevaRegla, setNuevaRegla] = useState<{ modulo: ProjectView | ""; accion: AccionPermiso | ""; rolAprobadorId: string }>({ modulo: "", accion: "", rolAprobadorId: roles.find(r => r.esAdministrador)?.id || roles[0]?.id || "" });
@@ -661,7 +659,6 @@ function AutorizacionesTab({
     if (!sesion) return;
     onResolveSolicitudAutorizacion(s.id, { estado, resolutorId: sesion.id });
     onAddRegistroAuditoria({
-      id: nextSequentialId("AUD", []),
       tipo: "SolicitudResuelta",
       usuarioId: sesion.id,
       usuarioNombre: sesion.nombre,

@@ -1477,7 +1477,6 @@ export default function FacturacionView({
 
   return (
     <div className="space-y-6 font-sans">
-      
       {!activeRes ? (
         <>
           {/* KPIs Grid */}

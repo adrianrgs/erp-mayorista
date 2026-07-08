@@ -1,7 +1,6 @@
 import { useAuth } from "../context/AuthContext";
 import { usePermissions } from "./usePermissions";
 import { useDialog } from "../components/ui/DialogProvider";
-import { nextSequentialId } from "../lib/idGenerator";
 import { ProjectView } from "../types";
 import { AccionPermiso, ReglaAutorizacion, SolicitudAutorizacion, RegistroAuditoria } from "../types/usuarios";
 
@@ -20,8 +19,8 @@ interface IntentarAccionOpts {
 // vez de ejecutar. Sin regla aplicable, simplemente informa que no hay permiso.
 export function useAutorizacion(
   reglasAutorizacion: ReglaAutorizacion[],
-  onCreateSolicitud: (solicitud: SolicitudAutorizacion) => void,
-  onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "createdAt">) => void,
+  onCreateSolicitud: (solicitud: Omit<SolicitudAutorizacion, "id">) => void,
+  onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "id" | "createdAt">) => void,
 ) {
   const { usuario } = useAuth();
   const { puede } = usePermissions();
@@ -40,8 +39,7 @@ export function useAutorizacion(
       return;
     }
 
-    const solicitud: SolicitudAutorizacion = {
-      id: nextSequentialId("SOL", []),
+    onCreateSolicitud({
       modulo: opts.modulo,
       accion: opts.accion,
       entidadTipo: opts.entidadTipo,
@@ -52,10 +50,8 @@ export function useAutorizacion(
       rolAprobadorId: regla.rolAprobadorId,
       estado: "Pendiente",
       createdAt: new Date().toISOString(),
-    };
-    onCreateSolicitud(solicitud);
+    });
     onAddRegistroAuditoria({
-      id: nextSequentialId("AUD", []),
       tipo: "SolicitudCreada",
       usuarioId: usuario.id,
       usuarioNombre: usuario.nombre,

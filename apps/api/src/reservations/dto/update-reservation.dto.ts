@@ -26,6 +26,10 @@ export class UpdateReservationDto {
   status?: string;
 
   @IsOptional()
+  @IsEnum(['Cotización', 'Reserva Real'])
+  tipo?: string;
+
+  @IsOptional()
   @IsNumber()
   totalPrice?: number;
 
