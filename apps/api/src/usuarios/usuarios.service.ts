@@ -32,4 +32,9 @@ export class UsuariosService {
     await this.dc.executeMutation('UpdateUsuario', payload);
     return { success: true };
   }
+
+  async remove(id: string) {
+    await this.dc.executeMutation('DeleteUsuario', { id });
+    return { success: true };
+  }
 }

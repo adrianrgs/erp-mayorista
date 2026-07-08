@@ -6,8 +6,8 @@ import { Property, RoomType, RatePlan, StopSale, ExtraService, ServiceRate, Prov
 
 import {
   listReservations, insertReservation, updateReservation, deleteReservation,
-  listClients, insertClient,
-  listDirectClients, insertDirectClient, updateDirectClient,
+  listClients, insertClient, deleteClient,
+  listDirectClients, insertDirectClient, updateDirectClient, deleteDirectClient,
   listInvoices, insertInvoice,
   listDetailedProperties, insertDetailedProperty, updateDetailedProperty, deleteDetailedProperty,
   listRoomTypes, insertRoomType, updateRoomType, deleteRoomType,
@@ -23,11 +23,11 @@ import {
   updateInvoice, updateClient,
   listPayableObligations, insertPayableObligation, updatePayableObligation, deletePayableObligation,
   listProviderStatements, insertProviderStatement, deleteProviderStatement,
-  listProveedores, insertProveedor, updateProveedor,
+  listProveedores, insertProveedor, updateProveedor, deleteProveedor,
   listTaxJurisdictions, listExchangeRates, listWithholdingCertificates, listJournalEntries,
   upsertTaxJurisdiction, insertExchangeRate, insertWithholdingCertificate,
   deleteWithholdingCertificate, insertJournalEntry,
-  listUsuarios, insertUsuario, updateUsuario,
+  listUsuarios, insertUsuario, updateUsuario, deleteUsuario,
   listRoles, insertRol, updateRol, deleteRol,
   listReglasAutorizacion, insertReglaAutorizacion, updateReglaAutorizacion,
   listSolicitudesAutorizacion, insertSolicitudAutorizacion, resolveSolicitudAutorizacion,
@@ -37,6 +37,7 @@ import { isAuthenticated } from "./lib/api";
 import LoginScreen from "./components/LoginScreen";
 import { useAuth } from "./context/AuthContext";
 import { usePermissions } from "./hooks/usePermissions";
+import { useDialog } from "./components/ui/DialogProvider";
 import { Usuario, Rol, ReglaAutorizacion, SolicitudAutorizacion, RegistroAuditoria } from "./types/usuarios";
 const dataConnect = null;
 
@@ -105,10 +106,7 @@ export default function App() {
   const [authenticated, setAuthenticated] = useState(isAuthenticated());
   const { usuario, cerrarSesion } = useAuth();
   const { puedeVerModulo, esAdministrador } = usePermissions();
-
-  if (!authenticated) {
-    return <LoginScreen onLogin={() => setAuthenticated(true)} />;
-  }
+  const { showAlert } = useDialog();
 
   // Navigation Section — se recuerda entre recargas de página
   const [currentSection, setCurrentSectionState] = useState<ProjectView>(() => {
@@ -272,6 +270,15 @@ export default function App() {
     }
   };
 
+  const handleDeleteProveedor = async (id: string) => {
+    try {
+      setProveedores(prev => prev.filter(p => p.id !== id));
+      await deleteProveedor(dataConnect, { id });
+    } catch (e) {
+      console.error("Failed to delete proveedor", e);
+    }
+  };
+
   // ── Usuarios, Roles y Permisos ────────────────────────────────────────────
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
@@ -296,6 +303,30 @@ export default function App() {
       await updateUsuario(dataConnect, { id, ...dto });
     } catch (e) {
       console.error("Failed to update usuario", e);
+    }
+  };
+
+  const handleDeleteUsuario = async (id: string) => {
+    if (usuario?.id === id) {
+      showAlert({ title: "Acción no permitida", message: "No puedes eliminar tu propio usuario.", type: "warning" });
+      return;
+    }
+    const objetivo = usuarios.find(u => u.id === id);
+    const rolObjetivo = objetivo ? roles.find(r => r.id === objetivo.rolId) : undefined;
+    if (rolObjetivo?.esAdministrador) {
+      const quedanOtrosAdminsActivos = usuarios.some(u =>
+        u.id !== id && u.activo && roles.find(r => r.id === u.rolId)?.esAdministrador
+      );
+      if (!quedanOtrosAdminsActivos) {
+        showAlert({ title: "Acción no permitida", message: "No puedes eliminar al último Administrador activo del sistema.", type: "warning" });
+        return;
+      }
+    }
+    try {
+      setUsuarios(prev => prev.filter(u => u.id !== id));
+      await deleteUsuario(dataConnect, { id });
+    } catch (e) {
+      console.error("Failed to delete usuario", e);
     }
   };
 
@@ -467,6 +498,10 @@ export default function App() {
 
 
   React.useEffect(() => {
+    // No hay sesión todavía (recién montado, antes de loguear) — no tiene sentido pedir
+    // datos que van a fallar con 401. Este efecto se vuelve a disparar en cuanto
+    // `authenticated` pase a true (justo después del login), gracias a estar en las deps.
+    if (!authenticated) return;
     async function loadData() {
       try {
         const res = await listReservations(dataConnect);
@@ -591,7 +626,8 @@ export default function App() {
       }
     }
     loadData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authenticated]);
 
 
   // Trigger cross-view state propagation
@@ -668,7 +704,14 @@ export default function App() {
     return built;
   };
 
-  const handleDeleteReservation = async (id: string) => { setReservations(prev => prev.filter(r => r.id !== id)); try { await deleteReservation(dataConnect, { id }); } catch (e) {} };
+  const handleDeleteReservation = async (id: string) => {
+    try {
+      setReservations(prev => prev.filter(r => r.id !== id));
+      await deleteReservation(dataConnect, { id });
+    } catch (e) {
+      console.error("Error in handleDeleteReservation:", e);
+    }
+  };
   const handleAddReservation = async (newRes: any) => {
     newRes.updatedAt = new Date().toISOString();
     setReservations(prev => [newRes, ...prev]);
@@ -1201,7 +1244,23 @@ export default function App() {
     }
   };
 
+  const handleDeleteClient = async (id: string) => {
+    try {
+      setClients(prev => prev.filter(c => c.id !== id));
+      await deleteClient(dataConnect, { id });
+    } catch (e) {
+      console.error("Failed to delete client", e);
+    }
+  };
 
+  const handleDeleteDirectClient = async (id: string) => {
+    try {
+      setDirectClients(prev => prev.filter(c => c.id !== id));
+      await deleteDirectClient(dataConnect, { id });
+    } catch (e) {
+      console.error("Failed to delete direct client", e);
+    }
+  };
 
   // --- FLIGHT TICKETS (Boletos) ---
   const handleAddBoleto = async (newBol: FlightTicket) => {
@@ -1497,9 +1556,18 @@ export default function App() {
     );
   };
 
+  // El chequeo de sesión va acá (justo antes del JSX final) y no como return temprano al
+  // inicio del componente: todos los hooks de arriba deben llamarse siempre, en el mismo
+  // orden, en cada render — devolver antes de declararlos hace que React llame menos hooks
+  // en el render sin sesión que en el que sigue justo después del login, lo que revienta
+  // con "Rendered more hooks than during the previous render" y deja la pantalla en blanco.
+  if (!authenticated) {
+    return <LoginScreen onLogin={() => setAuthenticated(true)} />;
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 text-zinc-900 flex font-sans antialiased">
-      
+
       {/* SIDEBAR PERSISTENTE IZQUIERDO */}
       <aside className="w-72 bg-zinc-950 flex flex-col h-screen fixed left-0 top-0 text-white p-5 border-r border-zinc-900 z-20 font-sans">
         
@@ -1672,6 +1740,7 @@ onDeleteStopSale={handleDeleteStopSale}
                       extraServices={extraServices}
                       onAddExtraService={handleAddExtraService}
                       onUpdateExtraService={handleUpdateExtraService}
+                      onDeleteExtraService={handleDeleteExtraService}
                       serviceRates={serviceRates}
                       onAddServiceRate={handleAddServiceRate}
                       onUpdateServiceRate={handleUpdateServiceRate}
@@ -1693,6 +1762,7 @@ onDeleteStopSale={handleDeleteStopSale}
                       proveedores={proveedores}
                       onAddProveedor={handleAddProveedor}
                       onUpdateProveedor={handleUpdateProveedor}
+                      onDeleteProveedor={handleDeleteProveedor}
                     />
                   )}
                   {currentSection === ProjectView.RESERVAS && (
@@ -1724,6 +1794,7 @@ onDeleteStopSale={handleDeleteStopSale}
                       reglasAutorizacion={reglasAutorizacion}
                       onCreateSolicitudAutorizacion={handleCreateSolicitudAutorizacion}
                       onAddRegistroAuditoria={handleAddRegistroAuditoria}
+                      onDeleteReservation={handleDeleteReservation}
                     />
                   )}
                   {currentSection === ProjectView.FACTURACION && (
@@ -1800,9 +1871,11 @@ onDeleteStopSale={handleDeleteStopSale}
                     clients={clients}
                     onUpdateClient={handleUpdateClient}
                     onAddClient={handleAddClient}
+                    onDeleteClient={handleDeleteClient}
                     directClients={directClients}
                     onUpdateDirectClient={handleUpdateDirectClient}
                     onAddDirectClient={handleAddDirectClient}
+                    onDeleteDirectClient={handleDeleteDirectClient}
                     invoices={invoices}
                     reservations={reservations}
                     boletos={boletos}
@@ -1866,6 +1939,7 @@ onDeleteStopSale={handleDeleteStopSale}
                     registrosAuditoria={registrosAuditoria}
                     onAddUsuario={handleAddUsuario}
                     onUpdateUsuario={handleUpdateUsuario}
+                    onDeleteUsuario={handleDeleteUsuario}
                     onAddRol={handleAddRol}
                     onUpdateRol={handleUpdateRol}
                     onDeleteRol={handleDeleteRol}

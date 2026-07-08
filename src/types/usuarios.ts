@@ -12,15 +12,15 @@ export enum AccionPermiso {
 // Única fuente de verdad de qué acciones existen realmente por módulo — determina
 // tanto los checkboxes que se muestran en "Permisos y Roles" como las acciones
 // válidas al configurar una Regla de Autorización, evitando reglas huérfanas
-// (ej. "Eliminar" en Proveedores, que no es una acción que exista en esa vista).
+// (ej. "Eliminar" en un módulo donde esa acción no existe en la UI).
 export const ACCIONES_POR_MODULO: Record<ProjectView, AccionPermiso[]> = {
   [ProjectView.PROPIEDADES]: [AccionPermiso.VER, AccionPermiso.CREAR, AccionPermiso.EDITAR, AccionPermiso.ELIMINAR],
   [ProjectView.SERVICIOS_VARIOS]: [AccionPermiso.VER, AccionPermiso.CREAR, AccionPermiso.EDITAR, AccionPermiso.ELIMINAR],
   [ProjectView.RESERVAS]: [AccionPermiso.VER, AccionPermiso.CREAR, AccionPermiso.EDITAR, AccionPermiso.ELIMINAR, AccionPermiso.ANULAR],
   [ProjectView.VUELOS]: [AccionPermiso.VER, AccionPermiso.CREAR, AccionPermiso.EDITAR, AccionPermiso.ELIMINAR, AccionPermiso.ANULAR],
   [ProjectView.OPERACIONES]: [AccionPermiso.VER, AccionPermiso.CREAR, AccionPermiso.EDITAR],
-  [ProjectView.CLIENTES]: [AccionPermiso.VER, AccionPermiso.CREAR, AccionPermiso.EDITAR],
-  [ProjectView.PROVEEDORES]: [AccionPermiso.VER, AccionPermiso.CREAR, AccionPermiso.EDITAR],
+  [ProjectView.CLIENTES]: [AccionPermiso.VER, AccionPermiso.CREAR, AccionPermiso.EDITAR, AccionPermiso.ELIMINAR],
+  [ProjectView.PROVEEDORES]: [AccionPermiso.VER, AccionPermiso.CREAR, AccionPermiso.EDITAR, AccionPermiso.ELIMINAR],
   [ProjectView.ADMINISTRACION]: [AccionPermiso.VER],
   [ProjectView.FACTURACION]: [AccionPermiso.VER, AccionPermiso.CREAR, AccionPermiso.APROBAR, AccionPermiso.ANULAR],
   [ProjectView.COBRANZAS]: [AccionPermiso.VER, AccionPermiso.CREAR, AccionPermiso.APROBAR],

@@ -3,14 +3,14 @@ import { B2BClient, ClientType, ClientStatus, FinancialInvoice, Reservation, Ser
 import { FlightTicket } from "../types/aereos";
 import { RoomType, RatePlan, TipoCobro, Property } from "../types/producto";
 import { nextSequentialId } from "../lib/idGenerator";
-import { 
-  Users, 
-  Search, 
-  Filter, 
-  Plus, 
-  ArrowLeft, 
-  ShieldAlert, 
-  AlertCircle, 
+import {
+  Users,
+  Search,
+  Filter,
+  Plus,
+  ArrowLeft,
+  ShieldAlert,
+  AlertCircle,
   CheckCircle2,
   DollarSign,
   X,
@@ -20,13 +20,19 @@ import {
   User,
   FileText,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  Trash2
 } from "lucide-react";
+import { ProjectView } from "../types";
+import { AccionPermiso } from "../types/usuarios";
+import { usePermissions } from "../hooks/usePermissions";
+import { useDialog } from "../components/ui/DialogProvider";
 
 interface ClientesB2BPanelProps {
   clients: B2BClient[];
   onUpdateClient: (updated: B2BClient) => void;
   onAddClient: (newClient: B2BClient) => void;
+  onDeleteClient: (id: string) => void;
   invoices: FinancialInvoice[];
   reservations: Reservation[];
   boletos?: FlightTicket[];
@@ -99,6 +105,7 @@ export default function ClientesB2BPanel({
   clients,
   onUpdateClient,
   onAddClient,
+  onDeleteClient,
   invoices,
   reservations,
   boletos = [],
@@ -107,6 +114,8 @@ export default function ClientesB2BPanel({
   detailedProperties,
   onNavigateToCobranzas
 }: ClientesB2BPanelProps) {
+  const { puede } = usePermissions();
+  const { showConfirm } = useDialog();
   // Navigation inside the module (Level 1: List, Level 2: Ficha Técnica, Level 3: Detalle Expediente)
   const [viewLevel, setViewLevel] = useState<1 | 2 | 3>(1);
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
@@ -661,6 +670,22 @@ export default function ClientesB2BPanel({
                 }`}>
                   {activeClient.tipo}
                 </span>
+                {puede(ProjectView.CLIENTES, AccionPermiso.ELIMINAR) && (
+                  <button
+                    onClick={() => showConfirm({
+                      title: "Eliminar Cliente",
+                      message: `¿Estás seguro que deseas eliminar a ${activeClient.nombre}? Esto podría afectar reservas y facturas asociadas.`,
+                      type: "danger",
+                      confirmText: "Eliminar",
+                      requireInputToConfirm: activeClient.nombre,
+                      onConfirm: () => { onDeleteClient(activeClient.id); setViewLevel(1); }
+                    })}
+                    className="p-1.5 rounded hover:bg-red-50 text-zinc-400 hover:text-red-600 cursor-pointer border border-transparent hover:border-red-200"
+                    title="Eliminar Cliente"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
 

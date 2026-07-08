@@ -123,6 +123,11 @@ export const updateClient = async (_dc: any, vars: any) => {
   return { data: {} };
 };
 
+export const deleteClient = async (_dc: any, vars: { id: string }) => {
+  await api.delete(`/clients/${vars.id}`);
+  return { data: {} };
+};
+
 // ─── MUTATIONS: DIRECT CLIENTS ────────────────────────────────────────────────
 
 export const insertDirectClient = async (_dc: any, vars: any) => {
@@ -133,6 +138,11 @@ export const insertDirectClient = async (_dc: any, vars: any) => {
 export const updateDirectClient = async (_dc: any, vars: any) => {
   const { id, ...rest } = vars;
   await api.patch(`/direct-clients/${id}`, rest);
+  return { data: {} };
+};
+
+export const deleteDirectClient = async (_dc: any, vars: { id: string }) => {
+  await api.delete(`/direct-clients/${vars.id}`);
   return { data: {} };
 };
 
@@ -457,6 +467,11 @@ export const insertUsuario = async (_dc: any, vars: any) => {
 export const updateUsuario = async (_dc: any, vars: any) => {
   const { id, ...rest } = vars;
   await api.patch(`/usuarios/${id}`, rest);
+  return { data: {} };
+};
+
+export const deleteUsuario = async (_dc: any, vars: { id: string }) => {
+  await api.delete(`/usuarios/${vars.id}`);
   return { data: {} };
 };
 

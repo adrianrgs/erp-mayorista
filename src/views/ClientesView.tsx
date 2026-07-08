@@ -9,9 +9,11 @@ interface ClientesViewProps {
   clients: B2BClient[];
   onUpdateClient: (updated: B2BClient) => void;
   onAddClient: (newClient: B2BClient) => void;
+  onDeleteClient: (id: string) => void;
   directClients: DirectClient[];
   onUpdateDirectClient: (updated: DirectClient) => void;
   onAddDirectClient: (newClient: DirectClient) => void;
+  onDeleteDirectClient: (id: string) => void;
   invoices: FinancialInvoice[];
   reservations: Reservation[];
   boletos?: FlightTicket[];
@@ -25,9 +27,11 @@ export default function ClientesView({
   clients,
   onUpdateClient,
   onAddClient,
+  onDeleteClient,
   directClients,
   onUpdateDirectClient,
   onAddDirectClient,
+  onDeleteDirectClient,
   invoices,
   reservations,
   boletos = [],
@@ -70,6 +74,7 @@ export default function ClientesView({
           clients={clients}
           onUpdateClient={onUpdateClient}
           onAddClient={onAddClient}
+          onDeleteClient={onDeleteClient}
           invoices={invoices}
           reservations={reservations}
           boletos={boletos}
@@ -83,6 +88,7 @@ export default function ClientesView({
           clients={directClients}
           onUpdateClient={onUpdateDirectClient}
           onAddClient={onAddDirectClient}
+          onDeleteClient={onDeleteDirectClient}
           invoices={invoices}
           reservations={reservations}
           boletos={boletos}

@@ -1,15 +1,17 @@
 import React, { useState } from "react";
 import { Proveedor, TipoProveedor } from "../types/producto";
 import { nextSequentialId } from "../lib/idGenerator";
-import { Search, Plus, Edit3, X, Save, Phone, Mail, MapPin, Tag, DollarSign, Briefcase, Building2 } from "lucide-react";
+import { Search, Plus, Edit3, Trash2, X, Save, Phone, Mail, MapPin, Tag, DollarSign, Briefcase, Building2 } from "lucide-react";
 import { ProjectView } from "../types";
 import { AccionPermiso } from "../types/usuarios";
 import { usePermissions } from "../hooks/usePermissions";
+import { useDialog } from "../components/ui/DialogProvider";
 
 interface ProveedoresViewProps {
   proveedores: Proveedor[];
   onAddProveedor: (p: Proveedor) => void;
   onUpdateProveedor: (p: Proveedor) => void;
+  onDeleteProveedor: (id: string) => void;
 }
 
 const TIPO_COLORS: Record<TipoProveedor, string> = {
@@ -39,8 +41,9 @@ const EMPTY_FORM: Partial<Proveedor> = {
   notas: "",
 };
 
-export default function ProveedoresView({ proveedores, onAddProveedor, onUpdateProveedor }: ProveedoresViewProps) {
+export default function ProveedoresView({ proveedores, onAddProveedor, onUpdateProveedor, onDeleteProveedor }: ProveedoresViewProps) {
   const { puede } = usePermissions();
+  const { showConfirm } = useDialog();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterTipo, setFilterTipo] = useState<TipoProveedor | "ALL">("ALL");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -207,10 +210,33 @@ export default function ProveedoresView({ proveedores, onAddProveedor, onUpdateP
                         {p.status}
                       </span>
                     </td>
-                    <td className="px-6 py-3 text-right" onClick={e => { e.stopPropagation(); handleOpen(p); }}>
-                      <button className="p-1.5 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded transition-colors">
-                        <Edit3 className="w-4 h-4" />
-                      </button>
+                    <td className="px-6 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={e => { e.stopPropagation(); handleOpen(p); }}
+                          className="p-1.5 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded transition-colors"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        {puede(ProjectView.PROVEEDORES, AccionPermiso.ELIMINAR) && (
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              showConfirm({
+                                title: "Eliminar Proveedor",
+                                message: `¿Estás seguro que deseas eliminar al proveedor ${p.nombre}? Esto podría afectar servicios y tarifas asociadas.`,
+                                type: "danger",
+                                confirmText: "Eliminar",
+                                requireInputToConfirm: p.nombre,
+                                onConfirm: () => onDeleteProveedor(p.id)
+                              });
+                            }}
+                            className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

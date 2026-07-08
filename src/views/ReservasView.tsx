@@ -2848,36 +2848,38 @@ export default function ReservasView({
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>Reactivar</span>
                       </button>
-                      <button
-                        onClick={() => intentarAccionSensible({
-                          modulo: ProjectView.RESERVAS,
-                          accion: AccionPermiso.ELIMINAR,
-                          entidadTipo: "Reservation",
-                          entidadId: activeRes.id,
-                          descripcion: `Eliminar permanentemente el expediente ${activeRes.id}`,
-                          ejecutar: () => {
-                            showConfirm({
-                              title: "Eliminar Permanentemente",
-                              message: "Esta acción no se puede deshacer. El expediente y sus traslados serán eliminados de la base de datos de manera definitiva, liberando su identificador.",
-                              requireInputToConfirm: activeRes.id,
-                              type: "danger",
-                              confirmText: "Sí, Eliminar Permanentemente",
-                              onConfirm: () => {
-                                if (onDeleteReservation) {
-                                  onDeleteReservation(activeRes.id);
-                                  showAlert({ title: "Expediente Eliminado", message: "El expediente ha sido eliminado de forma permanente.", type: "success" });
-                                  setViewLevel(1);
+                      {puede(ProjectView.RESERVAS, AccionPermiso.ELIMINAR) && (
+                        <button
+                          onClick={() => intentarAccionSensible({
+                            modulo: ProjectView.RESERVAS,
+                            accion: AccionPermiso.ELIMINAR,
+                            entidadTipo: "Reservation",
+                            entidadId: activeRes.id,
+                            descripcion: `Eliminar permanentemente el expediente ${activeRes.id}`,
+                            ejecutar: () => {
+                              showConfirm({
+                                title: "Eliminar Permanentemente",
+                                message: "Esta acción no se puede deshacer. El expediente y sus traslados serán eliminados de la base de datos de manera definitiva, liberando su identificador.",
+                                requireInputToConfirm: activeRes.id,
+                                type: "danger",
+                                confirmText: "Sí, Eliminar Permanentemente",
+                                onConfirm: () => {
+                                  if (onDeleteReservation) {
+                                    onDeleteReservation(activeRes.id);
+                                    showAlert({ title: "Expediente Eliminado", message: "El expediente ha sido eliminado de forma permanente.", type: "success" });
+                                    setViewLevel(1);
+                                  }
                                 }
-                              }
-                            });
-                          },
-                        })}
-                        className="px-3 py-1.5 border border-red-300 bg-red-100 hover:bg-red-200 rounded text-red-700 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
-                        title="Eliminar Permanente"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Eliminar Permanente</span>
-                      </button>
+                              });
+                            },
+                          })}
+                          className="px-3 py-1.5 border border-red-300 bg-red-100 hover:bg-red-200 rounded text-red-700 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
+                          title="Eliminar Permanente"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Eliminar Permanente</span>
+                        </button>
+                      )}
                     </>
                   )}
                 </div>

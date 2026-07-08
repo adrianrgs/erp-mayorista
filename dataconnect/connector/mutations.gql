@@ -1127,6 +1127,10 @@ mutation UpdateUsuario(
   })
 }
 
+mutation DeleteUsuario($id: String!) @auth(level: PUBLIC) {
+  usuario_delete(id: $id)
+}
+
 mutation InsertReglaAutorizacion(
   $id: String!
   $modulo: String!

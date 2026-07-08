@@ -30,7 +30,10 @@ import {
   XCircle
 } from "lucide-react";
 import type { FlightLeg, B2BClient, CompanyConfig } from "../types";
+import { ProjectView } from "../types";
 import type { FlightTicket, Passenger, FlightSegment } from "../types/aereos";
+import { AccionPermiso } from "../types/usuarios";
+import { usePermissions } from "../hooks/usePermissions";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
 import { parseGDS, buildRoute, formatGDSDate, SAMPLE_GDS_TEXT } from "../lib/parsers/pnrParser";
 import { useDialog } from "../components/ui/DialogProvider";
@@ -213,6 +216,8 @@ function ListadoView({
 }) {
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const [activeTab, setActiveTab] = useState<"Activos" | "Anulados">("Activos");
+  const { showConfirm } = useDialog();
+  const { puede } = usePermissions();
 
   const filtered = boletos.filter((b) => {
     // filter tab
@@ -427,6 +432,25 @@ function ListadoView({
                       <Link2 className="w-3.5 h-3.5" />
                     )}
                   </button>
+                  {puede(ProjectView.VUELOS, AccionPermiso.ELIMINAR) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        showConfirm({
+                          title: "Eliminar Boleto",
+                          message: `¿Estás seguro que deseas eliminar el boleto ${boleto.pnr}? Esta acción no se puede deshacer.`,
+                          type: "danger",
+                          confirmText: "Eliminar",
+                          requireInputToConfirm: boleto.pnr,
+                          onConfirm: () => onEliminar(boleto.id)
+                        });
+                      }}
+                      title="Eliminar Boleto"
+                      className="p-1.5 rounded text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             );

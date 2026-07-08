@@ -5,6 +5,7 @@ import {
   AccionPermiso, ACCIONES_POR_MODULO, NOMBRE_MODULO, NOMBRE_ACCION,
 } from "../types/usuarios";
 import { useAuth } from "../context/AuthContext";
+import { useDialog } from "../components/ui/DialogProvider";
 import { nextSequentialId } from "../lib/idGenerator";
 import {
   Building2,
@@ -36,6 +37,7 @@ interface ConfiguracionViewProps {
   registrosAuditoria: RegistroAuditoria[];
   onAddUsuario: (dto: { id: string; username: string; password: string; nombre: string; email: string; rolId: string }) => void;
   onUpdateUsuario: (id: string, dto: any) => void;
+  onDeleteUsuario: (id: string) => void;
   onAddRol: (rol: Rol) => void;
   onUpdateRol: (rol: Rol) => void;
   onDeleteRol: (id: string) => void;
@@ -52,7 +54,7 @@ const MODULOS_CON_ACCIONES = Object.values(ProjectView).filter(v => ACCIONES_POR
 export default function ConfiguracionView({
   config, onUpdateConfig,
   usuarios, roles, reglasAutorizacion, solicitudesAutorizacion, registrosAuditoria,
-  onAddUsuario, onUpdateUsuario, onAddRol, onUpdateRol, onDeleteRol,
+  onAddUsuario, onUpdateUsuario, onDeleteUsuario, onAddRol, onUpdateRol, onDeleteRol,
   onAddReglaAutorizacion, onUpdateReglaAutorizacion, onResolveSolicitudAutorizacion, onAddRegistroAuditoria,
 }: ConfiguracionViewProps) {
   const [activeTab, setActiveTab] = useState<TabType>("empresa");
@@ -143,6 +145,7 @@ export default function ConfiguracionView({
               nombreRol={nombreRol}
               onAddUsuario={onAddUsuario}
               onUpdateUsuario={onUpdateUsuario}
+              onDeleteUsuario={onDeleteUsuario}
               onAddRegistroAuditoria={onAddRegistroAuditoria}
               sesionUsuarioId={sesion?.id || ""}
             />
@@ -300,16 +303,18 @@ function EmpresaTab({ formData, onChange, onSubmit }: { formData: CompanyConfig;
 // ─── TAB: USUARIOS Y ACCESOS ────────────────────────────────────────────────
 
 function UsuariosTab({
-  usuarios, roles, nombreRol, onAddUsuario, onUpdateUsuario, onAddRegistroAuditoria, sesionUsuarioId,
+  usuarios, roles, nombreRol, onAddUsuario, onUpdateUsuario, onDeleteUsuario, onAddRegistroAuditoria, sesionUsuarioId,
 }: {
   usuarios: Usuario[];
   roles: Rol[];
   nombreRol: (rolId: string) => string;
   onAddUsuario: (dto: { id: string; username: string; password: string; nombre: string; email: string; rolId: string }) => void;
   onUpdateUsuario: (id: string, dto: any) => void;
+  onDeleteUsuario: (id: string) => void;
   onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "id" | "createdAt">) => void;
   sesionUsuarioId: string;
 }) {
+  const { showConfirm } = useDialog();
   const emptyForm = { nombre: "", username: "", email: "", password: "", rolId: roles[0]?.id || "" };
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -390,6 +395,19 @@ function UsuariosTab({
                 <td className="px-4 py-2.5 text-right">
                   <button onClick={() => startEdit(u)} className="p-1.5 rounded hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 cursor-pointer">
                     <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => showConfirm({
+                      title: "Eliminar Usuario",
+                      message: `¿Estás seguro que deseas eliminar al usuario ${u.username}? Esta acción no se puede deshacer.`,
+                      type: "danger",
+                      confirmText: "Eliminar",
+                      requireInputToConfirm: u.username,
+                      onConfirm: () => onDeleteUsuario(u.id)
+                    })}
+                    className="p-1.5 rounded hover:bg-red-50 text-zinc-400 hover:text-red-600 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </td>
               </tr>

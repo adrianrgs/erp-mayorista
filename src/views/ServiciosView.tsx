@@ -4,12 +4,16 @@ import { nextSequentialId } from "../lib/idGenerator";
 import DateRangePicker from "../components/ui/DateRangePicker";
 import { useDialog } from "../components/ui/DialogProvider";
 import { Search, Plus, MapPin, Edit3, Trash2, Tag, Compass, X, Save } from "lucide-react";
+import { ProjectView } from "../types";
+import { AccionPermiso } from "../types/usuarios";
+import { usePermissions } from "../hooks/usePermissions";
 
 interface ServiciosViewProps {
   extraServices: ExtraService[];
   serviceRates: ServiceRate[];
   onAddExtraService: (srv: ExtraService) => void;
   onUpdateExtraService: (srv: ExtraService) => void;
+  onDeleteExtraService: (id: string) => void;
   onAddServiceRate: (rate: ServiceRate) => void;
   onUpdateServiceRate: (rate: ServiceRate) => void;
   onDeleteServiceRate: (id: string) => void;
@@ -21,12 +25,14 @@ export default function ServiciosView({
   serviceRates,
   onAddExtraService,
   onUpdateExtraService,
+  onDeleteExtraService,
   onAddServiceRate,
   onUpdateServiceRate,
   onDeleteServiceRate,
   proveedores = []
 }: ServiciosViewProps) {
-  const { showAlert } = useDialog();
+  const { showAlert, showConfirm } = useDialog();
+  const { puede } = usePermissions();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState<ServiceCategory | "ALL">("ALL");
   const [providerSearch, setProviderSearch] = useState("");
@@ -215,9 +221,26 @@ export default function ServiciosView({
                     </span>
                   </td>
                   <td className="px-6 py-3 text-right">
-                    <button onClick={() => handleOpenService(s)} className="p-1.5 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded transition-colors">
-                      <Edit3 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => handleOpenService(s)} className="p-1.5 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 rounded transition-colors">
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      {puede(ProjectView.SERVICIOS_VARIOS, AccionPermiso.ELIMINAR) && (
+                        <button
+                          onClick={() => showConfirm({
+                            title: "Eliminar Servicio",
+                            message: `¿Estás seguro que deseas eliminar el servicio ${s.nombre}? Esto podría afectar tarifas asociadas.`,
+                            type: "danger",
+                            confirmText: "Eliminar",
+                            requireInputToConfirm: s.nombre,
+                            onConfirm: () => onDeleteExtraService(s.id)
+                          })}
+                          className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
