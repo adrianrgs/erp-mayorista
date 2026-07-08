@@ -41,6 +41,9 @@ import {
   X
 } from "lucide-react";
 import { useDialog } from "../components/ui/DialogProvider";
+import { ProjectView } from "../types";
+import { AccionPermiso } from "../types/usuarios";
+import { usePermissions } from "../hooks/usePermissions";
 
 // Initial list of Venezuelan and International properties mapped for Product Dpto.
 const initialDetailedProperties: Property[] = [
@@ -285,6 +288,7 @@ export default function PropiedadesView({
   onDeleteDetailedProperty
 }: PropiedadesViewProps) {
   const { showConfirm, showAlert } = useDialog();
+  const { puede } = usePermissions();
 
   // --- STATE MANAGERS ---
   const [viewLevel, setViewLevel] = useState<1 | 2 | 3>(1); // Level 1 (Listing), Level 2 (Property Detail & Stats), Level 3 (Rate/Room Matrix)
@@ -719,13 +723,15 @@ export default function PropiedadesView({
               </p>
             </div>
 
-            <button
-              id="add-new-hotel-btn"
-              onClick={() => setIsNewPropertyOpen(true)}
-              className="px-4.5 py-2.5 bg-zinc-900 hover:bg-zinc-805 text-white rounded text-xs font-bold tracking-wider uppercase flex items-center gap-2 cursor-pointer transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Registrar Hotel Directo
-            </button>
+            {puede(ProjectView.PROPIEDADES, AccionPermiso.CREAR) && (
+              <button
+                id="add-new-hotel-btn"
+                onClick={() => setIsNewPropertyOpen(true)}
+                className="px-4.5 py-2.5 bg-zinc-900 hover:bg-zinc-805 text-white rounded text-xs font-bold tracking-wider uppercase flex items-center gap-2 cursor-pointer transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Registrar Hotel Directo
+              </button>
+            )}
           </div>
 
           {/* Filtros Bento Grid */}
@@ -870,16 +876,25 @@ export default function PropiedadesView({
                             )}
                           </td>
                           <td className="p-4" onClick={e => e.stopPropagation()}>
-                            <button
-                              id={`toggle-status-btn-${p.id}`}
-                              onClick={() => handleTogglePropertyStatus(p.id, p.status)}
-                              className={`px-2 py-0.5.5 text-[9px] font-bold tracking-wider rounded uppercase border cursor-pointer transition-colors ${p.status === PropertyStatus.ACTIVO
-                                ? "bg-zinc-50 border-zinc-200 text-zinc-900 hover:text-zinc-500"
-                                : "bg-red-50 border-red-200 text-red-650 hover:bg-white"
-                                }`}
-                            >
-                              ● {p.status}
-                            </button>
+                            {puede(ProjectView.PROPIEDADES, AccionPermiso.EDITAR) ? (
+                              <button
+                                id={`toggle-status-btn-${p.id}`}
+                                onClick={() => handleTogglePropertyStatus(p.id, p.status)}
+                                className={`px-2 py-0.5.5 text-[9px] font-bold tracking-wider rounded uppercase border cursor-pointer transition-colors ${p.status === PropertyStatus.ACTIVO
+                                  ? "bg-zinc-50 border-zinc-200 text-zinc-900 hover:text-zinc-500"
+                                  : "bg-red-50 border-red-200 text-red-650 hover:bg-white"
+                                  }`}
+                              >
+                                ● {p.status}
+                              </button>
+                            ) : (
+                              <span className={`px-2 py-0.5.5 text-[9px] font-bold tracking-wider rounded uppercase border inline-block ${p.status === PropertyStatus.ACTIVO
+                                ? "bg-zinc-50 border-zinc-200 text-zinc-900"
+                                : "bg-red-50 border-red-200 text-red-650"
+                                }`}>
+                                ● {p.status}
+                              </span>
+                            )}
                           </td>
                           <td className="p-4 text-right" onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-2">
@@ -893,26 +908,28 @@ export default function PropiedadesView({
                               >
                                 Ficha de Detalle <ChevronRight className="w-3 h-3" />
                               </button>
-                              <button
-                                onClick={() => {
-                                  showConfirm({
-                                    title: "Eliminar propiedad",
-                                    message: `¿Estás seguro que deseas eliminar la propiedad ${p.nombre}? Esto podría afectar reservas y tarifas asociadas.`,
-                                    type: "danger",
-                                    confirmText: "Eliminar",
-                                    requireInputToConfirm: p.nombre,
-                                    onConfirm: () => {
-                                      onDeleteDetailedProperty(p.id);
-                                      setNotification(`La propiedad ${p.nombre} ha sido eliminada`);
-                                      setTimeout(() => setNotification(""), 3000);
-                                    }
-                                  });
-                                }}
-                                className="p-1.5 bg-white border border-zinc-200 text-red-500 hover:bg-red-50 rounded cursor-pointer transition-colors"
-                                title="Eliminar Propiedad"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {puede(ProjectView.PROPIEDADES, AccionPermiso.ELIMINAR) && (
+                                <button
+                                  onClick={() => {
+                                    showConfirm({
+                                      title: "Eliminar propiedad",
+                                      message: `¿Estás seguro que deseas eliminar la propiedad ${p.nombre}? Esto podría afectar reservas y tarifas asociadas.`,
+                                      type: "danger",
+                                      confirmText: "Eliminar",
+                                      requireInputToConfirm: p.nombre,
+                                      onConfirm: () => {
+                                        onDeleteDetailedProperty(p.id);
+                                        setNotification(`La propiedad ${p.nombre} ha sido eliminada`);
+                                        setTimeout(() => setNotification(""), 3000);
+                                      }
+                                    });
+                                  }}
+                                  className="p-1.5 bg-white border border-zinc-200 text-red-500 hover:bg-red-50 rounded cursor-pointer transition-colors"
+                                  title="Eliminar Propiedad"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1152,13 +1169,15 @@ export default function PropiedadesView({
                     <h5 className="font-bold text-zinc-900 text-sm">Biblioteca Fotográfica</h5>
                     <p className="text-xs text-zinc-450">Imágenes sincronizadas con material publicitario para minoristas.</p>
                   </div>
-                  <button
-                    id="trigger-photo-upload"
-                    onClick={handleAddImageToGallery}
-                    className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Simular Firebase Upload
-                  </button>
+                  {puede(ProjectView.PROPIEDADES, AccionPermiso.EDITAR) && (
+                    <button
+                      id="trigger-photo-upload"
+                      onClick={handleAddImageToGallery}
+                      className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Simular Firebase Upload
+                    </button>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1170,12 +1189,14 @@ export default function PropiedadesView({
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                       />
-                      <div className="absolute top-2 right-2 bg-zinc-900/80 text-white p-1 rounded hover:bg-zinc-950 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Trash2 className="w-3.5 h-3.5" onClick={() => {
-                          setTempImages(prev => prev.filter((_, i) => i !== idx));
-                          triggerNotification("✓ Foto descartada de la galería.");
-                        }} />
-                      </div>
+                      {puede(ProjectView.PROPIEDADES, AccionPermiso.EDITAR) && (
+                        <div className="absolute top-2 right-2 bg-zinc-900/80 text-white p-1 rounded hover:bg-zinc-950 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Trash2 className="w-3.5 h-3.5" onClick={() => {
+                            setTempImages(prev => prev.filter((_, i) => i !== idx));
+                            triggerNotification("✓ Foto descartada de la galería.");
+                          }} />
+                        </div>
+                      )}
                       <div className="absolute bottom-1 left-2">
                         <span className="text-[8.5px] bg-zinc-950/80 text-white px-1.5 py-0.2 rounded font-semibold whitespace-nowrap">IMAGEN_{idx + 1}.JPG</span>
                       </div>
@@ -1205,12 +1226,14 @@ export default function PropiedadesView({
                   <ShieldAlert className="w-4 h-5 text-zinc-800" />
                   <h5 className="font-bold text-zinc-900 text-xs uppercase tracking-wider">Declarar Cierre Temporal de Ventas (Stop Sale)</h5>
                 </div>
-                <MultiDayCalendar
-                  propertyId={activePropertyId}
-                  stopSales={stopSales}
-                  onAddStopSale={handleAddStopSaleWithNotify}
-                  onDeleteStopSale={handleDeleteStopSale}
-                />
+                {puede(ProjectView.PROPIEDADES, AccionPermiso.CREAR) && (
+                  <MultiDayCalendar
+                    propertyId={activePropertyId}
+                    stopSales={stopSales}
+                    onAddStopSale={handleAddStopSaleWithNotify}
+                    onDeleteStopSale={handleDeleteStopSale}
+                  />
+                )}
 
                 {/* List of active Stop Sales for active property */}
                 <div className="space-y-3">
@@ -1242,13 +1265,15 @@ export default function PropiedadesView({
                               <td className="p-3 text-zinc-900">{formatDate(s.fechaFin)}</td>
                               <td className="p-3 text-zinc-650">{s.motivo || "Cierre de contingencia"}</td>
                               <td className="p-3 text-right">
-                                <button
-                                  id={`delete-stopsale-btn-${s.id}`}
-                                  onClick={() => handleDeleteStopSale(s.id)}
-                                  className="p-1 px-2.5 bg-red-50 hover:bg-red-100 text-red-650 border border-red-200 rounded font-bold uppercase text-[9px]"
-                                >
-                                  Quitar
-                                </button>
+                                {puede(ProjectView.PROPIEDADES, AccionPermiso.ELIMINAR) && (
+                                  <button
+                                    id={`delete-stopsale-btn-${s.id}`}
+                                    onClick={() => handleDeleteStopSale(s.id)}
+                                    className="p-1 px-2.5 bg-red-50 hover:bg-red-100 text-red-650 border border-red-200 rounded font-bold uppercase text-[9px]"
+                                  >
+                                    Quitar
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           ))
@@ -1269,13 +1294,15 @@ export default function PropiedadesView({
                     <h5 className="font-bold text-zinc-900 text-sm">Condiciones Generales & Reglas del Voucher</h5>
                     <p className="text-xs text-zinc-450">Términos impresos en los vouchers emitidos por Foratour ERP para este hotel.</p>
                   </div>
-                  <button
-                    id="save-policies-btn"
-                    onClick={handleSavePolicies}
-                    className="px-4 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
-                  >
-                    Guardar Cambios
-                  </button>
+                  {puede(ProjectView.PROPIEDADES, AccionPermiso.EDITAR) && (
+                    <button
+                      id="save-policies-btn"
+                      onClick={handleSavePolicies}
+                      className="px-4 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                    >
+                      Guardar Cambios
+                    </button>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -1359,6 +1386,7 @@ export default function PropiedadesView({
             <div className="lg:col-span-12 xl:col-span-5 space-y-6">
 
               {/* Formulario Agregar Tipo Habitación */}
+              {puede(ProjectView.PROPIEDADES, AccionPermiso.CREAR) && (
               <div className="bg-white p-5 border border-zinc-200 rounded-lg space-y-4 shadow-xs">
                 <div>
                   <h4 className="font-bold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5">
@@ -1477,6 +1505,7 @@ export default function PropiedadesView({
                   </button>
                 </form>
               </div>
+              )}
 
               {/* Listado de Habitaciones Actuales */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-3 shadow-xs">
@@ -1504,23 +1533,25 @@ export default function PropiedadesView({
                           </div>
                         </div>
 
-                        <button
-                          id={`del-room-btn-${rt.id}`}
-                          onClick={() => {
-                            showConfirm({
-                              title: "Eliminar tipo de habitación",
-                              message: `El borrado de "${rt.nombre}" eliminará cascada y planes de tarifación adjuntos. ¿Continuar?`,
-                              type: "danger",
-                              confirmText: "Eliminar",
-                              onConfirm: () => {
-                                handleDeleteRoomType(rt.id);
-                              }
-                            });
-                          }}
-                          className="p-1 px-2.5 bg-zinc-50 hover:bg-red-50 text-zinc-400 hover:text-red-600 border border-zinc-200 hover:border-red-200 rounded font-bold uppercase text-[9px]"
-                        >
-                          Eliminar
-                        </button>
+                        {puede(ProjectView.PROPIEDADES, AccionPermiso.ELIMINAR) && (
+                          <button
+                            id={`del-room-btn-${rt.id}`}
+                            onClick={() => {
+                              showConfirm({
+                                title: "Eliminar tipo de habitación",
+                                message: `El borrado de "${rt.nombre}" eliminará cascada y planes de tarifación adjuntos. ¿Continuar?`,
+                                type: "danger",
+                                confirmText: "Eliminar",
+                                onConfirm: () => {
+                                  handleDeleteRoomType(rt.id);
+                                }
+                              });
+                            }}
+                            className="p-1 px-2.5 bg-zinc-50 hover:bg-red-50 text-zinc-400 hover:text-red-600 border border-zinc-200 hover:border-red-200 rounded font-bold uppercase text-[9px]"
+                          >
+                            Eliminar
+                          </button>
+                        )}
                       </div>
                     ))
                   )}
@@ -1571,6 +1602,7 @@ export default function PropiedadesView({
               </div>
 
               {/* Formulario Cargar Tarifa / Rate Plan — Opción A: Multi-Habitación */}
+              {(puede(ProjectView.PROPIEDADES, AccionPermiso.CREAR) || puede(ProjectView.PROPIEDADES, AccionPermiso.EDITAR)) && (
               <div id="rateplan-form-header" className="bg-white p-5 border border-zinc-200 rounded-lg space-y-4 shadow-xs">
                 <div>
                   <h4 className="font-bold text-zinc-905 text-sm uppercase tracking-wider flex items-center gap-1.5">
@@ -1797,6 +1829,7 @@ export default function PropiedadesView({
                   </div>
                 </form>
               </div>
+              )}
 
               {/* Registro de Tarifas Agrupadas por Plan/Promoción (Acordeón) */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-3 shadow-xs">
@@ -1858,32 +1891,36 @@ export default function PropiedadesView({
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
-                                <button
-                                  id={`edit-group-btn-${planName.replace(/\s+/g, '-')}`}
-                                  type="button"
-                                  onClick={() => handleEditPlanGroup(planName, planRates)}
-                                  className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider bg-zinc-100 text-zinc-700 border border-zinc-200 rounded hover:bg-zinc-200 cursor-pointer transition-colors"
-                                >
-                                  Editar Plan
-                                </button>
-                                <button
-                                  id={`delete-group-btn-${planName.replace(/\s+/g, '-')}`}
-                                  type="button"
-                                  onClick={() => {
-                                    showConfirm({
-                                      title: "Eliminar plan de tarifas",
-                                      message: `¿Eliminar el plan "${planName}" con todas sus ${planRates.length} tarifa(s)?`,
-                                      type: "danger",
-                                      confirmText: "Eliminar",
-                                      onConfirm: () => {
-                                        handleDeleteRatePlanGroup(planName);
-                                      }
-                                    });
-                                  }}
-                                  className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 cursor-pointer transition-colors"
-                                >
-                                  Eliminar Plan
-                                </button>
+                                {puede(ProjectView.PROPIEDADES, AccionPermiso.EDITAR) && (
+                                  <button
+                                    id={`edit-group-btn-${planName.replace(/\s+/g, '-')}`}
+                                    type="button"
+                                    onClick={() => handleEditPlanGroup(planName, planRates)}
+                                    className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider bg-zinc-100 text-zinc-700 border border-zinc-200 rounded hover:bg-zinc-200 cursor-pointer transition-colors"
+                                  >
+                                    Editar Plan
+                                  </button>
+                                )}
+                                {puede(ProjectView.PROPIEDADES, AccionPermiso.ELIMINAR) && (
+                                  <button
+                                    id={`delete-group-btn-${planName.replace(/\s+/g, '-')}`}
+                                    type="button"
+                                    onClick={() => {
+                                      showConfirm({
+                                        title: "Eliminar plan de tarifas",
+                                        message: `¿Eliminar el plan "${planName}" con todas sus ${planRates.length} tarifa(s)?`,
+                                        type: "danger",
+                                        confirmText: "Eliminar",
+                                        onConfirm: () => {
+                                          handleDeleteRatePlanGroup(planName);
+                                        }
+                                      });
+                                    }}
+                                    className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 cursor-pointer transition-colors"
+                                  >
+                                    Eliminar Plan
+                                  </button>
+                                )}
                                 <button
                                   id={`toggle-group-btn-${planName.replace(/\s+/g, '-')}`}
                                   type="button"
@@ -1930,15 +1967,17 @@ export default function PropiedadesView({
                                       <span className="text-xs font-semibold text-zinc-600 text-right">${rp.tarifaExtraAdulto.toFixed(2)}</span>
                                       <span className="text-xs font-semibold text-zinc-500 text-right">${rp.tarifaExtraNino.toFixed(2)}</span>
                                       <div className="flex justify-end">
-                                        <button
-                                          id={`delete-rateplan-btn-${rp.id}`}
-                                          type="button"
-                                          onClick={() => handleDeleteRatePlan(rp.id)}
-                                          className="p-1 text-zinc-300 hover:text-red-500 transition-colors cursor-pointer"
-                                          title="Eliminar esta tarifa"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
+                                        {puede(ProjectView.PROPIEDADES, AccionPermiso.ELIMINAR) && (
+                                          <button
+                                            id={`delete-rateplan-btn-${rp.id}`}
+                                            type="button"
+                                            onClick={() => handleDeleteRatePlan(rp.id)}
+                                            className="p-1 text-zinc-300 hover:text-red-500 transition-colors cursor-pointer"
+                                            title="Eliminar esta tarifa"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
                                   );
