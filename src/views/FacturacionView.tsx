@@ -206,7 +206,7 @@ export default function FacturacionView({
         }
 
         return (
-          <div className="mt-2 text-[10px] text-zinc-605 bg-zinc-50 p-2 rounded border border-zinc-200 space-y-2 text-left font-sans">
+          <div className="mt-2 text-[10px] text-zinc-600 bg-zinc-50 p-2 rounded border border-zinc-200 space-y-2 text-left font-sans">
             <div className="grid grid-cols-3 gap-2 border-b border-zinc-200 pb-1.5 font-bold">
               <div>Check-in: <span className="font-mono text-zinc-800">{formatDate(checkIn)}</span></div>
               <div>Check-out: <span className="font-mono text-zinc-800">{formatDate(checkOut)}</span></div>
@@ -219,7 +219,7 @@ export default function FacturacionView({
                 <div className="font-semibold text-zinc-800 leading-tight">
                   <p>Plan: {ratePlanName}</p>
                   {ratePlan && (
-                    <p className="text-[9.5px] text-zinc-550 font-medium">Cobro: {ratePlan.tipoCobro} | Tarifa base: ${ratePlan.tarifaBase} USD/noche</p>
+                    <p className="text-[9.5px] text-zinc-500 font-medium">Cobro: {ratePlan.tipoCobro} | Tarifa base: ${ratePlan.tarifaBase} USD/noche</p>
                   )}
                 </div>
               </div>
@@ -230,7 +230,7 @@ export default function FacturacionView({
                     const roomTypeObj = roomTypes.find(rt => rt.id === room.roomTypeId);
                     const roomTypeName = roomTypeObj ? roomTypeObj.nombre : room.roomTypeId || `Habitación ${idx + 1}`;
                     return (
-                      <div key={idx} className="bg-white border border-zinc-150 p-1.5 rounded text-[9px] font-semibold leading-none shadow-3xs">
+                      <div key={idx} className="bg-white border border-zinc-100 p-1.5 rounded text-[9px] font-semibold leading-none shadow-3xs">
                         <div className="flex justify-between border-b border-zinc-100 pb-0.5 mb-1 font-bold text-zinc-700">
                           <span>{roomTypeName}</span>
                           <span>{room.adultsCount} Pax</span>
@@ -239,7 +239,7 @@ export default function FacturacionView({
                           {room.guests && room.guests.map((g: any, gIdx: number) => (
                             <div key={gIdx} className="text-zinc-500 font-mono flex gap-1 items-center">
                               <span>{gIdx + 1}.</span>
-                              <span className="uppercase font-bold text-zinc-755">{g.name || "Sin Nombre asignado"}</span>
+                              <span className="uppercase font-bold text-zinc-800">{g.name || "Sin Nombre asignado"}</span>
                               <span className="text-[7px] bg-zinc-100 px-0.5 rounded text-zinc-400 font-sans font-bold">{g.type}</span>
                             </div>
                           ))}
@@ -263,15 +263,15 @@ export default function FacturacionView({
         const pax = det.transPax || 1;
 
         return (
-          <div className="mt-2 text-[10px] text-zinc-650 bg-zinc-50 p-2 rounded border border-zinc-200 space-y-2 text-left font-sans">
+          <div className="mt-2 text-[10px] text-zinc-600 bg-zinc-50 p-2 rounded border border-zinc-200 space-y-2 text-left font-sans">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <span className="text-[8px] uppercase tracking-wider text-zinc-400 font-bold block mb-1">Ruta y Logística</span>
                 <div className="font-semibold text-zinc-800 space-y-0.5">
-                  <p>Origen: <span className="font-extrabold uppercase text-zinc-955">{pickup}</span></p>
-                  <p>Destino: <span className="font-extrabold uppercase text-zinc-955">{dropoff}</span></p>
+                  <p>Origen: <span className="font-extrabold uppercase text-zinc-950">{pickup}</span></p>
+                  <p>Destino: <span className="font-extrabold uppercase text-zinc-950">{dropoff}</span></p>
                   {det.transTripType === "round-trip" && (
-                    <p className="text-[9px] text-zinc-505 font-medium">🔄 Retorno: {det.transReturnDropoff || pickup} el {formatDate(det.transReturnDate)}</p>
+                    <p className="text-[9px] text-zinc-500 font-medium">🔄 Retorno: {det.transReturnDropoff || pickup} el {formatDate(det.transReturnDate)}</p>
                   )}
                 </div>
               </div>
@@ -294,17 +294,17 @@ export default function FacturacionView({
         const pax = det.insPax || 1;
 
         return (
-          <div className="mt-2 text-[10px] text-zinc-650 bg-zinc-50 p-2 rounded border border-zinc-200 space-y-2 text-left font-sans">
+          <div className="mt-2 text-[10px] text-zinc-600 bg-zinc-50 p-2 rounded border border-zinc-200 space-y-2 text-left font-sans">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <span className="text-[8px] uppercase tracking-wider text-zinc-400 font-bold block mb-1">Vigencia</span>
-                <div className="font-semibold text-zinc-850 space-y-0.5">
+                <div className="font-semibold text-zinc-800 space-y-0.5">
                   <p>Plan: {plan}</p>
                   <p>Fechas: {formatDate(start)} ➔ {formatDate(end)}</p>
                   <p>Duración: {days} días | Pasajeros: {pax} Pax</p>
                 </div>
               </div>
-              <div className="font-semibold text-zinc-850 space-y-0.5">
+              <div className="font-semibold text-zinc-800 space-y-0.5">
                 <span className="text-[8px] uppercase tracking-wider text-zinc-400 font-bold block mb-1">Estado de Tarifas</span>
                 <p>Tipo de Cobertura: Internacional</p>
                 {det.salePrice && (
@@ -323,17 +323,17 @@ export default function FacturacionView({
         const days = det.carDays || 1;
 
         return (
-          <div className="mt-2 text-[10px] text-zinc-650 bg-zinc-50 p-2 rounded border border-zinc-200 space-y-2 text-left font-sans">
+          <div className="mt-2 text-[10px] text-zinc-600 bg-zinc-50 p-2 rounded border border-zinc-200 space-y-2 text-left font-sans">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <span className="text-[8px] uppercase tracking-wider text-zinc-400 font-bold block mb-1">Vehículo y Proveedor</span>
-                <div className="font-semibold text-zinc-850 space-y-0.5">
+                <div className="font-semibold text-zinc-800 space-y-0.5">
                   <p>Rent-A-Car: {supplier}</p>
                   <p>Categoría: {category}</p>
                   <p>Período: {formatDate(start)} ➔ {formatDate(end)}</p>
                 </div>
               </div>
-              <div className="font-semibold text-zinc-855 space-y-0.5">
+              <div className="font-semibold text-zinc-900 space-y-0.5">
                 <span className="text-[8px] uppercase tracking-wider text-zinc-400 font-bold block mb-1">Renta</span>
                 <p>Duración: {days} días de alquiler</p>
               </div>
@@ -346,10 +346,10 @@ export default function FacturacionView({
         const description = det.manualDescription || "No especificado";
 
         return (
-          <div className="mt-2 text-[10px] text-zinc-650 bg-zinc-50 p-2 rounded border border-zinc-200 space-y-2 text-left font-sans">
+          <div className="mt-2 text-[10px] text-zinc-600 bg-zinc-50 p-2 rounded border border-zinc-200 space-y-2 text-left font-sans">
             <div>
               <span className="text-[8px] uppercase tracking-wider text-zinc-400 font-bold block mb-1">Entrada Manual Receptiva</span>
-              <div className="font-semibold text-zinc-850 space-y-1">
+              <div className="font-semibold text-zinc-800 space-y-1">
                 <p>Proveedor: {supplier}</p>
                 <p className="text-[9.5px] italic text-zinc-500 font-medium">Notas: {description}</p>
               </div>
@@ -359,7 +359,7 @@ export default function FacturacionView({
       }
       default:
         return (
-          <div className="mt-2 text-[10px] text-zinc-450 italic text-left">
+          <div className="mt-2 text-[10px] text-zinc-400 italic text-left">
             No hay detalles estructurados cargados para este servicio legacy.
           </div>
         );
@@ -388,11 +388,11 @@ export default function FacturacionView({
         }
 
         return (
-          <div className="mt-2 pl-3 border-l-2 border-zinc-200 text-[10.5px] text-zinc-550 space-y-2 bg-zinc-50/70 p-2 rounded no-print">
+          <div className="mt-2 pl-3 border-l-2 border-zinc-200 text-[10.5px] text-zinc-500 space-y-2 bg-zinc-50/70 p-2 rounded no-print">
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-semibold text-left">
               <div><span className="text-zinc-400">Check-in:</span> <span className="font-mono text-zinc-800 font-bold">{formatDate(checkIn)}</span></div>
               <div><span className="text-zinc-400">Check-out:</span> <span className="font-mono text-zinc-800 font-bold">{formatDate(checkOut)}</span></div>
-              <div><span className="text-zinc-400">Noches:</span> <span className="font-bold text-zinc-850">{nights} noche(s)</span></div>
+              <div><span className="text-zinc-400">Noches:</span> <span className="font-bold text-zinc-800">{nights} noche(s)</span></div>
               <div className="col-span-1 truncate"><span className="text-zinc-400">Tarifa / Plan:</span> <span className="font-bold text-zinc-800">{ratePlanName}</span></div>
               {promo && promo !== "Ninguna" && (
                 <div className="col-span-2"><span className="text-zinc-400">Promoción:</span> <span className="text-emerald-700 font-extrabold">{promo}</span></div>
@@ -401,13 +401,13 @@ export default function FacturacionView({
 
             {/* Extranet Contract Info */}
             {ratePlan && (
-              <div className="bg-white p-2 rounded border border-zinc-200 text-[9px] text-zinc-650 space-y-1 text-left">
+              <div className="bg-white p-2 rounded border border-zinc-200 text-[9px] text-zinc-600 space-y-1 text-left">
                 <span className="font-black text-zinc-800 uppercase block text-[8px] tracking-wider">Reglas del Contrato Extranet:</span>
                 <div>Cobro: <span className="font-bold text-zinc-700">{ratePlan.tipoCobro}</span> | Tarifa Base: <span className="font-bold text-zinc-700">${ratePlan.tarifaBase} USD/noche</span></div>
                 {ratePlan.tipoCobro === TipoCobro.POR_PERSONA && (
                   <div>Extra Adulto: <span className="font-bold text-zinc-700">${ratePlan.tarifaExtraAdulto} USD</span> | Extra Niño: <span className="font-bold text-zinc-700">${ratePlan.tarifaExtraNino} USD</span></div>
                 )}
-                <div className="text-zinc-455 italic truncate" title={ratePlan.politicasCancelacion}>Pol. Cancelación: {ratePlan.politicasCancelacion}</div>
+                <div className="text-zinc-500 italic truncate" title={ratePlan.politicasCancelacion}>Pol. Cancelación: {ratePlan.politicasCancelacion}</div>
               </div>
             )}
             
@@ -418,17 +418,17 @@ export default function FacturacionView({
                   const roomTypeObj = roomTypes.find(rt => rt.id === room.roomTypeId);
                   const roomTypeName = roomTypeObj ? roomTypeObj.nombre : room.roomTypeId || `Habitación ${idx + 1}`;
                   return (
-                    <div key={idx} className="bg-white border border-zinc-150 p-1.5 rounded text-[9.5px] space-y-1 shadow-3xs">
-                      <div className="flex justify-between font-bold text-zinc-755 border-b border-zinc-100 pb-0.5">
+                    <div key={idx} className="bg-white border border-zinc-100 p-1.5 rounded text-[9.5px] space-y-1 shadow-3xs">
+                      <div className="flex justify-between font-bold text-zinc-800 border-b border-zinc-100 pb-0.5">
                         <span>{roomTypeName}</span>
                         <span className="text-zinc-400 font-normal">({room.adultsCount} Pax)</span>
                       </div>
                       <div className="space-y-0.5 pl-1">
                         {room.guests && room.guests.map((g: any, gIdx: number) => (
-                          <div key={gIdx} className="text-zinc-650 flex items-center gap-1 font-medium">
-                            <span className="text-zinc-455 font-mono text-[8px]">{gIdx + 1}.</span>
+                          <div key={gIdx} className="text-zinc-600 flex items-center gap-1 font-medium">
+                            <span className="text-zinc-500 font-mono text-[8px]">{gIdx + 1}.</span>
                             <span className="uppercase font-bold text-zinc-800">{g.name || "Sin nombre asignado"}</span>
-                            <span className="text-[7.5px] bg-zinc-105 border border-zinc-200 px-0.5 rounded text-zinc-500 font-bold">{g.type}</span>
+                            <span className="text-[7.5px] bg-zinc-100 border border-zinc-200 px-0.5 rounded text-zinc-500 font-bold">{g.type}</span>
                           </div>
                         ))}
                       </div>
@@ -450,16 +450,16 @@ export default function FacturacionView({
         const pax = det.transPax || 1;
         
         return (
-          <div className="mt-2 pl-3 border-l-2 border-zinc-200 text-[10.5px] text-zinc-550 space-y-1 bg-zinc-50/70 p-2 rounded no-print text-left">
-            <div className="font-bold text-zinc-850">Ruta: <span className="font-extrabold text-zinc-955 uppercase">{pickup} ➔ {dropoff}</span></div>
+          <div className="mt-2 pl-3 border-l-2 border-zinc-200 text-[10.5px] text-zinc-500 space-y-1 bg-zinc-50/70 p-2 rounded no-print text-left">
+            <div className="font-bold text-zinc-800">Ruta: <span className="font-extrabold text-zinc-950 uppercase">{pickup} ➔ {dropoff}</span></div>
             {det.transTripType === "round-trip" && (
-              <div className="text-zinc-650 font-medium pl-1.5">🔄 Retorno: <span className="font-bold uppercase text-zinc-700">{det.transReturnDropoff || pickup}</span> el <span className="font-mono font-bold text-zinc-800">{formatDate(det.transReturnDate)}</span></div>
+              <div className="text-zinc-600 font-medium pl-1.5">🔄 Retorno: <span className="font-bold uppercase text-zinc-700">{det.transReturnDropoff || pickup}</span> el <span className="font-mono font-bold text-zinc-800">{formatDate(det.transReturnDate)}</span></div>
             )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-semibold text-[10px] pt-1 border-t border-zinc-200/60 mt-1">
-              <div><span className="text-zinc-400">Fecha:</span> <span className="font-mono text-zinc-855 font-bold">{formatDate(date)}</span></div>
+              <div><span className="text-zinc-400">Fecha:</span> <span className="font-mono text-zinc-900 font-bold">{formatDate(date)}</span></div>
               <div><span className="text-zinc-400">Pasajeros:</span> <span className="font-bold text-zinc-800">{pax} Pax</span></div>
-              <div><span className="text-zinc-400">Vehículo:</span> <span className="font-bold text-zinc-850">{vehicle}</span></div>
-              <div><span className="text-zinc-400">Servicio:</span> <span className="font-bold text-zinc-855">{serviceType} ({tripType})</span></div>
+              <div><span className="text-zinc-400">Vehículo:</span> <span className="font-bold text-zinc-800">{vehicle}</span></div>
+              <div><span className="text-zinc-400">Servicio:</span> <span className="font-bold text-zinc-900">{serviceType} ({tripType})</span></div>
             </div>
           </div>
         );
@@ -472,11 +472,11 @@ export default function FacturacionView({
         const pax = det.insPax || 1;
         
         return (
-          <div className="mt-2 pl-3 border-l-2 border-zinc-200 text-[10.5px] text-zinc-550 space-y-1 bg-zinc-50/70 p-2 rounded no-print text-left">
-            <div className="font-bold text-zinc-855">Plan Seguro: <span className="font-extrabold text-zinc-950">{plan}</span></div>
+          <div className="mt-2 pl-3 border-l-2 border-zinc-200 text-[10.5px] text-zinc-500 space-y-1 bg-zinc-50/70 p-2 rounded no-print text-left">
+            <div className="font-bold text-zinc-900">Plan Seguro: <span className="font-extrabold text-zinc-950">{plan}</span></div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-semibold text-[10px] pt-1 border-t border-zinc-200/60 mt-1">
-              <div><span className="text-zinc-400">Inicio:</span> <span className="font-mono text-zinc-850 font-bold">{formatDate(start)}</span></div>
-              <div><span className="text-zinc-400">Vence:</span> <span className="font-mono text-zinc-850 font-bold">{formatDate(end)}</span></div>
+              <div><span className="text-zinc-400">Inicio:</span> <span className="font-mono text-zinc-800 font-bold">{formatDate(start)}</span></div>
+              <div><span className="text-zinc-400">Vence:</span> <span className="font-mono text-zinc-800 font-bold">{formatDate(end)}</span></div>
               <div><span className="text-zinc-400">Vigencia:</span> <span className="font-bold text-zinc-800">{days} días de cobertura</span></div>
               <div><span className="text-zinc-400">Pasajeros:</span> <span className="font-bold text-zinc-800">{pax} Pax</span></div>
               {det.salePrice && (
@@ -494,13 +494,13 @@ export default function FacturacionView({
         const days = det.carDays || 1;
         
         return (
-          <div className="mt-2 pl-3 border-l-2 border-zinc-200 text-[10.5px] text-zinc-550 space-y-1 bg-zinc-50/70 p-2 rounded no-print text-left">
-            <div className="font-bold text-zinc-850">Rent-A-Car: <span className="font-extrabold text-zinc-955 uppercase">{supplier}</span></div>
+          <div className="mt-2 pl-3 border-l-2 border-zinc-200 text-[10.5px] text-zinc-500 space-y-1 bg-zinc-50/70 p-2 rounded no-print text-left">
+            <div className="font-bold text-zinc-800">Rent-A-Car: <span className="font-extrabold text-zinc-950 uppercase">{supplier}</span></div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-semibold text-[10px] pt-1 border-t border-zinc-200/60 mt-1">
-              <div><span className="text-zinc-400">Categoría:</span> <span className="font-bold text-zinc-850">{category}</span></div>
+              <div><span className="text-zinc-400">Categoría:</span> <span className="font-bold text-zinc-800">{category}</span></div>
               <div><span className="text-zinc-400">Días:</span> <span className="font-bold text-zinc-800">{days} días de renta</span></div>
-              <div><span className="text-zinc-400">Entrega:</span> <span className="font-mono text-zinc-850 font-bold">{formatDate(start)}</span></div>
-              <div><span className="text-zinc-400">Devuelve:</span> <span className="font-mono text-zinc-850 font-bold">{formatDate(end)}</span></div>
+              <div><span className="text-zinc-400">Entrega:</span> <span className="font-mono text-zinc-800 font-bold">{formatDate(start)}</span></div>
+              <div><span className="text-zinc-400">Devuelve:</span> <span className="font-mono text-zinc-800 font-bold">{formatDate(end)}</span></div>
             </div>
           </div>
         );
@@ -510,9 +510,9 @@ export default function FacturacionView({
         const description = det.manualDescription || "No especificado";
         
         return (
-          <div className="mt-2 pl-3 border-l-2 border-zinc-200 text-[10.5px] text-zinc-550 space-y-1 bg-zinc-50/70 p-2 rounded no-print text-left">
-            <div className="font-bold text-zinc-850">Proveedor Receptivo: <span className="font-extrabold text-zinc-950 uppercase">{supplier}</span></div>
-            <p className="text-zinc-660 font-semibold italic mt-1"><span className="text-zinc-400 font-black uppercase text-[8.5px] block font-sans">Notas de Coordinación:</span> {description}</p>
+          <div className="mt-2 pl-3 border-l-2 border-zinc-200 text-[10.5px] text-zinc-500 space-y-1 bg-zinc-50/70 p-2 rounded no-print text-left">
+            <div className="font-bold text-zinc-800">Proveedor Receptivo: <span className="font-extrabold text-zinc-950 uppercase">{supplier}</span></div>
+            <p className="text-zinc-700 font-semibold italic mt-1"><span className="text-zinc-400 font-black uppercase text-[8.5px] block font-sans">Notas de Coordinación:</span> {description}</p>
           </div>
         );
       }
@@ -1500,7 +1500,7 @@ export default function FacturacionView({
                 <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400">Solicitado en Revisión</span>
                 <h3 className="font-extrabold text-xl text-amber-700 mt-1">${totalPendingVal.toLocaleString("es-ES")} USD</h3>
                 <p className="text-[10px] text-zinc-500 mt-1 flex items-center gap-1 font-semibold uppercase">
-                  <Clock className="w-3.5 h-3.5 text-zinc-455" />
+                  <Clock className="w-3.5 h-3.5 text-zinc-500" />
                   Por Aprobar o Rechazar
                 </p>
               </div>
@@ -1536,7 +1536,7 @@ export default function FacturacionView({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h4 className="font-bold text-zinc-900 text-sm uppercase tracking-wider">Cola de Revisión y Facturación</h4>
-                <p className="text-xs text-zinc-450 mt-1">Inspección de contratos netos y aprobación de cobros B2B</p>
+                <p className="text-xs text-zinc-400 mt-1">Inspección de contratos netos y aprobación de cobros B2B</p>
               </div>
               <div className="relative w-48">
                 <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
@@ -1617,10 +1617,10 @@ export default function FacturacionView({
                               {r.facturacionTipo || "Pago Contado"}
                             </span>
                           </td>
-                          <td className="p-3 font-bold text-zinc-955">
+                          <td className="p-3 font-bold text-zinc-950">
                             <div className="space-y-0.5">
                               <span>{r.holder}</span>
-                              <span className="text-[10px] text-zinc-455 block font-semibold">{r.agenciaName || "Canal Directo"}</span>
+                              <span className="text-[10px] text-zinc-500 block font-semibold">{r.agenciaName || "Canal Directo"}</span>
                             </div>
                           </td>
                           <td className="p-3">
@@ -1712,7 +1712,7 @@ export default function FacturacionView({
                 <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 bg-zinc-950 text-white rounded inline-block">
                   Inspector de Facturación
                 </span>
-                <h4 className="font-black text-base mt-2.5 text-zinc-955 leading-tight uppercase">{activeRes.holder}</h4>
+                <h4 className="font-black text-base mt-2.5 text-zinc-950 leading-tight uppercase">{activeRes.holder}</h4>
                 <p className="text-[10px] text-zinc-400 font-mono mt-0.5">Localizador ID: {activeRes.id} | Agencia: {activeRes.agenciaName || "Directo"}</p>
               </div>
               <div className="flex flex-col gap-1.5 items-end">
@@ -1747,7 +1747,7 @@ export default function FacturacionView({
                 : (activeRes.agenciaName || "Canal Directo");
 
               return (
-                <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-lg space-y-2 text-xs font-semibold text-zinc-750">
+                <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-lg space-y-2 text-xs font-semibold text-zinc-700">
                   <div className="flex justify-between items-center border-b border-zinc-200 pb-1.5 mb-1.5">
                     <h5 className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Validación de Cliente</h5>
                     {agencyRecord ? (
@@ -1764,7 +1764,7 @@ export default function FacturacionView({
                         </span>
                       </div>
                     ) : (
-                      <span className="px-1.5 py-0.25 bg-zinc-100 border border-zinc-200 rounded text-[8.5px] font-bold text-zinc-650">
+                      <span className="px-1.5 py-0.25 bg-zinc-100 border border-zinc-200 rounded text-[8.5px] font-bold text-zinc-600">
                         Directo
                       </span>
                     )}
@@ -1800,8 +1800,8 @@ export default function FacturacionView({
                         </div>
                       </>
                     )}
-                    <div className="col-span-2 border-t border-zinc-150 pt-1.5 mt-1">
-                      <span className="text-zinc-450 block text-[9.5px] uppercase font-bold">Contacto Principal Pasajero (Titular)</span>
+                    <div className="col-span-2 border-t border-zinc-100 pt-1.5 mt-1">
+                      <span className="text-zinc-400 block text-[9.5px] uppercase font-bold">Contacto Principal Pasajero (Titular)</span>
                       <div className="flex flex-col sm:flex-row sm:justify-between text-[11px] text-zinc-800 font-mono mt-0.5">
                         <span>📞 {activeRes.telefono || "Sin registrar"}</span>
                         <span>✉ {activeRes.email || "Sin registrar"}</span>
@@ -1814,10 +1814,10 @@ export default function FacturacionView({
 
             {/* Panel de Comprobante de Pago Adjunto */}
             {activeRes.comprobanteRef && (
-              <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-lg space-y-2 text-xs font-semibold text-zinc-750">
+              <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-lg space-y-2 text-xs font-semibold text-zinc-700">
                 <div className="flex justify-between items-center border-b border-zinc-200 pb-1.5 mb-1.5">
                   <h5 className="text-[10px] font-black uppercase text-zinc-400 tracking-wider flex items-center gap-1.5">
-                    <CreditCard className="w-4 h-4 text-zinc-455" /> Comprobante de Pago Adjunto
+                    <CreditCard className="w-4 h-4 text-zinc-500" /> Comprobante de Pago Adjunto
                   </h5>
                   <span className="px-1.5 py-0.25 bg-amber-50 border border-amber-250 text-amber-700 rounded-full text-[8.5px] font-black uppercase flex items-center gap-1">
                     <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
@@ -1826,19 +1826,19 @@ export default function FacturacionView({
                 </div>
                 <div className="grid grid-cols-4 gap-2 text-left">
                   <div>
-                    <span className="text-zinc-455 block text-[9px] uppercase font-bold">Referencia</span>
+                    <span className="text-zinc-500 block text-[9px] uppercase font-bold">Referencia</span>
                     <span className="text-zinc-900 font-mono font-bold">{activeRes.comprobanteRef}</span>
                   </div>
                   <div>
-                    <span className="text-zinc-455 block text-[9px] uppercase font-bold">Método</span>
+                    <span className="text-zinc-500 block text-[9px] uppercase font-bold">Método</span>
                     <span className="text-zinc-900 font-bold">{activeRes.comprobanteMetodo}</span>
                   </div>
                   <div>
-                    <span className="text-zinc-455 block text-[9px] uppercase font-bold">Monto Declarado</span>
+                    <span className="text-zinc-500 block text-[9px] uppercase font-bold">Monto Declarado</span>
                     <span className="text-zinc-900 font-extrabold font-mono">${activeRes.comprobanteMonto?.toLocaleString("es-ES")} USD</span>
                   </div>
                   <div>
-                    <span className="text-zinc-455 block text-[9px] uppercase font-bold">Archivo Adjunto</span>
+                    <span className="text-zinc-500 block text-[9px] uppercase font-bold">Archivo Adjunto</span>
                     {activeRes.comprobanteArchivo ? (
                       <span className="text-blue-600 font-bold flex items-center gap-1 hover:underline cursor-pointer">
                         <FileText className="w-3 h-3" /> {activeRes.comprobanteArchivo}
@@ -1854,14 +1854,14 @@ export default function FacturacionView({
             {/* Breakdown of services */}
             <div className="space-y-3">
               <h5 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Desglose de Servicios y Estado de Cobros</h5>
-              <div className="divide-y divide-zinc-150 border border-zinc-200 rounded overflow-hidden">
+              <div className="divide-y divide-zinc-100 border border-zinc-200 rounded overflow-hidden">
                 {(activeRes.servicios || []).map((s) => {
                   const status = s.statusFacturacion || "Borrador";
                   return (
                     <div key={s.id} className="p-3 bg-white flex items-start justify-between gap-4">
                       <div className="space-y-0.5 flex-1 text-left">
                         <div className="flex items-center gap-1.5">
-                          <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-zinc-100 border border-zinc-200 text-zinc-655">
+                          <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-zinc-100 border border-zinc-200 text-zinc-700">
                             {s.tipo}
                           </span>
                           <span className="text-[9px] font-mono text-zinc-400">{s.id}</span>
@@ -1898,7 +1898,7 @@ export default function FacturacionView({
                   const origin = vuelo.segmentos?.[0]?.origen || "";
                   const dest = vuelo.segmentos && vuelo.segmentos.length > 0 ? vuelo.segmentos[vuelo.segmentos.length-1].destino : "";
                   return (
-                    <div key={vuelo.id} className="p-3 bg-white flex items-start justify-between gap-4 border-t border-zinc-150 bg-blue-50/10">
+                    <div key={vuelo.id} className="p-3 bg-white flex items-start justify-between gap-4 border-t border-zinc-100 bg-blue-50/10">
                       <div className="space-y-0.5 flex-1 text-left">
                         <div className="flex items-center gap-1.5">
                           <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-blue-900 text-white">
@@ -1945,7 +1945,7 @@ export default function FacturacionView({
                 <h5 className="text-[10px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-1.5">
                   ⚠️ Ajustes y Modificaciones Pendientes de Facturación
                 </h5>
-                <div className="divide-y divide-zinc-150 border border-amber-200 rounded overflow-hidden bg-amber-50/10">
+                <div className="divide-y divide-zinc-100 border border-amber-200 rounded overflow-hidden bg-amber-50/10">
                   {(activeRes.variaciones || []).filter((v: any) => !v.invoiceId && v.status !== "Borrador").map((v: any) => {
                     const isPositive = v.amountSale > 0;
                     return (
@@ -2002,7 +2002,7 @@ export default function FacturacionView({
                 <h5 className="text-[10px] font-bold text-orange-600 uppercase tracking-widest flex items-center gap-1.5">
                   🔎 Excedentes Pendientes de Verificar con Proveedor
                 </h5>
-                <div className="divide-y divide-zinc-150 border border-orange-200 rounded overflow-hidden bg-orange-50/10">
+                <div className="divide-y divide-zinc-100 border border-orange-200 rounded overflow-hidden bg-orange-50/10">
                   {(activeRes.variaciones || []).filter((v: any) => (v.excessPendingVerification || 0) > 0).map((v: any) => (
                     <div key={v.id} className="p-3 bg-white space-y-1.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -2018,7 +2018,7 @@ export default function FacturacionView({
                       </p>
                       <div className="flex items-center justify-between gap-2 pt-0.5 flex-wrap">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[9px] text-zinc-450 font-bold uppercase">Reembolsó</span>
+                          <span className="text-[9px] text-zinc-400 font-bold uppercase">Reembolsó</span>
                           <input
                             type="number"
                             step="0.01"
@@ -2026,9 +2026,9 @@ export default function FacturacionView({
                             max={v.excessPendingVerification}
                             value={refundInputs[v.id] ?? v.excessPendingVerification.toFixed(2)}
                             onChange={(e) => setRefundInputs(prev => ({ ...prev, [v.id]: e.target.value }))}
-                            className="w-24 px-2 py-1 border border-zinc-250 rounded text-[11px] font-mono font-bold text-right focus:outline-none focus:border-zinc-500"
+                            className="w-24 px-2 py-1 border border-zinc-200 rounded text-[11px] font-mono font-bold text-right focus:outline-none focus:border-zinc-500"
                           />
-                          <span className="text-[9px] text-zinc-450 font-bold">/ ${v.excessPendingVerification.toFixed(2)} USD</span>
+                          <span className="text-[9px] text-zinc-400 font-bold">/ ${v.excessPendingVerification.toFixed(2)} USD</span>
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -2125,7 +2125,7 @@ export default function FacturacionView({
                       )}
                       {invoicedTotal === 0 && (
                         <p className="text-zinc-500 italic flex items-start gap-1.5 leading-snug">
-                          <Info className="w-4 h-4 text-zinc-450 flex-shrink-0 mt-0.5" />
+                          <Info className="w-4 h-4 text-zinc-400 flex-shrink-0 mt-0.5" />
                           <span>No existen facturas emitidas ni cobradas asociadas a este expediente.</span>
                         </p>
                       )}
@@ -2213,7 +2213,7 @@ export default function FacturacionView({
                   {hasRequests && (
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-zinc-200/60 pb-3">
                       <div className="space-y-0.5 text-left">
-                        <span className="text-zinc-505 uppercase text-[9px] font-bold block">Método de Facturación</span>
+                        <span className="text-zinc-500 uppercase text-[9px] font-bold block">Método de Facturación</span>
                         <span className="text-[10px] text-zinc-400 font-medium leading-none">
                           Solicitado por Reservas: {activeRes.facturacionTipo || "Pago Contado"}
                         </span>
@@ -2297,7 +2297,7 @@ export default function FacturacionView({
                     <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={handleRejectBilling}
-                        className="py-2.5 border border-zinc-250 hover:bg-zinc-100 text-red-700 bg-white text-[11px] font-black uppercase tracking-wider rounded flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all animate-fade-in"
+                        className="py-2.5 border border-zinc-200 hover:bg-zinc-100 text-red-700 bg-white text-[11px] font-black uppercase tracking-wider rounded flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all animate-fade-in"
                       >
                         <ThumbsDown className="w-4 h-4 text-red-650" />
                         Rechazar
@@ -2363,7 +2363,7 @@ export default function FacturacionView({
                     <div 
                       key={inv.id} 
                       onClick={() => setSelectedInvoiceForModal(inv)}
-                      className="p-2 bg-zinc-50 hover:bg-zinc-100 border border-zinc-150 rounded text-[10px] flex items-center justify-between cursor-pointer transition-colors"
+                      className="p-2 bg-zinc-50 hover:bg-zinc-100 border border-zinc-100 rounded text-[10px] flex items-center justify-between cursor-pointer transition-colors"
                       title="Ver / Imprimir Factura Comercial"
                     >
                       <div className="flex items-center gap-1.5 text-zinc-800">
@@ -2415,7 +2415,7 @@ export default function FacturacionView({
               {/* Document Header */}
               <div className="flex justify-between items-center border-b-2 border-zinc-900 pb-4 mb-6">
                 <div>
-                  <h2 className="font-black text-lg text-zinc-955 leading-none font-sans uppercase">{companyConfig.name}</h2>
+                  <h2 className="font-black text-lg text-zinc-950 leading-none font-sans uppercase">{companyConfig.name}</h2>
                   <span className="text-[8px] uppercase tracking-widest font-black text-zinc-400 block mt-1 font-sans">{companyConfig.subtitle}</span>
                 </div>
                 <div className="text-right">
@@ -2430,12 +2430,12 @@ export default function FacturacionView({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 {/* Pax lead */}
                 <div className="bg-zinc-50 border border-zinc-200 p-4 rounded-lg space-y-1.5">
-                  <h5 className="text-[10px] font-black uppercase text-zinc-455 tracking-wider flex items-center gap-1.5 font-sans">
-                    <User className="w-3.5 h-3.5 text-zinc-450" /> Pasajero Principal (Titular)
+                  <h5 className="text-[10px] font-black uppercase text-zinc-500 tracking-wider flex items-center gap-1.5 font-sans">
+                    <User className="w-3.5 h-3.5 text-zinc-400" /> Pasajero Principal (Titular)
                   </h5>
                   <p className="text-sm font-black text-zinc-950 font-sans uppercase">{activeRes.holder}</p>
-                  <p className="text-xs text-zinc-650 font-mono">📞 {activeRes.telefono || "Sin registrar"}</p>
-                  <p className="text-xs text-zinc-650 font-mono">✉ {activeRes.email || "Sin registrar"}</p>
+                  <p className="text-xs text-zinc-600 font-mono">📞 {activeRes.telefono || "Sin registrar"}</p>
+                  <p className="text-xs text-zinc-600 font-mono">✉ {activeRes.email || "Sin registrar"}</p>
                   <div className="pt-1.5 border-t border-zinc-200 text-[10px] font-bold text-zinc-400 flex justify-between font-sans uppercase">
                     <span>Pax totales:</span>
                     <span className="font-extrabold text-zinc-800 font-mono">{activeRes.pax}</span>
@@ -2449,14 +2449,14 @@ export default function FacturacionView({
                   const displayName = saleClient.kind === "Directo" ? agency.nombre : (activeRes.agenciaName || "Canal Directo");
                   return (
                     <div className="bg-zinc-50 border border-zinc-200 p-4 rounded-lg space-y-1.5">
-                      <h5 className="text-[10px] font-black uppercase text-zinc-455 tracking-wider flex items-center gap-1.5 font-sans">
-                        <Building className="w-3.5 h-3.5 text-zinc-450" /> Información de Cliente
+                      <h5 className="text-[10px] font-black uppercase text-zinc-500 tracking-wider flex items-center gap-1.5 font-sans">
+                        <Building className="w-3.5 h-3.5 text-zinc-400" /> Información de Cliente
                       </h5>
                       <p className="text-sm font-black text-zinc-950 truncate font-sans">{displayName}</p>
                       {agency ? (
                         <>
-                          <p className="text-xs text-zinc-650 font-semibold font-sans">Tipo: <span className="font-extrabold text-zinc-800">{agency.tipo}</span></p>
-                          {saleClient.kind === "B2B" && <p className="text-xs text-zinc-650 font-mono">RIF: {saleClient.client.rif}</p>}
+                          <p className="text-xs text-zinc-600 font-semibold font-sans">Tipo: <span className="font-extrabold text-zinc-800">{agency.tipo}</span></p>
+                          {saleClient.kind === "B2B" && <p className="text-xs text-zinc-600 font-mono">RIF: {saleClient.client.rif}</p>}
                           <div className="pt-1.5 border-t border-zinc-200 text-[10px] font-bold text-zinc-400 flex justify-between font-sans uppercase">
                             <span>Estado Cuenta:</span>
                             <span className={`font-black ${agency.moroso ? "text-red-650" : "text-emerald-700"}`}>
@@ -2473,8 +2473,8 @@ export default function FacturacionView({
 
                 {/* Dates & Status */}
                 <div className="bg-zinc-50 border border-zinc-200 p-4 rounded-lg space-y-1.5">
-                  <h5 className="text-[10px] font-black uppercase text-zinc-455 tracking-wider flex items-center gap-1.5 font-sans">
-                    <Calendar className="w-3.5 h-3.5 text-zinc-450" /> Cronograma de Viaje
+                  <h5 className="text-[10px] font-black uppercase text-zinc-500 tracking-wider flex items-center gap-1.5 font-sans">
+                    <Calendar className="w-3.5 h-3.5 text-zinc-400" /> Cronograma de Viaje
                   </h5>
                   <div className="text-xs font-semibold text-zinc-800 space-y-1">
                     <div className="flex justify-between">
@@ -2514,7 +2514,7 @@ export default function FacturacionView({
                         <th className="p-3 text-center">Estatus</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-150 font-medium">
+                    <tbody className="divide-y divide-zinc-100 font-medium">
                       {(activeRes.servicios || []).map((s) => {
                         const margin = s.precioVenta - s.precioNeto;
                         return (
@@ -2523,7 +2523,7 @@ export default function FacturacionView({
                             <td className="p-3">
                               <div className="space-y-0.5 text-left">
                                 <div className="flex items-center">
-                                  <span className="px-1.5 py-0.25 bg-zinc-100 text-zinc-650 text-[8px] font-black border border-zinc-200 rounded mr-2 uppercase">
+                                  <span className="px-1.5 py-0.25 bg-zinc-100 text-zinc-600 text-[8px] font-black border border-zinc-200 rounded mr-2 uppercase">
                                     {s.tipo}
                                   </span>
                                   <span className="font-bold text-zinc-900">{s.descripcion}</span>
@@ -2565,7 +2565,7 @@ export default function FacturacionView({
                                     </span>
                                     <span className="font-bold text-zinc-900">Itinerario Vuelo - PNR: {vuelo.pnr}</span>
                                   </div>
-                                  <div className="mt-2 text-[10px] text-zinc-605 bg-white p-2 rounded border border-zinc-200 space-y-1 text-left font-sans shadow-2xs">
+                                  <div className="mt-2 text-[10px] text-zinc-600 bg-white p-2 rounded border border-zinc-200 space-y-1 text-left font-sans shadow-2xs">
                                     {(vuelo.segmentos?.map ? vuelo.segmentos : []).map((seg, i) => (
                                       <div key={i} className="flex gap-2 font-mono">
                                         <span className="font-bold text-zinc-800">{seg.origen} → {seg.destino}</span>
@@ -2600,7 +2600,7 @@ export default function FacturacionView({
               {/* Special Requests */}
               {activeRes.specialRequests && (
                 <div className="bg-zinc-50 border border-zinc-200 p-4 rounded-lg space-y-1.5 mb-6">
-                  <h5 className="text-[10px] font-black uppercase text-zinc-455 tracking-wider font-sans">Notas y Requerimientos Especiales</h5>
+                  <h5 className="text-[10px] font-black uppercase text-zinc-500 tracking-wider font-sans">Notas y Requerimientos Especiales</h5>
                   <p className="text-xs text-zinc-700 leading-relaxed font-semibold italic">{activeRes.specialRequests}</p>
                 </div>
               )}
@@ -2630,7 +2630,7 @@ export default function FacturacionView({
               </button>
               <button
                 onClick={() => window.print()}
-                className="px-5 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs flex items-center gap-1.5"
+                className="px-5 py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs flex items-center gap-1.5"
               >
                 <Printer className="w-4 h-4" />
                 <span>Imprimir Ficha</span>
@@ -2672,7 +2672,7 @@ export default function FacturacionView({
                       {companyConfig.logoLetter}
                     </div>
                     <div>
-                      <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans uppercase">{companyConfig.name}</h2>
+                      <h2 className="font-black text-base tracking-tight leading-none text-zinc-950 font-sans uppercase">{companyConfig.name}</h2>
                       <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">{companyConfig.subtitle}</span>
                     </div>
                   </div>
@@ -2693,7 +2693,7 @@ export default function FacturacionView({
               <div className="border border-emerald-250 bg-emerald-50/40 rounded-lg p-4 mb-6 flex items-center justify-between gap-4">
                 <div className="space-y-1">
                   <h4 className="text-xs font-extrabold uppercase text-emerald-800 font-sans">Estado: SERVICIOS CONCILIADOS Y CONFIRMADOS</h4>
-                  <p className="text-[10.5px] text-zinc-650 leading-relaxed font-semibold font-sans">
+                  <p className="text-[10.5px] text-zinc-600 leading-relaxed font-semibold font-sans">
                     Este documento acredita que los servicios listados a continuación están totalmente pagados al proveedor y garantizados por Foratour ERP. Presente este voucher al proveedor del servicio al iniciar su viaje.
                   </p>
                 </div>
@@ -2709,7 +2709,7 @@ export default function FacturacionView({
                 <div className="space-y-1.5">
                   <h5 className="text-[9px] font-black text-zinc-400 uppercase tracking-wider font-sans">Titular de la Reserva</h5>
                   <p className="text-sm font-black text-zinc-950 leading-tight uppercase font-sans">{activeRes.holder}</p>
-                  <div className="text-xs text-zinc-650 font-semibold space-y-0.5">
+                  <div className="text-xs text-zinc-600 font-semibold space-y-0.5">
                     <p className="font-mono">📱 Contacto Tel: {activeRes.telefono || "Sin registrar"}</p>
                     <p className="font-mono">✉ Contacto Email: {activeRes.email || "Sin registrar"}</p>
                   </div>
@@ -2717,17 +2717,17 @@ export default function FacturacionView({
                 
                 <div className="space-y-1.5 sm:text-right font-sans">
                   <h5 className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Detalles de Operación</h5>
-                  <p className="text-xs font-semibold text-zinc-850">
+                  <p className="text-xs font-semibold text-zinc-800">
                     Fecha de Ingreso: <span className="font-bold text-zinc-950 font-mono">{activeRes.checkIn}</span>
                   </p>
-                  <p className="text-xs font-semibold text-zinc-850">
+                  <p className="text-xs font-semibold text-zinc-800">
                     Fecha de Salida: <span className="font-bold text-zinc-950 font-mono">{activeRes.checkOut}</span>
                   </p>
-                  <p className="text-xs font-semibold text-zinc-850">
+                  <p className="text-xs font-semibold text-zinc-800">
                     Total Pasajeros: <span className="font-bold text-zinc-950">{activeRes.pax} Pax</span>
                   </p>
                   {activeRes.flightNo && (
-                    <p className="text-xs font-semibold text-zinc-850">
+                    <p className="text-xs font-semibold text-zinc-800">
                       Vuelo de Conexión: <span className="font-bold font-mono text-zinc-900">{activeRes.flightNo}</span>
                     </p>
                   )}
@@ -2741,7 +2741,7 @@ export default function FacturacionView({
                 
                 return (
                   <div className="space-y-4 mb-6">
-                    <h5 className="text-[9.5px] font-black text-zinc-455 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Itinerario de Vuelo Aéreo</h5>
+                    <h5 className="text-[9.5px] font-black text-zinc-500 uppercase tracking-widest border-b border-zinc-100 pb-1.5 font-sans">Itinerario de Vuelo Aéreo</h5>
                     <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30">
                       {vuelosFacturados.map((vuelo) => (
                         <div key={vuelo.id} className="p-4 bg-white space-y-3 break-inside-avoid print:break-inside-avoid">
@@ -2749,7 +2749,7 @@ export default function FacturacionView({
                             <span className="px-2 py-0.5 bg-blue-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
                               BOLETO AÉREO GDS
                             </span>
-                            <span className="text-[9px] font-mono text-zinc-455 font-semibold">PNR: {vuelo.pnr}</span>
+                            <span className="text-[9px] font-mono text-zinc-500 font-semibold">PNR: {vuelo.pnr}</span>
                           </div>
                           
                           <div className="space-y-2 mt-2">
@@ -2769,7 +2769,7 @@ export default function FacturacionView({
                             ))}
                           </div>
                           
-                          <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-[10.5px] text-zinc-650 font-semibold space-y-1 font-sans mt-3">
+                          <div className="bg-zinc-50 border border-zinc-100 rounded p-2.5 text-[10.5px] text-zinc-600 font-semibold space-y-1 font-sans mt-3">
                             <span className="text-[8.5px] font-black text-zinc-400 uppercase tracking-wider block">Instrucciones de Embarque</span>
                             <p>Preséntese en el mostrador de la aerolínea 3 horas antes de la salida programada del vuelo para el check-in internacional, o 2 horas antes para vuelos domésticos. El equipaje permitido dependerá de la política de la clase {vuelo.segmentos[0]?.clase || "Y"}.</p>
                           </div>
@@ -2782,7 +2782,7 @@ export default function FacturacionView({
 
               {/* Services List (Only Billed) */}
               <div className="space-y-4 mb-6">
-                <h5 className="text-[9.5px] font-black text-zinc-450 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Servicios Confirmados</h5>
+                <h5 className="text-[9.5px] font-black text-zinc-400 uppercase tracking-widest border-b border-zinc-100 pb-1.5 font-sans">Servicios Confirmados</h5>
                 <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30">
                   {activeRes.servicios?.filter(s => s.statusFacturacion === "Facturado").map((s) => (
                     <div key={s.id} className="p-4 bg-white space-y-2 break-inside-avoid print:break-inside-avoid">
@@ -2790,15 +2790,15 @@ export default function FacturacionView({
                         <span className="px-2 py-0.5 bg-zinc-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
                           {s.tipo}
                         </span>
-                        <span className="text-[9px] font-mono text-zinc-450 font-semibold">Cód. Servicio: {s.id}</span>
+                        <span className="text-[9px] font-mono text-zinc-400 font-semibold">Cód. Servicio: {s.id}</span>
                       </div>
                       
                       <div className="text-xs text-zinc-900">
-                        <p className="font-extrabold text-sm text-zinc-955 leading-snug font-sans">{s.descripcion}</p>
+                        <p className="font-extrabold text-sm text-zinc-950 leading-snug font-sans">{s.descripcion}</p>
                       </div>
 
                       {/* Pax instructions based on service type */}
-                      <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-[10.5px] text-zinc-650 font-semibold space-y-1 font-sans">
+                      <div className="bg-zinc-50 border border-zinc-100 rounded p-2.5 text-[10.5px] text-zinc-600 font-semibold space-y-1 font-sans">
                         <span className="text-[8.5px] font-black text-zinc-400 uppercase tracking-wider block">Instrucciones para el Viajero</span>
                         {s.tipo === ServiceType.ALOJAMIENTO && (
                           <p>Presente este voucher impreso o digital al momento del Check-in en la recepción del hotel. El alojamiento incluye desayuno e impuestos locales, salvo tasas municipales de pago directo en destino si las hubiere.</p>
@@ -2823,8 +2823,8 @@ export default function FacturacionView({
 
               {/* Special Requests if present */}
               {activeRes.specialRequests && (
-                <div className="bg-zinc-50 border border-zinc-150 rounded-lg p-4 mb-6 space-y-1 font-sans">
-                  <h5 className="text-[9px] font-black text-zinc-450 uppercase tracking-wider">Notas de Coordinación / Requerimientos</h5>
+                <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-4 mb-6 space-y-1 font-sans">
+                  <h5 className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Notas de Coordinación / Requerimientos</h5>
                   <p className="text-xs text-zinc-800 leading-relaxed font-semibold italic">{activeRes.specialRequests}</p>
                 </div>
               )}
@@ -3008,15 +3008,15 @@ export default function FacturacionView({
               <div className="flex justify-between items-start border-b-2 border-zinc-900 pb-6 mb-6">
                 <div>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded bg-zinc-955 text-white flex items-center justify-center font-black text-xl shadow-xs flex-shrink-0 print:border print:border-zinc-950">
+                    <div className="w-10 h-10 rounded bg-zinc-950 text-white flex items-center justify-center font-black text-xl shadow-xs flex-shrink-0 print:border print:border-zinc-950">
                       {companyConfig.logoLetter}
                     </div>
                     <div>
-                      <h1 className="text-2xl font-black tracking-tight text-zinc-955 uppercase leading-none">{companyConfig.name}</h1>
+                      <h1 className="text-2xl font-black tracking-tight text-zinc-950 uppercase leading-none">{companyConfig.name}</h1>
                       <p className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mt-1">{companyConfig.subtitle}</p>
                     </div>
                   </div>
-                  <div className="text-xs text-zinc-650 mt-3 space-y-0.5">
+                  <div className="text-xs text-zinc-600 mt-3 space-y-0.5">
                     <p><span className="font-bold text-zinc-700">RIF:</span> {companyConfig.rif}</p>
                     <p>{companyConfig.address}</p>
                     <p>Tel: {companyConfig.phone} | Email: {companyConfig.email}</p>
@@ -3027,7 +3027,7 @@ export default function FacturacionView({
                     FACTURA COMERCIAL
                   </span>
                   <h2 className="text-xl font-mono font-black text-zinc-950 mt-2">{selectedInvoiceForModal.id}</h2>
-                  <div className="text-xs text-zinc-650 mt-3 space-y-1">
+                  <div className="text-xs text-zinc-600 mt-3 space-y-1">
                     <p><span className="font-bold text-zinc-700">Fecha Emisión:</span> {formatDate(selectedInvoiceForModal.date)}</p>
                     <p><span className="font-bold text-zinc-700">Vencimiento:</span> {formatDate(selectedInvoiceForModal.dueDate)}</p>
                     <p>
@@ -3103,7 +3103,7 @@ export default function FacturacionView({
                           <td className="p-3.5 text-right font-mono">
                             ${subtotal.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
                           </td>
-                          <td className={`p-3.5 text-right font-mono ${isExemptInv ? "text-emerald-700 font-bold" : "text-zinc-650"}`}>
+                          <td className={`p-3.5 text-right font-mono ${isExemptInv ? "text-emerald-700 font-bold" : "text-zinc-600"}`}>
                             {isExemptInv ? "Exento" : `$${inv.vatAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}`}
                           </td>
                           <td className="p-3.5 text-right font-mono font-bold text-zinc-950">
@@ -3142,7 +3142,7 @@ export default function FacturacionView({
               )}
 
               {/* Legal Notes */}
-              <div className="border-t border-zinc-300 pt-6 text-[9.5px] text-zinc-455 leading-relaxed font-sans space-y-1.5">
+              <div className="border-t border-zinc-300 pt-6 text-[9.5px] text-zinc-500 leading-relaxed font-sans space-y-1.5">
                 <p className="font-bold text-zinc-500">Condiciones de Facturación y Pago:</p>
                 <p>1. Esta factura comercial representa transacciones comerciales asociadas a la reserva de servicios turísticos descrita.</p>
                 <p>2. Todos los pagos deben ser realizados en la cuenta oficial de {companyConfig.name} antes de la fecha de vencimiento indicada para garantizar los bloqueos de servicios con proveedores locales.</p>
@@ -3162,7 +3162,7 @@ export default function FacturacionView({
               </button>
               <button
                 onClick={handlePrintInvoice}
-                className="px-5 py-2 bg-zinc-900 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs flex items-center gap-1.5"
+                className="px-5 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs flex items-center gap-1.5"
               >
                 <Printer className="w-4 h-4 text-emerald-400" />
                 <span>Imprimir / Descargar PDF</span>

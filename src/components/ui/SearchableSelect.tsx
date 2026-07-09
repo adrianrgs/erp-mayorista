@@ -67,7 +67,7 @@ export default function SearchableSelect({
       {open && !disabled && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-150">
+          <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-100">
             {filtered.length === 0 ? (
               <div className="p-3 text-xs text-zinc-400 italic">{emptyLabel}</div>
             ) : (
@@ -79,7 +79,7 @@ export default function SearchableSelect({
                   className="w-full text-left p-2.5 hover:bg-zinc-50 flex flex-col text-xs transition-colors cursor-pointer border-none font-sans"
                 >
                   <span className="font-bold text-zinc-900">{o.label}</span>
-                  {o.sublabel && <span className="text-[10px] text-zinc-450 font-mono">{o.sublabel}</span>}
+                  {o.sublabel && <span className="text-[10px] text-zinc-400 font-mono">{o.sublabel}</span>}
                 </button>
               ))
             )}

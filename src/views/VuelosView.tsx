@@ -37,6 +37,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
 import { parseGDS, buildRoute, formatGDSDate, SAMPLE_GDS_TEXT } from "../lib/parsers/pnrParser";
 import { useDialog } from "../components/ui/DialogProvider";
+import Button from "../components/ui/Button";
 
 // ─── TIPOS Y UTILIDADES LOCALES ────────────────────────────────────────────────────────────
 
@@ -246,14 +247,10 @@ function ListadoView({
             {boletos.filter((b) => !b.vinculadoAExpediente).length} disponibles para vincular
           </p>
         </div>
-        <button
-          id="btn-nuevo-boleto"
-          onClick={onNuevo}
-          className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white text-xs font-bold rounded hover:bg-zinc-800 transition-colors cursor-pointer"
-        >
+        <Button id="btn-nuevo-boleto" onClick={onNuevo}>
           <Plus className="w-4 h-4" />
           Cargar PNR
-        </button>
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -303,9 +300,9 @@ function ListadoView({
           No se encontraron boletos con "{search}"
         </div>
       ) : (
-        <div className="bg-white border border-zinc-200 rounded overflow-hidden">
+        <div className="bg-white border border-zinc-200 rounded overflow-x-auto">
           {/* Header tabla */}
-          <div className="grid grid-cols-12 gap-2 px-5 py-2.5 bg-zinc-50 border-b border-zinc-200 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+          <div className="grid grid-cols-12 gap-2 px-5 py-2.5 bg-zinc-50 border-b border-zinc-200 text-[10px] font-bold text-zinc-400 uppercase tracking-wider min-w-[900px]">
             <div className="col-span-2">PNR</div>
             <div className="col-span-3">Pasajeros</div>
             <div className="col-span-3">Ruta</div>
@@ -326,7 +323,7 @@ function ListadoView({
                 key={boleto.id}
                 id={`boleto-row-${boleto.id}`}
                 onClick={() => onExpediente(boleto.id)}
-                className="grid grid-cols-12 gap-2 px-5 py-3.5 border-b border-zinc-100 last:border-0 hover:bg-zinc-50/60 transition-colors items-center cursor-pointer"
+                className="grid grid-cols-12 gap-2 px-5 py-3.5 border-b border-zinc-100 last:border-0 hover:bg-zinc-50/60 transition-colors items-center cursor-pointer min-w-[900px]"
               >
                 {/* PNR */}
                 <div className="col-span-2">
@@ -670,14 +667,10 @@ function NuevoBoletoView({
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-zinc-200 pb-4 sticky top-16 bg-zinc-50/95 backdrop-blur-xs pt-2 z-10 -mx-8 px-8">
-        <button
-          id="btn-volver-listado"
-          onClick={onCancelar}
-          className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-900 font-medium transition-colors cursor-pointer"
-        >
+        <Button id="btn-volver-listado" variant="ghost" size="sm" onClick={onCancelar}>
           <ChevronLeft className="w-4 h-4" />
           Volver al listado
-        </button>
+        </Button>
         <span className="text-zinc-300">·</span>
         <h2 className="text-sm font-bold text-zinc-900 flex items-center gap-2">
           <Plane className="w-4 h-4 text-zinc-500" />
@@ -703,7 +696,7 @@ function NuevoBoletoView({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
         {/* ── COLUMNA IZQUIERDA: PNR INPUT ── */}
         <div className="space-y-4">
 
@@ -719,14 +712,10 @@ function NuevoBoletoView({
                       Terminal GDS
                     </span>
                   </div>
-                  <button
-                    id="btn-load-sample"
-                    onClick={handleLoadSample}
-                    className="text-[10px] text-zinc-400 hover:text-zinc-700 font-semibold uppercase tracking-wide cursor-pointer transition-colors flex items-center gap-1"
-                  >
+                  <Button id="btn-load-sample" variant="ghost" size="sm" onClick={handleLoadSample} className="uppercase tracking-wide">
                     <Sparkles className="w-3 h-3" />
                     Cargar Ejemplo
-                  </button>
+                  </Button>
                 </div>
                 <textarea
                   id="gds-raw-input"
@@ -744,11 +733,11 @@ function NuevoBoletoView({
                   <span className="text-[10px] text-zinc-500 font-mono">
                     {rawText.split("\n").length} líneas · {rawText.length} caracteres
                   </span>
-                  <button
+                  <Button
                     id="btn-analizar-pnr"
+                    variant="success"
                     onClick={handleAnalizar}
                     disabled={!rawText.trim() || isParsing}
-                    className="flex items-center gap-2 px-5 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-xs font-bold rounded transition-colors cursor-pointer disabled:cursor-not-allowed"
                   >
                     {isParsing ? (
                       <>
@@ -761,7 +750,7 @@ function NuevoBoletoView({
                         Analizar Reserva
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -834,7 +823,7 @@ function NuevoBoletoView({
                     />
                   </div>
                 </div>
-                <button
+                <Button
                   onClick={() => {
                     if (!manualPaxNombre.trim()) return;
                     setPasajeros(prev => [...prev, { nombre: manualPaxNombre.trim(), tipo: manualPaxTipo, documento: manualPaxDoc.trim() || undefined }]);
@@ -842,11 +831,11 @@ function NuevoBoletoView({
                     setManualPaxDoc("");
                   }}
                   disabled={!manualPaxNombre.trim()}
-                  className="w-full py-2 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-xs font-bold rounded transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                  className="w-full"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   Agregar Pasajero
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -1076,7 +1065,8 @@ function NuevoBoletoView({
                       />
                     </div>
                   </div>
-                  <button
+                  <Button
+                    size="sm"
                     onClick={() => {
                       if (!manualSeg.aerolinea || !manualSeg.origen || !manualSeg.destino) return;
                       setSegmentos(prev => [...prev, {
@@ -1094,11 +1084,11 @@ function NuevoBoletoView({
                       setManualSeg({ aerolinea: "", numeroVuelo: "", origen: "", destino: "", fecha: "", horaSalida: "", horaLlegada: "", clase: "Y", status: "HK1" });
                     }}
                     disabled={!manualSeg.aerolinea || !manualSeg.origen || !manualSeg.destino}
-                    className="w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-xs font-bold rounded transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                    className="w-full"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Agregar Tramo
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -1330,18 +1320,15 @@ function NuevoBoletoView({
 
           {/* Acciones finales */}
           <div className="flex gap-3">
-            <button
-              id="btn-cancelar-boleto"
-              onClick={onCancelar}
-              className="flex-1 py-2.5 border border-zinc-200 text-zinc-600 text-xs font-bold rounded hover:bg-zinc-50 transition-colors cursor-pointer"
-            >
+            <Button id="btn-cancelar-boleto" variant="secondary" size="lg" onClick={onCancelar} className="flex-1">
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               id="btn-guardar-boleto"
+              size="lg"
               onClick={handleGuardar}
               disabled={!canGuardar || guardando}
-              className="flex-1 py-2.5 bg-zinc-900 text-white text-xs font-bold rounded hover:bg-zinc-800 disabled:bg-zinc-200 disabled:text-zinc-400 transition-colors cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1"
             >
               {guardando ? (
                 <>
@@ -1354,7 +1341,7 @@ function NuevoBoletoView({
                   Guardar Boleto
                 </>
               )}
-            </button>
+            </Button>
           </div>
 
           {/* Hint de validación */}
@@ -1457,20 +1444,16 @@ function ExpedienteAereoView({
         <div className="flex items-center gap-2">
           {expediente.status === "Borrador" && !boleto.facturarConjunto && (
             <>
-              <button
-                onClick={handleSave}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-zinc-200 text-zinc-700 text-xs font-bold rounded hover:bg-zinc-50 transition-colors cursor-pointer"
-              >
+              <Button variant="secondary" size="sm" onClick={handleSave}>
                 <Save className="w-3.5 h-3.5" /> Guardar Cambios
-              </button>
-              <button
-                onClick={handleSendToBilling}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded hover:bg-blue-700 transition-colors cursor-pointer"
-              >
+              </Button>
+              <Button variant="info" size="sm" onClick={handleSendToBilling}>
                 <Send className="w-3.5 h-3.5" /> Enviar a Facturar
-              </button>
+              </Button>
               {expediente.status === "Borrador" && (
-                <button
+                <Button
+                  variant="danger"
+                  size="sm"
                   onClick={() => {
                     showConfirm({
                       title: "Anular Expediente Aéreo",
@@ -1486,15 +1469,16 @@ function ExpedienteAereoView({
                       }
                     });
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 text-xs font-bold rounded hover:bg-red-100 transition-colors cursor-pointer"
                 >
                   <XCircle className="w-3.5 h-3.5" /> Anular
-                </button>
+                </Button>
               )}
             </>
           )}
           {expediente.status === "Anulado" && !boleto.facturarConjunto && (
-            <button
+            <Button
+              variant="warning"
+              size="sm"
               onClick={() => {
                 showConfirm({
                   title: "Reactivar Expediente",
@@ -1509,18 +1493,14 @@ function ExpedienteAereoView({
                   }
                 });
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold rounded hover:bg-amber-100 transition-colors cursor-pointer"
             >
               <CheckCircle2 className="w-3.5 h-3.5" /> Volver a Activar
-            </button>
+            </Button>
           )}
           {(expediente.status === "Facturado" || expediente.status === "PagadoAerolinea") && (
-            <button
-              onClick={() => onShowVoucher(boleto)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700 transition-colors cursor-pointer"
-            >
+            <Button variant="success" size="sm" onClick={() => onShowVoucher(boleto)}>
               <Download className="w-3.5 h-3.5" /> Descargar Voucher
-            </button>
+            </Button>
           )}
           {expediente.status === "Borrador" && boleto.facturarConjunto && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded">
@@ -1691,7 +1671,7 @@ function ExpedienteAereoView({
                         className="fixed inset-0 z-40" 
                         onClick={() => setShowAgencyDropdown(false)}
                       />
-                      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-150">
+                      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-100">
                         {agenciasActivas.filter(c => {
                           const query = agencySearch.toLowerCase();
                           return (
@@ -1762,7 +1742,7 @@ function ExpedienteAereoView({
                     className={`py-2 px-3 border rounded text-xs font-bold transition-all ${
                       expediente.facturacionTipo === "Crédito" || !expediente.facturacionTipo
                         ? "bg-zinc-950 border-zinc-950 text-white"
-                        : "bg-white border-zinc-250 text-zinc-700 hover:bg-zinc-50"
+                        : "bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50"
                     }`}
                   >
                     Facturar a Crédito
@@ -1773,7 +1753,7 @@ function ExpedienteAereoView({
                     className={`py-2 px-3 border rounded text-xs font-bold transition-all ${
                       expediente.facturacionTipo === "Pago Contado"
                         ? "bg-zinc-950 border-zinc-950 text-white"
-                        : "bg-white border-zinc-250 text-zinc-700 hover:bg-zinc-50"
+                        : "bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50"
                     }`}
                   >
                     Pago Contado (Inmediato)
@@ -1905,10 +1885,11 @@ function ExpedienteAereoView({
             </div>
 
             <div className="mt-6 flex justify-end">
-              <button
+              <Button
+                size="lg"
                 onClick={() => {
                   if (expediente.status !== "Borrador") return;
-                  
+
                   const updated = {
                     ...expediente,
                     status: "Solicitado" as const,
@@ -1925,11 +1906,7 @@ function ExpedienteAereoView({
                   showAlert({ title: "Solicitud enviada", message: "Solicitud enviada a Facturación. El departamento debe aprobar la emisión de factura y pagos.", type: "success" });
                 }}
                 disabled={expediente.status !== "Borrador"}
-                className={`flex items-center gap-2 px-6 py-3 text-xs font-bold rounded shadow-xs transition-all ${
-                  expediente.status === "Borrador"
-                    ? "bg-zinc-950 text-white hover:bg-zinc-800 cursor-pointer"
-                    : "bg-zinc-100 text-zinc-400 cursor-not-allowed border border-zinc-200"
-                }`}
+                className="shadow-xs"
               >
                 {expediente.status === "Borrador" ? (
                   <>
@@ -1942,7 +1919,7 @@ function ExpedienteAereoView({
                     {expediente.status === "Solicitado" ? "En Revisión por Facturación" : "Liquidación Procesada"}
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1963,14 +1940,10 @@ function EmptyState({ onNuevo }: { onNuevo: () => void }) {
       <p className="text-xs text-zinc-400 font-medium mb-5 max-w-xs mx-auto leading-relaxed">
         Carga el texto de una reserva GDS para extraer los datos automáticamente y registrar el boleto.
       </p>
-      <button
-        id="btn-empty-cargar-pnr"
-        onClick={onNuevo}
-        className="inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-900 text-white text-xs font-bold rounded hover:bg-zinc-800 transition-colors cursor-pointer"
-      >
+      <Button id="btn-empty-cargar-pnr" size="lg" onClick={onNuevo}>
         <Plus className="w-4 h-4" />
         Cargar primer PNR
-      </button>
+      </Button>
     </div>
   );
 }
@@ -2036,12 +2009,9 @@ function FlightVoucherModal({
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => window.print()}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded transition-colors cursor-pointer flex items-center gap-2"
-              >
+              <Button variant="success" onClick={() => window.print()}>
                 <Download className="w-3.5 h-3.5" /> Generar PDF / Imprimir
-              </button>
+              </Button>
               <button 
                 onClick={onClose}
                 className="text-zinc-400 hover:text-white transition-colors cursor-pointer"
@@ -2061,7 +2031,7 @@ function FlightVoucherModal({
                     {companyConfig.logoLetter}
                   </div>
                   <div>
-                    <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans uppercase">{companyConfig.name}</h2>
+                    <h2 className="font-black text-base tracking-tight leading-none text-zinc-950 font-sans uppercase">{companyConfig.name}</h2>
                     <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">{companyConfig.subtitle}</span>
                   </div>
                 </div>
@@ -2082,7 +2052,7 @@ function FlightVoucherModal({
             <div className="border border-emerald-250 bg-emerald-50/40 rounded-lg p-4 mb-6 flex items-center justify-between gap-4">
               <div className="space-y-1">
                 <h4 className="text-xs font-extrabold uppercase text-emerald-800 font-sans">Estado: BOLETO EMITIDO Y CONFIRMADO</h4>
-                <p className="text-[10.5px] text-zinc-650 leading-relaxed font-semibold font-sans">
+                <p className="text-[10.5px] text-zinc-600 leading-relaxed font-semibold font-sans">
                   Este documento certifica la emisión de los boletos aéreos electrónicos detallados a continuación. Por favor presente este recibo junto a su documento de identidad vigente al momento del chequeo en el aeropuerto.
                 </p>
               </div>
@@ -2095,7 +2065,7 @@ function FlightVoucherModal({
 
             {/* Passenger Info */}
             <div className="mb-6 space-y-4">
-              <h5 className="text-[9.5px] font-black text-zinc-455 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Datos de los Pasajeros</h5>
+              <h5 className="text-[9.5px] font-black text-zinc-500 uppercase tracking-widest border-b border-zinc-100 pb-1.5 font-sans">Datos de los Pasajeros</h5>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {(boleto.pasajeros?.map ? boleto.pasajeros : []).map((p, i) => (
                   <div key={i} className="flex flex-col gap-0.5">
@@ -2112,7 +2082,7 @@ function FlightVoucherModal({
 
             {/* Itinerary */}
             <div className="space-y-4 mb-6">
-              <h5 className="text-[9.5px] font-black text-zinc-455 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Itinerario de Vuelos</h5>
+              <h5 className="text-[9.5px] font-black text-zinc-500 uppercase tracking-widest border-b border-zinc-100 pb-1.5 font-sans">Itinerario de Vuelos</h5>
               <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30 break-inside-avoid print:break-inside-avoid">
                 {(boleto.segmentos?.map ? boleto.segmentos : []).map((seg, i) => (
                   <div key={i} className="p-4 bg-white space-y-2 break-inside-avoid print:break-inside-avoid">
@@ -2158,7 +2128,7 @@ function FlightVoucherModal({
             </div>
 
             {/* General Instructions */}
-            <div className="bg-zinc-50 border border-zinc-150 rounded p-4 text-[10px] text-zinc-650 font-semibold space-y-2 font-sans mt-8 break-inside-avoid print:break-inside-avoid">
+            <div className="bg-zinc-50 border border-zinc-100 rounded p-4 text-[10px] text-zinc-600 font-semibold space-y-2 font-sans mt-8 break-inside-avoid print:break-inside-avoid">
               <span className="text-[9px] font-black text-zinc-800 uppercase tracking-wider block mb-2 border-b border-zinc-200 pb-1">Instrucciones Importantes</span>
               <ul className="list-disc pl-4 space-y-1 text-zinc-600">
                 <li>Preséntese en el mostrador de la aerolínea con <strong>al menos 3 horas de antelación</strong> para vuelos internacionales y 2 horas para vuelos domésticos.</li>

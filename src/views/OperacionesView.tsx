@@ -1009,7 +1009,7 @@ export default function OperacionesView({
                         <div className="grid grid-cols-2 gap-4">
                           <div className="bg-white p-3 rounded-lg border border-zinc-200">
                             <p className="text-[8px] text-zinc-400 font-extrabold uppercase tracking-wider">Chofer / Operador</p>
-                            <p className={`text-xs font-black mt-1 ${selectedTransfer.driverName ? "text-zinc-955" : "text-amber-600 animate-pulse"}`}>
+                            <p className={`text-xs font-black mt-1 ${selectedTransfer.driverName ? "text-zinc-950" : "text-amber-600 animate-pulse"}`}>
                               {selectedTransfer.driverName || "⚠ Sin Asignar"}
                             </p>
                             {selectedTransfer.conductorId && (
@@ -1018,7 +1018,7 @@ export default function OperacionesView({
                           </div>
                           <div className="bg-white p-3 rounded-lg border border-zinc-200">
                             <p className="text-[8px] text-zinc-400 font-extrabold uppercase tracking-wider">Vehículo Autorizado</p>
-                            <p className={`text-xs font-black mt-1 ${selectedTransfer.vehiculoId ? "text-zinc-955" : "text-amber-600 animate-pulse"}`}>
+                            <p className={`text-xs font-black mt-1 ${selectedTransfer.vehiculoId ? "text-zinc-950" : "text-amber-600 animate-pulse"}`}>
                               {selectedTransfer.vehiculoId
                                 ? (() => { const v = fleetVehicles.find(v => v.id === selectedTransfer.vehiculoId); return v ? `${v.marca} ${v.modelo}` : selectedTransfer.vehicleType; })()
                                 : "⚠ Sin Vehículo"}

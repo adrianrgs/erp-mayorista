@@ -99,7 +99,9 @@ import {
   ReceiptText,
   TrendingDown,
   Lock,
-  LogOut
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen
 } from "lucide-react";
 
 export default function App() {
@@ -495,6 +497,13 @@ export default function App() {
 
   const [expandedMenus, setExpandedMenus] = useState<Record<string, boolean>>({ comercial: true, operaciones: true, finanzas: true, directorio: true });
   const toggleMenu = (key: string) => setExpandedMenus(p => ({ ...p, [key]: !p[key] }));
+
+  // Preferencia de sidebar colapsado, persistida para que sobreviva a recargas — en pantallas
+  // chicas (ej. MacBook Air) colapsar el sidebar recupera ~220px de ancho útil de contenido.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => localStorage.getItem("erp-sidebar-collapsed") === "true");
+  React.useEffect(() => {
+    localStorage.setItem("erp-sidebar-collapsed", String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
 
 
   React.useEffect(() => {
@@ -1534,14 +1543,14 @@ export default function App() {
         <button
           key={id}
           disabled
-          title="Sin permiso de acceso a este módulo"
-          className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-zinc-600 cursor-not-allowed opacity-60"
+          title={sidebarCollapsed ? `${label} — sin permiso de acceso` : "Sin permiso de acceso a este módulo"}
+          className={`w-full flex items-center rounded-lg text-zinc-600 cursor-not-allowed opacity-60 ${sidebarCollapsed ? "justify-center p-2.5" : "justify-between px-3 py-2"}`}
         >
           <span className="flex items-center gap-3">
             <Icon className="w-4 h-4 flex-shrink-0" />
-            <span className="text-xs font-semibold">{label}</span>
+            {!sidebarCollapsed && <span className="text-xs font-semibold">{label}</span>}
           </span>
-          <Lock className="w-3 h-3 text-zinc-500 flex-shrink-0" />
+          {!sidebarCollapsed && <Lock className="w-3 h-3 text-zinc-500 flex-shrink-0" />}
         </button>
       );
     }
@@ -1550,10 +1559,11 @@ export default function App() {
         key={id}
         id={id}
         onClick={() => setCurrentSection(view)}
-        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all cursor-pointer ${currentSection === view ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}
+        title={sidebarCollapsed ? label : undefined}
+        className={`w-full flex items-center rounded-lg transition-all cursor-pointer ${sidebarCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2"} ${currentSection === view ? 'bg-zinc-900 text-white font-semibold' : 'text-zinc-400 hover:text-white hover:bg-zinc-900/40'}`}
       >
         <Icon className="w-4 h-4 flex-shrink-0" />
-        <span className="text-xs font-semibold">{label}</span>
+        {!sidebarCollapsed && <span className="text-xs font-semibold">{label}</span>}
       </button>
     );
   };
@@ -1571,49 +1581,68 @@ export default function App() {
     <div className="min-h-screen bg-zinc-50 text-zinc-900 flex font-sans antialiased">
 
       {/* SIDEBAR PERSISTENTE IZQUIERDO */}
-      <aside className="w-72 bg-zinc-950 flex flex-col h-screen fixed left-0 top-0 text-white p-5 border-r border-zinc-900 z-20 font-sans">
-        
+      <aside className={`${sidebarCollapsed ? "w-16" : "w-72"} bg-zinc-950 flex flex-col h-screen fixed left-0 top-0 text-white p-5 border-r border-zinc-900 z-20 font-sans transition-[width] duration-200 overflow-hidden`}>
+
         {/* Brand Header */}
         <button
           onClick={() => esAdministrador && setCurrentSection(ProjectView.CONFIGURACION)}
-          className={`flex items-center gap-3 mb-9 px-2 py-1.5 rounded-lg transition-all w-full text-left focus:outline-none ${esAdministrador ? "hover:bg-zinc-900/40 cursor-pointer" : "cursor-default"}`}
+          className={`flex items-center ${sidebarCollapsed ? "justify-center" : "gap-3"} mb-4 px-2 py-1.5 rounded-lg transition-all w-full text-left focus:outline-none ${esAdministrador ? "hover:bg-zinc-900/40 cursor-pointer" : "cursor-default"}`}
           title={esAdministrador ? "Configuración de Empresa" : companyConfig.name}
         >
           <div className="w-10 h-10 rounded-md bg-white text-zinc-950 flex items-center justify-center font-black text-xl shadow-xs flex-shrink-0">
             {companyConfig.logoLetter}
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 font-sans">
-              <h1 className="font-bold text-sm tracking-tight leading-none text-white truncate max-w-[120px]" title={companyConfig.name}>{companyConfig.name}</h1>
-              <span className="text-[9px] bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono px-1 py-0.5 rounded-sm flex-shrink-0">V0</span>
+          {!sidebarCollapsed && (
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 font-sans">
+                <h1 className="font-bold text-sm tracking-tight leading-none text-white truncate max-w-[120px]" title={companyConfig.name}>{companyConfig.name}</h1>
+                <span className="text-[9px] bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono px-1 py-0.5 rounded-sm flex-shrink-0">V0</span>
+              </div>
+              <p className="text-[9px] text-zinc-500 font-medium mt-1 uppercase tracking-wider truncate" title={companyConfig.subtitle}>{companyConfig.subtitle}</p>
             </div>
-            <p className="text-[9px] text-zinc-550 font-medium mt-1 uppercase tracking-wider truncate" title={companyConfig.subtitle}>{companyConfig.subtitle}</p>
-          </div>
+          )}
+        </button>
+
+        {/* Toggle de colapso: recupera ancho de contenido en pantallas chicas */}
+        <button
+          onClick={() => setSidebarCollapsed(v => !v)}
+          title={sidebarCollapsed ? "Expandir menú" : "Colapsar menú"}
+          className="w-full flex items-center justify-center gap-2 mb-5 py-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-900/40 transition-colors cursor-pointer"
+        >
+          {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4 flex-shrink-0" /> : (
+            <>
+              <PanelLeftClose className="w-4 h-4 flex-shrink-0" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Colapsar menú</span>
+            </>
+          )}
         </button>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1 overflow-y-auto pb-6">
+        <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden pb-6">
 
           {/* BUSCADOR GLOBAL — botón principal arriba */}
           <button
             id="nav-buscador"
             onClick={() => setCurrentSection(ProjectView.BUSCADOR)}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all cursor-pointer mb-3 ${currentSection === ProjectView.BUSCADOR ? 'bg-white/10 text-white font-semibold border border-white/10' : 'text-zinc-300 hover:text-white hover:bg-zinc-900/60 border border-transparent'}`}
+            title={sidebarCollapsed ? "Buscador Global" : undefined}
+            className={`w-full flex items-center rounded-lg transition-all cursor-pointer mb-3 ${sidebarCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5"} ${currentSection === ProjectView.BUSCADOR ? 'bg-white/10 text-white font-semibold border border-white/10' : 'text-zinc-300 hover:text-white hover:bg-zinc-900/60 border border-transparent'}`}
           >
             <Search className="w-4 h-4 flex-shrink-0" />
-            <span className="text-xs font-bold tracking-wide">Buscador Global</span>
+            {!sidebarCollapsed && <span className="text-xs font-bold tracking-wide">Buscador Global</span>}
           </button>
 
           <div className="h-px bg-zinc-800 mb-3" />
 
           {/* COMERCIAL */}
-          <div className="px-1">
-            <button onClick={() => toggleMenu('comercial')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
-              <span>Comercial</span>
-              <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.comercial ? '' : '-rotate-90'}`} />
-            </button>
-            {expandedMenus.comercial && (
-              <div className="space-y-1 mt-1 pl-1">
+          <div className={sidebarCollapsed ? "" : "px-1"}>
+            {!sidebarCollapsed && (
+              <button onClick={() => toggleMenu('comercial')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
+                <span>Comercial</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.comercial ? '' : '-rotate-90'}`} />
+              </button>
+            )}
+            {(sidebarCollapsed || expandedMenus.comercial) && (
+              <div className={sidebarCollapsed ? "space-y-1" : "space-y-1 mt-1 pl-1"}>
                 {renderNavButton(ProjectView.PROPIEDADES, Building2, "Propiedades y Tarifas", "nav-propiedades")}
                 {renderNavButton(ProjectView.SERVICIOS_VARIOS, Box, "Servicios Varios", "nav-servicios")}
               </div>
@@ -1621,13 +1650,15 @@ export default function App() {
           </div>
 
           {/* OPERACIONES */}
-          <div className="px-1 mt-2">
-            <button onClick={() => toggleMenu('operaciones')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
-              <span>Operaciones & Tráfico</span>
-              <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.operaciones ? '' : '-rotate-90'}`} />
-            </button>
-            {expandedMenus.operaciones && (
-              <div className="space-y-1 mt-1 pl-1">
+          <div className={sidebarCollapsed ? "mt-2" : "px-1 mt-2"}>
+            {!sidebarCollapsed && (
+              <button onClick={() => toggleMenu('operaciones')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
+                <span>Operaciones & Tráfico</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.operaciones ? '' : '-rotate-90'}`} />
+              </button>
+            )}
+            {(sidebarCollapsed || expandedMenus.operaciones) && (
+              <div className={sidebarCollapsed ? "space-y-1" : "space-y-1 mt-1 pl-1"}>
                 {renderNavButton(ProjectView.RESERVAS, Calendar, "Reservas (Booking)", "nav-reservas")}
                 {renderNavButton(ProjectView.VUELOS, Plane, "Vuelos (Air Control)", "nav-vuelos")}
                 {renderNavButton(ProjectView.OPERACIONES, Activity, "Ops. Receptivo", "nav-operaciones")}
@@ -1636,13 +1667,15 @@ export default function App() {
           </div>
 
           {/* DIRECTORIO */}
-          <div className="px-1 mt-2">
-            <button onClick={() => toggleMenu('directorio')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
-              <span>Directorio</span>
-              <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.directorio ? '' : '-rotate-90'}`} />
-            </button>
-            {expandedMenus.directorio && (
-              <div className="space-y-1 mt-1 pl-1">
+          <div className={sidebarCollapsed ? "mt-2" : "px-1 mt-2"}>
+            {!sidebarCollapsed && (
+              <button onClick={() => toggleMenu('directorio')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
+                <span>Directorio</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.directorio ? '' : '-rotate-90'}`} />
+              </button>
+            )}
+            {(sidebarCollapsed || expandedMenus.directorio) && (
+              <div className={sidebarCollapsed ? "space-y-1" : "space-y-1 mt-1 pl-1"}>
                 {renderNavButton(ProjectView.CLIENTES, Users, "Clientes", "nav-clientes")}
                 {renderNavButton(ProjectView.PROVEEDORES, Briefcase, "Proveedores", "nav-proveedores")}
               </div>
@@ -1650,13 +1683,15 @@ export default function App() {
           </div>
 
           {/* ADMIN & FINANZAS */}
-          <div className="px-1 mt-2">
-            <button onClick={() => toggleMenu('finanzas')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
-              <span>Admin & Finanzas</span>
-              <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.finanzas ? '' : '-rotate-90'}`} />
-            </button>
-            {expandedMenus.finanzas && (
-              <div className="space-y-1 mt-1 pl-1">
+          <div className={sidebarCollapsed ? "mt-2" : "px-1 mt-2"}>
+            {!sidebarCollapsed && (
+              <button onClick={() => toggleMenu('finanzas')} className="w-full flex items-center justify-between px-3 py-1 text-[10px] uppercase text-zinc-500 font-semibold tracking-wider hover:text-white transition-colors">
+                <span>Admin & Finanzas</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${expandedMenus.finanzas ? '' : '-rotate-90'}`} />
+              </button>
+            )}
+            {(sidebarCollapsed || expandedMenus.finanzas) && (
+              <div className={sidebarCollapsed ? "space-y-1" : "space-y-1 mt-1 pl-1"}>
                 {renderNavButton(ProjectView.ADMINISTRACION, Wallet, "Administración / BI", "nav-admin")}
                 {renderNavButton(ProjectView.FACTURACION, Receipt, "Dpto. Facturación", "nav-facturacion")}
                 {renderNavButton(ProjectView.COBRANZAS, CreditCard, "Cuentas por Cobrar", "nav-cobranzas")}
@@ -1669,7 +1704,7 @@ export default function App() {
       </aside>
 
       {/* CONTINENTE DE CONTENIDO PRINCIPAL (COLUMNA DERECHA) */}
-      <div className="flex-1 pl-72 flex flex-col min-h-screen">
+      <div className={`flex-1 ${sidebarCollapsed ? "pl-16" : "pl-72"} flex flex-col min-h-screen transition-[padding] duration-200`}>
         
         {/* TOP GENERAL BAR */}
         <header className="h-16 bg-white border-b border-zinc-200/80 flex items-center justify-between px-8 sticky top-0 z-10">

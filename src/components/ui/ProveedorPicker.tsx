@@ -71,7 +71,7 @@ export default function ProveedorPicker({
       )}
 
       {showDropdown && !disabled && proveedores.length > 0 && (
-        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-52 overflow-y-auto divide-y divide-zinc-150">
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-52 overflow-y-auto divide-y divide-zinc-100">
           {matches.length === 0 ? (
             <div className="p-3 text-xs text-zinc-400 italic">
               Ningún proveedor del catálogo coincide. Se guardará como "{nombre || "texto libre"}".

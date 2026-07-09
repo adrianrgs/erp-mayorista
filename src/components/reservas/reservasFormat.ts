@@ -5,7 +5,7 @@ export const getStatusBadge = (status: Reservation["status"]) => {
     case "Confirmada":
       return "bg-emerald-50 border-emerald-200 text-emerald-700 font-extrabold";
     case "Pendiente":
-      return "bg-zinc-100 border-zinc-250 text-zinc-600 font-bold";
+      return "bg-zinc-100 border-zinc-200 text-zinc-600 font-bold";
     case "Pendiente de Pago":
       return "bg-amber-50 border-amber-250 text-amber-700 font-bold";
     case "Petición Especial":
@@ -15,7 +15,7 @@ export const getStatusBadge = (status: Reservation["status"]) => {
     case "Cancelada":
       return "bg-red-50 border-red-200 text-red-650 font-bold";
     default:
-      return "bg-zinc-50 border-zinc-200 text-zinc-655 font-medium";
+      return "bg-zinc-50 border-zinc-200 text-zinc-700 font-medium";
   }
 };
 

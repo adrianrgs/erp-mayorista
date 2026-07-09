@@ -193,7 +193,7 @@ export default function ServiciosView({
                 <th className="px-6 py-3 border-b border-zinc-200"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-150">
+            <tbody className="divide-y divide-zinc-100">
               {filteredServices.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-10 text-center text-zinc-400 font-medium">
@@ -346,7 +346,7 @@ export default function ServiciosView({
                         const query = providerSearch.toLowerCase();
                         const matches = proveedores.filter(p => p.status === "Activo" && p.nombre.toLowerCase().includes(query));
                         return (
-                          <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-52 overflow-y-auto divide-y divide-zinc-150">
+                          <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-52 overflow-y-auto divide-y divide-zinc-100">
                             {matches.length === 0 ? (
                               <div className="p-3 text-xs text-zinc-400 italic">
                                 Ningún proveedor del catálogo coincide. Se guardará como "{providerSearch || "Manual"}".
@@ -483,7 +483,7 @@ export default function ServiciosView({
 
                   {/* Formulario Nueva Tarifa / Edición */}
                   <div className={`bg-white border rounded-lg p-5 shadow-sm mt-8 ${editingRateId ? "border-blue-300" : "border-zinc-200"}`}>
-                    <h4 className="text-xs font-bold text-zinc-800 uppercase tracking-widest mb-4 border-b border-zinc-150 pb-2">
+                    <h4 className="text-xs font-bold text-zinc-800 uppercase tracking-widest mb-4 border-b border-zinc-100 pb-2">
                       {editingRateId ? "Editando Temporada / Tarifa" : "Añadir Nueva Temporada / Tarifa"}
                     </h4>
 

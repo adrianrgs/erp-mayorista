@@ -415,7 +415,7 @@ export default function ClientesB2BPanel({
               className={`p-5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
                 selectedStatus === ClientStatus.ACTIVO 
                   ? "bg-emerald-50/20 border-emerald-500 ring-2 ring-emerald-500/10" 
-                  : "bg-white border-zinc-200 hover:border-zinc-350 hover:shadow-sm"
+                  : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-sm"
               }`}
             >
               <div className="space-y-1.5">
@@ -426,7 +426,7 @@ export default function ClientesB2BPanel({
                 </span>
               </div>
               <div className={`p-3 rounded-lg border ${
-                selectedStatus === ClientStatus.ACTIVO ? "bg-emerald-50 border-emerald-200 text-emerald-650" : "bg-zinc-50 border-zinc-200 text-zinc-650"
+                selectedStatus === ClientStatus.ACTIVO ? "bg-emerald-50 border-emerald-200 text-emerald-650" : "bg-zinc-50 border-zinc-200 text-zinc-600"
               }`}>
                 <Users className="w-6 h-6" />
               </div>
@@ -441,7 +441,7 @@ export default function ClientesB2BPanel({
               className={`p-5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
                 filterMorosoOnly 
                   ? "bg-red-50/20 border-red-500 ring-2 ring-red-500/10" 
-                  : "bg-white border-zinc-200 hover:border-zinc-350 hover:shadow-sm"
+                  : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-sm"
               }`}
             >
               <div className="space-y-1.5">
@@ -454,7 +454,7 @@ export default function ClientesB2BPanel({
                 </span>
               </div>
               <div className={`p-3 rounded-lg border ${
-                filterMorosoOnly ? "bg-red-100 border-red-300 text-red-600" : (totalMorosos > 0 ? "bg-red-50 border-red-200 text-red-600" : "bg-zinc-50 border-zinc-200 text-zinc-650")
+                filterMorosoOnly ? "bg-red-100 border-red-300 text-red-600" : (totalMorosos > 0 ? "bg-red-50 border-red-200 text-red-600" : "bg-zinc-50 border-zinc-200 text-zinc-600")
               }`}>
                 <AlertCircle className="w-6 h-6" />
               </div>
@@ -469,7 +469,7 @@ export default function ClientesB2BPanel({
               className={`p-5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
                 selectedStatus === ClientStatus.LISTA_NEGRA 
                   ? "bg-amber-50/20 border-amber-500 ring-2 ring-amber-500/10" 
-                  : "bg-white border-zinc-200 hover:border-zinc-350 hover:shadow-sm"
+                  : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-sm"
               }`}
             >
               <div className="space-y-1.5">
@@ -482,7 +482,7 @@ export default function ClientesB2BPanel({
                 </span>
               </div>
               <div className={`p-3 rounded-lg border ${
-                selectedStatus === ClientStatus.LISTA_NEGRA ? "bg-amber-100 border-amber-300 text-amber-600" : (totalListaNegra > 0 ? "bg-amber-50 border-amber-250 text-amber-600" : "bg-zinc-50 border-zinc-200 text-zinc-650")
+                selectedStatus === ClientStatus.LISTA_NEGRA ? "bg-amber-100 border-amber-300 text-amber-600" : (totalListaNegra > 0 ? "bg-amber-50 border-amber-250 text-amber-600" : "bg-zinc-50 border-zinc-200 text-zinc-600")
               }`}>
                 <ShieldAlert className="w-6 h-6" />
               </div>
@@ -506,7 +506,7 @@ export default function ClientesB2BPanel({
             {/* Filters Selection */}
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
               <div className="flex items-center gap-2">
-                <Filter className="w-3.5 h-3.5 text-zinc-450" />
+                <Filter className="w-3.5 h-3.5 text-zinc-400" />
                 <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Tipo:</span>
                 <select
                   className="p-1.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
@@ -591,7 +591,7 @@ export default function ClientesB2BPanel({
                         <td className="p-4 font-mono font-bold text-zinc-900">{c.id}</td>
                         <td className="p-4 font-bold text-zinc-900 group-hover:underline">{c.nombre}</td>
                         <td className="p-4 font-semibold text-zinc-700">{c.rif}</td>
-                        <td className="p-4 text-zinc-650">{c.contactoNombre}</td>
+                        <td className="p-4 text-zinc-600">{c.contactoNombre}</td>
                         <td className="p-4">
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${
                             c.tipo === ClientType.CREDITO ? "bg-blue-50 border-blue-200 text-blue-700" :
@@ -812,7 +812,7 @@ export default function ClientesB2BPanel({
             {/* TAB CONTENT: Ficha Comercial */}
             {detailTab === "ficha" && (
               <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs">
-                <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-3 mb-5">
+                <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-100 pb-3 mb-5">
                   <Edit2 className="w-4 h-4 text-zinc-700" /> Editar Ficha Técnica y Datos Comerciales
                 </h4>
 
@@ -987,7 +987,7 @@ export default function ClientesB2BPanel({
                     </button>
                     <button
                       type="submit"
-                      className="px-6 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                      className="px-6 py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
                     >
                       Guardar Cambios
                     </button>
@@ -999,7 +999,7 @@ export default function ClientesB2BPanel({
             {/* TAB CONTENT: Movimientos Financieros */}
             {detailTab === "movimientos" && (
               <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs space-y-4">
-                <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-3">
+                <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-100 pb-3">
                   <FileText className="w-4.5 h-4.5 text-zinc-700" /> Historial de Movimientos Financieros (Facturaciones, Pagos y Reintegros)
                 </h4>
 
@@ -1057,7 +1057,7 @@ export default function ClientesB2BPanel({
                     <tbody className="divide-y divide-zinc-100 font-medium">
                       {filteredInvoices.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="p-6 text-center text-zinc-450 italic">
+                          <td colSpan={6} className="p-6 text-center text-zinc-400 italic">
                             No se registran movimientos financieros que coincidan con los filtros seleccionados.
                           </td>
                         </tr>
@@ -1069,7 +1069,7 @@ export default function ClientesB2BPanel({
                           
                           return (
                             <tr key={inv.id} className="hover:bg-zinc-50/50 transition-colors">
-                              <td className="p-3 font-mono font-bold text-zinc-650">{inv.id}</td>
+                              <td className="p-3 font-mono font-bold text-zinc-600">{inv.id}</td>
                               <td className="p-3 text-zinc-900 font-bold">{inv.clientName}</td>
                               <td className="p-3 text-zinc-500 font-mono">{inv.date}</td>
                               <td className={`p-3 text-right font-black font-mono text-xs ${isCreditNote ? "text-red-650" : isExcess ? "text-emerald-700 font-extrabold" : "text-zinc-900"}`}>
@@ -1079,7 +1079,7 @@ export default function ClientesB2BPanel({
                                 <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${
                                   inv.status === "Pagado" ? "bg-emerald-50 text-emerald-700 border-emerald-250 font-bold" : 
                                   inv.status === "Facturado" ? "bg-amber-50 text-amber-700 border-amber-250" : 
-                                  inv.status === "Vencido" ? "bg-red-50 text-red-700 border-red-200 font-bold animate-pulse" : "bg-zinc-50 text-zinc-650 border-zinc-200"
+                                  inv.status === "Vencido" ? "bg-red-50 text-red-700 border-red-200 font-bold animate-pulse" : "bg-zinc-50 text-zinc-600 border-zinc-200"
                                 }`}>
                                   {inv.status}
                                 </span>
@@ -1110,7 +1110,7 @@ export default function ClientesB2BPanel({
             {/* TAB CONTENT: Expedientes de Reservas */}
             {detailTab === "expedientes" && (
               <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs space-y-4">
-                <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-3">
+                <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-100 pb-3">
                   <Calendar className="w-4.5 h-4.5 text-zinc-700" /> Historial de Expedientes (Reservas de la Agencia)
                 </h4>
 
@@ -1170,7 +1170,7 @@ export default function ClientesB2BPanel({
                     <tbody className="divide-y divide-zinc-100 font-medium">
                       {filteredBookings.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="p-6 text-center text-zinc-450 italic">
+                          <td colSpan={7} className="p-6 text-center text-zinc-400 italic">
                             No se registran expedientes de reservas que coincidan con los filtros.
                           </td>
                         </tr>
@@ -1190,9 +1190,9 @@ export default function ClientesB2BPanel({
                               }}
                               className="hover:bg-zinc-50/60 transition-colors cursor-pointer group"
                             >
-                              <td className="p-3 font-mono font-bold text-zinc-650 group-hover:underline">{res.id}</td>
+                              <td className="p-3 font-mono font-bold text-zinc-600 group-hover:underline">{res.id}</td>
                               <td className="p-3 text-zinc-900 font-bold">{res.holder}</td>
-                              <td className="p-3 text-zinc-650 font-semibold">{res.hotelName}</td>
+                              <td className="p-3 text-zinc-600 font-semibold">{res.hotelName}</td>
                               <td className="p-3 text-center text-zinc-500 font-mono">{res.checkIn}</td>
                               <td className="p-3 text-right font-black font-mono text-zinc-900">${res.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</td>
                               <td className="p-3 text-center">
@@ -1261,7 +1261,7 @@ export default function ClientesB2BPanel({
                 }`}>
                   ● {selectedRes.status}
                 </span>
-                <span className="px-2.5 py-0.5 border border-zinc-200 bg-zinc-50 rounded-full text-[9px] font-bold uppercase text-zinc-650">
+                <span className="px-2.5 py-0.5 border border-zinc-200 bg-zinc-50 rounded-full text-[9px] font-bold uppercase text-zinc-600">
                   {selectedRes.mercado || "NACIONAL"}
                 </span>
               </div>
@@ -1353,7 +1353,7 @@ export default function ClientesB2BPanel({
                         </span>
                       )}
                     </div>
-                    <span className="text-[9.5px] text-zinc-455 block font-medium">
+                    <span className="text-[9.5px] text-zinc-500 block font-medium">
                       {totalPendiente > 0 ? `Pagado: $${totalPagado.toLocaleString("es-ES", { minimumFractionDigits: 2 })}` : "Sin deudas activas"}
                     </span>
                   </div>
@@ -1386,7 +1386,7 @@ export default function ClientesB2BPanel({
 
                 {/* Desglose de Servicios */}
                 <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs space-y-4">
-                  <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-3">
+                  <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-100 pb-3">
                     <Calendar className="w-4.5 h-4.5 text-zinc-700" /> Desglose Detallado de Servicios Contratados
                   </h4>
                   <div className="overflow-x-auto">
@@ -1421,11 +1421,11 @@ export default function ClientesB2BPanel({
                                     </td>
                                     <td className="p-3 text-left leading-normal text-zinc-900 font-semibold">
                                       <span className="font-extrabold text-zinc-900">{hotelName}</span>
-                                      <span className="block text-[9.5px] text-zinc-450 font-medium mt-0.5">
+                                      <span className="block text-[9.5px] text-zinc-400 font-medium mt-0.5">
                                         IN: {formatDate(srv.detalles.checkInDate)} / OUT: {formatDate(srv.detalles.checkOutDate)} ({srv.detalles.selectedPromoName || "Tarifa Directa"})
                                       </span>
                                     </td>
-                                    <td className="p-3 text-right font-mono font-bold text-zinc-650">${srv.precioNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                    <td className="p-3 text-right font-mono font-bold text-zinc-600">${srv.precioNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                     <td className="p-3 text-right font-mono font-black text-zinc-900">${srv.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                     <td className="p-3 text-right font-mono text-zinc-500">${b2bCom.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                     <td className="p-3 text-center">
@@ -1446,15 +1446,15 @@ export default function ClientesB2BPanel({
                                     const guestsNames = room.guests?.map((g: any) => `${g.name} (${g.type === "Adulto" ? "ADT" : "CHD"})`).filter((str: string) => str.replace(/\s*\([^)]+\)/g, "").trim() !== "").join(", ");
                                     const roomB2bCom = rates.pvp - rates.sale;
                                     return (
-                                      <tr key={`${srv.id}-rm-${rIdx}`} className="border-b border-zinc-100 last:border-b-zinc-205 bg-white hover:bg-zinc-50/30 transition-colors">
+                                      <tr key={`${srv.id}-rm-${rIdx}`} className="border-b border-zinc-100 last:border-b-zinc-200 bg-white hover:bg-zinc-50/30 transition-colors">
                                         <td className="p-2.5"></td>
                                         <td className="p-2.5 text-[9.5px] text-zinc-400 font-bold uppercase tracking-wider pl-5">Hab {rIdx + 1}</td>
-                                        <td className="p-2.5 text-zinc-650 pl-5 text-left">
-                                          <span className="font-semibold text-zinc-850 text-xs">{roomTypeName}</span>
+                                        <td className="p-2.5 text-zinc-600 pl-5 text-left">
+                                          <span className="font-semibold text-zinc-800 text-xs">{roomTypeName}</span>
                                           {guestsNames && <span className="block text-[10px] text-zinc-400 italic">Pasajeros: {guestsNames}</span>}
                                         </td>
                                         <td className="p-2.5 text-right text-zinc-500 text-xs font-mono">${rates.net.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                        <td className="p-2.5 text-right text-zinc-850 font-bold text-xs font-mono">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-2.5 text-right text-zinc-800 font-bold text-xs font-mono">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                         <td className="p-2.5 text-right text-zinc-500 font-mono text-[10.5px]">${roomB2bCom.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                         <td className="p-2.5"></td>
                                       </tr>
@@ -1473,7 +1473,7 @@ export default function ClientesB2BPanel({
                                   </span>
                                 </td>
                                 <td className="p-3 text-zinc-900 font-semibold">{srv.descripcion}</td>
-                                <td className="p-3 text-right font-mono font-bold text-zinc-650">${srv.precioNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                <td className="p-3 text-right font-mono font-bold text-zinc-600">${srv.precioNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                 <td className="p-3 text-right font-mono font-black text-zinc-900">${srv.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                 <td className="p-3 text-right font-mono text-zinc-500">${b2bCom.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                 <td className="p-3 text-center">
@@ -1498,7 +1498,7 @@ export default function ClientesB2BPanel({
                               </span>
                             </td>
                             <td className="p-3 text-zinc-900 font-semibold">{selectedRes.hotelName} (Servicio Base)</td>
-                            <td className="p-3 text-right font-mono font-bold text-zinc-650">${selectedRes.netPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                            <td className="p-3 text-right font-mono font-bold text-zinc-600">${selectedRes.netPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                             <td className="p-3 text-right font-mono font-black text-zinc-900">${selectedRes.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                             <td className="p-3 text-right font-mono text-zinc-500">${(selectedRes.totalPrice - selectedRes.netPrice).toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                             <td className="p-3 text-center">
@@ -1526,7 +1526,7 @@ export default function ClientesB2BPanel({
                                 </span>
                               </td>
                               <td className="p-3 text-zinc-900 font-semibold">Boleto Aéreo GDS - Ruta: {rutaStr}</td>
-                              <td className="p-3 text-right font-mono font-bold text-zinc-650">${vuelo.costoNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                              <td className="p-3 text-right font-mono font-bold text-zinc-600">${vuelo.costoNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                               <td className="p-3 text-right font-mono font-black text-zinc-900">${vuelo.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                               <td className="p-3 text-right font-mono text-zinc-500">${b2bCom.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                               <td className="p-3 text-center">
@@ -1547,7 +1547,7 @@ export default function ClientesB2BPanel({
 
                 {/* Historial de Movimientos de Facturación */}
                 <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs space-y-4">
-                  <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-3">
+                  <h4 className="font-extrabold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-100 pb-3">
                     <FileText className="w-4.5 h-4.5 text-zinc-700" /> Registro de Transacciones y Movimientos del Expediente
                   </h4>
                   <div className="overflow-x-auto">
@@ -1565,7 +1565,7 @@ export default function ClientesB2BPanel({
                       <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
                         {resInvoices.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="p-6 text-center text-zinc-450 italic">
+                            <td colSpan={6} className="p-6 text-center text-zinc-400 italic">
                               No se registran movimientos ni transacciones financieras para este localizador.
                             </td>
                           </tr>
@@ -1577,7 +1577,7 @@ export default function ClientesB2BPanel({
                             
                             return (
                               <tr key={inv.id} className="hover:bg-zinc-50/50 transition-colors">
-                                <td className="p-3 font-mono font-bold text-zinc-650">{inv.id}</td>
+                                <td className="p-3 font-mono font-bold text-zinc-600">{inv.id}</td>
                                 <td className="p-3 text-zinc-900 font-bold">{inv.clientName}</td>
                                 <td className="p-3 text-zinc-500 font-mono">{inv.date}</td>
                                 <td className={`p-3 text-right font-black font-mono text-xs ${isCreditNote ? "text-red-650" : isExcess ? "text-emerald-700 font-extrabold" : "text-zinc-900"}`}>
@@ -1587,7 +1587,7 @@ export default function ClientesB2BPanel({
                                   <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${
                                     inv.status === "Pagado" ? "bg-emerald-50 text-emerald-700 border-emerald-250 font-bold" : 
                                     inv.status === "Facturado" ? "bg-amber-50 text-amber-700 border-amber-250" : 
-                                    inv.status === "Vencido" ? "bg-red-50 text-red-700 border-red-200 font-bold animate-pulse" : "bg-zinc-50 text-zinc-650 border-zinc-200"
+                                    inv.status === "Vencido" ? "bg-red-50 text-red-700 border-red-200 font-bold animate-pulse" : "bg-zinc-50 text-zinc-600 border-zinc-200"
                                   }`}>
                                     {inv.status}
                                   </span>
@@ -1813,7 +1813,7 @@ export default function ClientesB2BPanel({
               </div>
 
               {/* Form Actions */}
-              <div className="flex justify-end gap-2 pt-3 border-t border-zinc-150">
+              <div className="flex justify-end gap-2 pt-3 border-t border-zinc-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
@@ -1823,7 +1823,7 @@ export default function ClientesB2BPanel({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                  className="px-5 py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
                 >
                   Guardar Cliente B2B
                 </button>

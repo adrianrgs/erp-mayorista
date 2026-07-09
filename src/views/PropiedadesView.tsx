@@ -44,6 +44,8 @@ import { useDialog } from "../components/ui/DialogProvider";
 import { ProjectView } from "../types";
 import { AccionPermiso } from "../types/usuarios";
 import { usePermissions } from "../hooks/usePermissions";
+import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
 
 // Initial list of Venezuelan and International properties mapped for Product Dpto.
 const initialDetailedProperties: Property[] = [
@@ -724,13 +726,14 @@ export default function PropiedadesView({
             </div>
 
             {puede(ProjectView.PROPIEDADES, AccionPermiso.CREAR) && (
-              <button
+              <Button
                 id="add-new-hotel-btn"
                 onClick={() => setIsNewPropertyOpen(true)}
-                className="px-4.5 py-2.5 bg-zinc-900 hover:bg-zinc-805 text-white rounded text-xs font-bold tracking-wider uppercase flex items-center gap-2 cursor-pointer transition-colors"
+                size="lg"
+                className="uppercase tracking-wider"
               >
                 <Plus className="w-4 h-4" /> Registrar Hotel Directo
-              </button>
+              </Button>
             )}
           </div>
 
@@ -746,7 +749,7 @@ export default function PropiedadesView({
                   id="hotel-search-bar"
                   type="text"
                   placeholder="Hotel, ciudad, proveedor..."
-                  className="w-full pl-9 pr-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-850 font-medium focus:outline-none focus:border-zinc-500"
+                  className="w-full pl-9 pr-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-800 font-medium focus:outline-none focus:border-zinc-500"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -758,7 +761,7 @@ export default function PropiedadesView({
               <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">País</label>
               <select
                 id="country-filter-select"
-                className="w-full p-2 border border-zinc-200 rounded text-xs font-medium bg-white focus:outline-none focus:border-zinc-550"
+                className="w-full p-2 border border-zinc-200 rounded text-xs font-medium bg-white focus:outline-none focus:border-zinc-500"
                 value={selectedCountry}
                 onChange={(e) => {
                   setSelectedCountry(e.target.value);
@@ -776,7 +779,7 @@ export default function PropiedadesView({
               <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Estado (Región)</label>
               <select
                 id="state-filter-select"
-                className="w-full p-2 border border-zinc-200 rounded text-xs font-medium bg-white focus:outline-none focus:border-zinc-550"
+                className="w-full p-2 border border-zinc-200 rounded text-xs font-medium bg-white focus:outline-none focus:border-zinc-500"
                 value={selectedState}
                 onChange={(e) => setSelectedState(e.target.value)}
               >
@@ -820,7 +823,7 @@ export default function PropiedadesView({
                 <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
                   {filteredProperties.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-8 text-center text-zinc-450 italic">
+                      <td colSpan={7} className="p-8 text-center text-zinc-400 italic">
                         Ningún establecimiento o hotel coincide con los criterios de búsqueda de producto.
                       </td>
                     </tr>
@@ -848,7 +851,7 @@ export default function PropiedadesView({
                           </td>
                           <td className="p-4">
                             <h4 className="font-bold text-zinc-900 text-sm group-hover:underline">{p.nombre}</h4>
-                            <span className="text-[10px] text-zinc-450 font-mono">Código de Producto: {p.id}</span>
+                            <span className="text-[10px] text-zinc-400 font-mono">Código de Producto: {p.id}</span>
                           </td>
                           <td className="p-4">
                             <div className="flex items-center gap-1">
@@ -972,7 +975,7 @@ export default function PropiedadesView({
           </div>
 
           {/* Hero Header Presentation */}
-          <div className="relative h-44 bg-zinc-950 rounded-lg overflow-hidden border border-zinc-250 shadow-sm flex items-end">
+          <div className="relative h-44 bg-zinc-950 rounded-lg overflow-hidden border border-zinc-200 shadow-sm flex items-end">
             <img
               src={activeProperty.imagen}
               alt={activeProperty.nombre}
@@ -1103,7 +1106,7 @@ export default function PropiedadesView({
                 <div className="p-4 border border-zinc-200 rounded-lg bg-zinc-50/20 space-y-3">
                   <div className="flex justify-between items-center pb-2 border-b border-zinc-100">
                     <h4 className="font-bold text-xs text-zinc-900 uppercase">Habitaciones Relacionadas en Contrato</h4>
-                    <span className="text-[10px] bg-zinc-100 px-2 py-0.5 rounded text-zinc-650 font-bold">
+                    <span className="text-[10px] bg-zinc-100 px-2 py-0.5 rounded text-zinc-600 font-bold">
                       {roomTypes.filter(rt => rt.property_id === activeProperty.id).length} tipos cargados
                     </span>
                   </div>
@@ -1112,17 +1115,17 @@ export default function PropiedadesView({
                     {roomTypes.filter(rt => rt.property_id === activeProperty.id).map(rt => (
                       <div key={rt.id} className="p-3 bg-white border border-zinc-100 rounded flex justify-between items-center">
                         <div className="flex items-center gap-2.5">
-                          <div className="p-1.5 rounded-full bg-zinc-50 border border-zinc-250 text-zinc-700">
+                          <div className="p-1.5 rounded-full bg-zinc-50 border border-zinc-200 text-zinc-700">
                             <Bed className="w-3.5 h-3.5" />
                           </div>
                           <div>
                             <h5 className="font-bold text-zinc-800 text-xs">{rt.nombre}</h5>
-                            <span className="text-[10px] text-zinc-450 uppercase flex items-center gap-1 font-semibold">
+                            <span className="text-[10px] text-zinc-400 uppercase flex items-center gap-1 font-semibold">
                               <Utensils className="w-3 h-3" /> {rt.regimenAlimentacion}
                             </span>
                           </div>
                         </div>
-                        <span className="text-[10px] text-zinc-400">Capacidad: <strong className="text-zinc-850 font-extrabold">{rt.capacidadMax} pax</strong></span>
+                        <span className="text-[10px] text-zinc-400">Capacidad: <strong className="text-zinc-800 font-extrabold">{rt.capacidadMax} pax</strong></span>
                       </div>
                     ))}
                   </div>
@@ -1149,7 +1152,7 @@ export default function PropiedadesView({
                       </thead>
                       <tbody className="divide-y divide-zinc-100 font-medium">
                         <tr>
-                          <td colSpan={6} className="p-5 text-center text-zinc-450 italic bg-white">
+                          <td colSpan={6} className="p-5 text-center text-zinc-400 italic bg-white">
                             No hay reservas registradas con check-in próximo para este establecimiento.
                           </td>
                         </tr>
@@ -1167,16 +1170,16 @@ export default function PropiedadesView({
                 <div className="flex items-center justify-between">
                   <div>
                     <h5 className="font-bold text-zinc-900 text-sm">Biblioteca Fotográfica</h5>
-                    <p className="text-xs text-zinc-450">Imágenes sincronizadas con material publicitario para minoristas.</p>
+                    <p className="text-xs text-zinc-400">Imágenes sincronizadas con material publicitario para minoristas.</p>
                   </div>
                   {puede(ProjectView.PROPIEDADES, AccionPermiso.EDITAR) && (
-                    <button
+                    <Button
                       id="trigger-photo-upload"
                       onClick={handleAddImageToGallery}
-                      className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1.5"
+                      className="uppercase tracking-wider"
                     >
                       <Plus className="w-3.5 h-3.5" /> Simular Firebase Upload
-                    </button>
+                    </Button>
                   )}
                 </div>
 
@@ -1254,24 +1257,24 @@ export default function PropiedadesView({
                       <tbody className="divide-y divide-zinc-100 font-medium">
                         {stopSales.filter(s => s.property_id === activePropertyId).length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="p-5 text-center text-zinc-450 italic bg-white">
+                            <td colSpan={6} className="p-5 text-center text-zinc-400 italic bg-white">
                               No hay Stop Sales o cierres configurados para este hotel. Todo el periodo se mantiene con ventas abiertas.
                             </td>
                           </tr>
                         ) : (
                           stopSales.filter(s => s.property_id === activePropertyId).map(s => (
                             <tr key={s.id}>
-                              <td className="p-3 font-mono font-bold text-zinc-650">{s.id}</td>
+                              <td className="p-3 font-mono font-bold text-zinc-600">{s.id}</td>
                               <td className="p-3">
                                 {(s.tipo ?? "Cierre") === "EnSolicitud" ? (
-                                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-bold uppercase text-[9px]">Bajo Solicitud</span>
+                                  <Badge variant="warning">Bajo Solicitud</Badge>
                                 ) : (
-                                  <span className="px-2 py-0.5 rounded bg-red-100 text-red-700 border border-red-200 font-bold uppercase text-[9px]">Cierre</span>
+                                  <Badge variant="danger">Cierre</Badge>
                                 )}
                               </td>
                               <td className="p-3 text-zinc-900">{formatDate(s.fechaInicio)}</td>
                               <td className="p-3 text-zinc-900">{formatDate(s.fechaFin)}</td>
-                              <td className="p-3 text-zinc-650">{s.motivo || "Cierre de contingencia"}</td>
+                              <td className="p-3 text-zinc-600">{s.motivo || "Cierre de contingencia"}</td>
                               <td className="p-3 text-right">
                                 {puede(ProjectView.PROPIEDADES, AccionPermiso.ELIMINAR) && (
                                   <button
@@ -1300,16 +1303,16 @@ export default function PropiedadesView({
                 <div className="flex items-center justify-between pb-2 border-b border-zinc-100">
                   <div>
                     <h5 className="font-bold text-zinc-900 text-sm">Condiciones Generales & Reglas del Voucher</h5>
-                    <p className="text-xs text-zinc-450">Términos impresos en los vouchers emitidos por Foratour ERP para este hotel.</p>
+                    <p className="text-xs text-zinc-400">Términos impresos en los vouchers emitidos por Foratour ERP para este hotel.</p>
                   </div>
                   {puede(ProjectView.PROPIEDADES, AccionPermiso.EDITAR) && (
-                    <button
+                    <Button
                       id="save-policies-btn"
                       onClick={handleSavePolicies}
-                      className="px-4 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                      className="uppercase tracking-wider"
                     >
                       Guardar Cambios
-                    </button>
+                    </Button>
                   )}
                 </div>
 
@@ -1340,7 +1343,7 @@ export default function PropiedadesView({
                   </div>
                 </div>
 
-                <div className="p-4 bg-zinc-50 rounded border border-zinc-205 text-zinc-650 text-xs leading-relaxed font-semibold">
+                <div className="p-4 bg-zinc-50 rounded border border-zinc-200 text-zinc-600 text-xs leading-relaxed font-semibold">
                   <span className="font-bold text-zinc-900 block uppercase mb-1 text-[10px] tracking-wider">Nota Importante:</span>
                   Toda enmienda salvada en este panel modificará al instante el XML y plantillas PDF de Voucher Receptivo. Por favor, mantenga la claridad de horarios locales de entrega de habitaciones.
                 </div>
@@ -1388,20 +1391,20 @@ export default function PropiedadesView({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="grid grid-cols-1 2xl:grid-cols-12 gap-8">
 
             {/* --- SECCIÓN A: GESTIÓN DE HABITACIONES (Room types) --- */}
-            <div className="lg:col-span-12 xl:col-span-5 space-y-6">
+            <div className="2xl:col-span-5 space-y-6">
 
               {/* Formulario Agregar Tipo Habitación */}
               {puede(ProjectView.PROPIEDADES, AccionPermiso.CREAR) && (
               <div className="bg-white p-5 border border-zinc-200 rounded-lg space-y-4 shadow-xs">
                 <div>
                   <h4 className="font-bold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5">
-                    <Bed className="w-4.5 h-4.5 text-zinc-750" />
+                    <Bed className="w-4.5 h-4.5 text-zinc-700" />
                     Carga de Tipos de Habitación
                   </h4>
-                  <p className="text-xs text-zinc-450 mt-1">Crea o añade categorías de alojamiento relacionales (Fase 1).</p>
+                  <p className="text-xs text-zinc-400 mt-1">Crea o añade categorías de alojamiento relacionales (Fase 1).</p>
                 </div>
 
                 <form onSubmit={handleAddRoomTypeSubmit} className="space-y-4">
@@ -1483,7 +1486,7 @@ export default function PropiedadesView({
                         min="1"
                         max="8"
                         required
-                        className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-805"
+                        className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800"
                         value={newRoomForm.capacidadMax}
                         onChange={(e) => setNewRoomForm(prev => ({ ...prev, capacidadMax: e.target.value }))}
                       />
@@ -1497,20 +1500,20 @@ export default function PropiedadesView({
                         min="1"
                         max="8"
                         required
-                        className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-805"
+                        className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800"
                         value={newRoomForm.ocupacionBase}
                         onChange={(e) => setNewRoomForm(prev => ({ ...prev, ocupacionBase: e.target.value }))}
                       />
                     </div>
                   </div>
 
-                  <button
+                  <Button
                     id="submit-room-type"
                     type="submit"
-                    className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                    className="w-full uppercase tracking-wider"
                   >
                     Guardar Tipo de Habitación
-                  </button>
+                  </Button>
                 </form>
               </div>
               )}
@@ -1521,7 +1524,7 @@ export default function PropiedadesView({
 
                 <div className="divide-y divide-zinc-200">
                   {roomTypes.filter(rt => rt.property_id === activePropertyId).length === 0 ? (
-                    <div className="p-4 text-center text-zinc-450 text-xs italic">
+                    <div className="p-4 text-center text-zinc-400 text-xs italic">
                       No hay tipos de habitación cargados para esta propiedad. Debes agregar al menos una.
                     </div>
                   ) : (
@@ -1530,7 +1533,7 @@ export default function PropiedadesView({
                         <div>
                           <h6 className="font-bold text-zinc-900 text-xs">{rt.nombre}</h6>
                           <div className="flex items-center gap-2 mt-0.5 text-[10px]">
-                            <span className="text-[9px] tracking-wide uppercase font-bold text-zinc-650 bg-zinc-50 border border-zinc-200 px-1.5 rounded inline-flex items-center gap-1">
+                            <span className="text-[9px] tracking-wide uppercase font-bold text-zinc-600 bg-zinc-50 border border-zinc-200 px-1.5 rounded inline-flex items-center gap-1">
                               <Utensils className="w-2.5 h-2.5" />
                               {rt.regimenAlimentacion}
                             </span>
@@ -1569,7 +1572,7 @@ export default function PropiedadesView({
             </div>
 
             {/* --- SECCIÓN B: GESTIÓN DE TARIFAS / RATE PLANS --- */}
-            <div className="lg:col-span-12 xl:col-span-7 space-y-6">
+            <div className="2xl:col-span-7 space-y-6">
 
               {/* Market Tabs: Nacional / Internacional */}
               <div className="flex border-b border-zinc-200 bg-zinc-50/50 p-1 rounded-lg gap-1">
@@ -1613,11 +1616,11 @@ export default function PropiedadesView({
               {(puede(ProjectView.PROPIEDADES, AccionPermiso.CREAR) || puede(ProjectView.PROPIEDADES, AccionPermiso.EDITAR)) && (
               <div id="rateplan-form-header" className="bg-white p-5 border border-zinc-200 rounded-lg space-y-4 shadow-xs">
                 <div>
-                  <h4 className="font-bold text-zinc-905 text-sm uppercase tracking-wider flex items-center gap-1.5">
+                  <h4 className="font-bold text-zinc-900 text-sm uppercase tracking-wider flex items-center gap-1.5">
                     <DollarSign className="w-4.5 h-4.5 text-zinc-700" />
                     {editingPlanGroup ? "Editar Plan de Tarifas" : "Cargar Plan de Tarifas — Multi-Habitación"}
                   </h4>
-                  <p className="text-xs text-zinc-450 mt-1">Nombre el plan, configure fechas y asigne precios individuales a cada habitación seleccionada.</p>
+                  <p className="text-xs text-zinc-400 mt-1">Nombre el plan, configure fechas y asigne precios individuales a cada habitación seleccionada.</p>
                 </div>
 
                 <form onSubmit={handleAddRatePlanSubmit} className="space-y-4">
@@ -1653,7 +1656,7 @@ export default function PropiedadesView({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[9px] font-bold text-zinc-405 uppercase tracking-widest block">Metodología de Cobro</label>
+                      <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block">Metodología de Cobro</label>
                       <select
                         id="rateplan-charge-type-select"
                         className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900"
@@ -1823,17 +1826,15 @@ export default function PropiedadesView({
                     <span className="text-[9px] text-zinc-400 italic">
                       Se creará 1 tarifa por cada habitación seleccionada.
                     </span>
-                    <button
+                    <Button
                       id="submit-rate-plan"
                       type="submit"
-                      className={`px-6 py-3 rounded text-xs font-bold uppercase tracking-wider cursor-pointer ${
-                        editingPlanGroup 
-                          ? "bg-amber-500 hover:bg-amber-600 text-white shadow-md" 
-                          : "bg-zinc-900 hover:bg-zinc-800 text-white"
-                      }`}
+                      size="lg"
+                      variant={editingPlanGroup ? "warning" : "primary"}
+                      className={`uppercase tracking-wider ${editingPlanGroup ? "shadow-md" : ""}`}
                     >
                       {editingPlanGroup ? "Guardar Cambios" : "Guardar Plan de Tarifas"}
-                    </button>
+                    </Button>
                   </div>
                 </form>
               </div>
@@ -1841,7 +1842,7 @@ export default function PropiedadesView({
 
               {/* Registro de Tarifas Agrupadas por Plan/Promoción (Acordeón) */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-3 shadow-xs">
-                <h5 className="font-bold text-xs text-zinc-450 uppercase tracking-wider flex items-center gap-1.5">
+                <h5 className="font-bold text-xs text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
                   <CalendarRange className="w-3.5 h-3.5" />
                   Planes de Tarifa Registrados (Agrupados por Temporada)
                 </h5>
@@ -1929,18 +1930,20 @@ export default function PropiedadesView({
                                     Eliminar Plan
                                   </button>
                                 )}
-                                <button
+                                <Button
                                   id={`toggle-group-btn-${planName.replace(/\s+/g, '-')}`}
                                   type="button"
+                                  variant="secondary"
+                                  size="sm"
                                   onClick={() => toggleGroupExpansion(planName)}
-                                  className="px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider bg-white text-zinc-600 border border-zinc-200 rounded hover:bg-zinc-100 cursor-pointer transition-colors flex items-center gap-1"
+                                  className="uppercase tracking-wider"
                                 >
                                   {isExpanded ? (
                                     <><ChevronRight className="w-3 h-3 rotate-90" /> Colapsar</>
                                   ) : (
                                     <><ChevronRight className="w-3 h-3" /> Expandir</>
                                   )}
-                                </button>
+                                </Button>
                               </div>
                             </div>
 
@@ -2015,7 +2018,7 @@ export default function PropiedadesView({
       {/* --- LEVEL 1 MODAL DIALOG: AGREGAR NUEVA PROPIEDAD OR HOTEL --- */}
       {isNewPropertyOpen && (
         <div className="fixed inset-0 bg-zinc-950/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-zinc-250 rounded-lg max-w-xl w-full shadow-2xl overflow-hidden animate-zoom-in font-sans">
+          <div className="bg-white border border-zinc-200 rounded-lg max-w-xl w-full shadow-2xl overflow-hidden animate-zoom-in font-sans">
 
             {/* Modal Header */}
             <div className="bg-zinc-50 p-5 border-b border-zinc-200 flex items-center justify-between">
@@ -2215,7 +2218,7 @@ export default function PropiedadesView({
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-xs">%</span>
                   </div>
-                  <p className="text-[10px] text-zinc-450 font-medium">Se propaga automáticamente a Reservas al agregar un Alojamiento en este hotel. Se puede configurar luego desde la pestaña Políticas.</p>
+                  <p className="text-[10px] text-zinc-400 font-medium">Se propaga automáticamente a Reservas al agregar un Alojamiento en este hotel. Se puede configurar luego desde la pestaña Políticas.</p>
                 </div>
 
                 {/* Políticas Generales de Contrato Inicial */}
@@ -2234,21 +2237,22 @@ export default function PropiedadesView({
 
               {/* Modal Actions Footer */}
               <div className="bg-zinc-50 p-4 border-t border-zinc-200 flex justify-end gap-2">
-                <button
+                <Button
                   id="cancel-hotel-modal-btn"
                   type="button"
+                  variant="secondary"
                   onClick={() => setIsNewPropertyOpen(false)}
-                  className="px-4 py-2 bg-white hover:bg-zinc-100 border border-zinc-200 rounded text-xs text-zinc-700 font-bold uppercase tracking-wider cursor-pointer"
+                  className="uppercase tracking-wider"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   id="save-new-hotel-btn"
                   type="submit"
-                  className="px-4 py-2 bg-zinc-900 hover:bg-zinc-805 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer font-sans"
+                  className="uppercase tracking-wider font-sans"
                 >
                   Registrar en Extranet
-                </button>
+                </Button>
               </div>
 
             </form>

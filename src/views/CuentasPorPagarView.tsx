@@ -458,7 +458,7 @@ export default function CuentasPorPagarView({
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white p-4 border border-zinc-200 rounded-lg shadow-3xs">
             {/* Search Bar */}
             <div className="relative w-full md:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-450" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
               <input
                 type="text"
                 placeholder="Buscar por proveedor, ID, localizador..."
@@ -470,7 +470,7 @@ export default function CuentasPorPagarView({
 
             {/* Status Select Filters */}
             <div className="flex items-center gap-3 w-full md:w-auto">
-              <Filter className="w-4 h-4 text-zinc-450" />
+              <Filter className="w-4 h-4 text-zinc-400" />
               <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Estatus Pago:</span>
               <div className="flex gap-1.5 flex-wrap">
                 {["Todos", "Pendiente", "Vencido", "Pagado Parcial", "Pagado Total"].map(st => (
@@ -511,7 +511,7 @@ export default function CuentasPorPagarView({
                 <tbody className="divide-y divide-zinc-200 font-medium">
                   {filteredObligations.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="p-10 text-center text-zinc-450 italic bg-zinc-50/10">
+                      <td colSpan={10} className="p-10 text-center text-zinc-400 italic bg-zinc-50/10">
                         No se registran obligaciones de pago a proveedores para los filtros activos.
                       </td>
                     </tr>
@@ -547,7 +547,7 @@ export default function CuentasPorPagarView({
                                   <p className="text-[10px] text-amber-800 font-bold leading-tight flex items-center gap-1">
                                     ⚠️ Pago Congelado Automáticamente
                                   </p>
-                                  <p className="text-[9.5px] text-zinc-650 leading-normal font-semibold">
+                                  <p className="text-[9.5px] text-zinc-600 leading-normal font-semibold">
                                     El servicio fue cancelado o modificado en el expediente.
                                   </p>
                                   <p className="text-[9.5px] text-amber-705 font-extrabold leading-normal">
@@ -571,7 +571,7 @@ export default function CuentasPorPagarView({
                           <td className={`p-4 text-right font-black font-mono ${remaining > 0 ? "text-red-650" : remaining < 0 ? "text-emerald-700" : "text-zinc-400"}`}>
                             {remaining < 0 ? "-" : ""}{formatCurrency(Math.abs(remaining), ob.currency || "USD")}
                           </td>
-                          <td className="p-4 text-center font-mono text-[10.5px] text-zinc-650">
+                          <td className="p-4 text-center font-mono text-[10.5px] text-zinc-600">
                             {formatDate(ob.dueDate)}
                           </td>
                           <td className="p-4 text-center">
@@ -613,7 +613,7 @@ export default function CuentasPorPagarView({
                             ) : ob.status !== "Pagado Total" ? (
                               <button
                                 onClick={() => handleOpenPaymentDrawer(ob)}
-                                className="px-3 py-1.5 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs"
+                                className="px-3 py-1.5 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs"
                               >
                                 Pagar
                               </button>
@@ -642,7 +642,7 @@ export default function CuentasPorPagarView({
           <div className="lg:col-span-4 bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-3xs">
             <div>
               <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest">Catálogo de Proveedores</h4>
-              <p className="text-[10px] text-zinc-450 mt-1">Seleccione un proveedor para auditar su Libro Mayor de costos</p>
+              <p className="text-[10px] text-zinc-400 mt-1">Seleccione un proveedor para auditar su Libro Mayor de costos</p>
             </div>
 
             <div className="divide-y divide-zinc-100 max-h-[50vh] overflow-y-auto pr-1">
@@ -660,7 +660,7 @@ export default function CuentasPorPagarView({
                   >
                     <div className="space-y-0.5 max-w-full">
                       <p className="font-extrabold text-[11.5px] truncate">{provider}</p>
-                      <p className={`text-[9.5px] font-medium ${isSelected ? "text-zinc-400" : "text-zinc-450"}`}>
+                      <p className={`text-[9.5px] font-medium ${isSelected ? "text-zinc-400" : "text-zinc-400"}`}>
                         Región: América & Caribe
                       </p>
                     </div>
@@ -676,12 +676,12 @@ export default function CuentasPorPagarView({
             
             {/* Statement Header and calculated balance */}
             <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-3xs">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-150 pb-3 gap-3">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-100 pb-3 gap-3">
                 <div>
                   <span className="px-2 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-[9px] font-bold text-zinc-700 uppercase">
                     Libro Mayor Operativo
                   </span>
-                  <h3 className="font-black text-base text-zinc-955 uppercase mt-1.5">{selectedProvider}</h3>
+                  <h3 className="font-black text-base text-zinc-950 uppercase mt-1.5">{selectedProvider}</h3>
                 </div>
                 <div>
                   <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
@@ -697,7 +697,7 @@ export default function CuentasPorPagarView({
               {/* Balances Tiles */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-zinc-50 p-3.5 rounded-md border border-zinc-200 text-left">
-                  <span className="text-[9px] text-zinc-450 uppercase font-bold tracking-wider block">Total Facturas Recibidas</span>
+                  <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Total Facturas Recibidas</span>
                   <p className="font-black text-zinc-900 text-base mt-1 font-mono">
                     {formatDualCurrency(
                       activeProviderStatements.filter(s => s.type === "Factura Recibida").reduce((sum, s) => sum + s.amount, 0),
@@ -707,7 +707,7 @@ export default function CuentasPorPagarView({
                 </div>
 
                 <div className="bg-zinc-50 p-3.5 rounded-md border border-zinc-200 text-left">
-                  <span className="text-[9px] text-zinc-450 uppercase font-bold tracking-wider block">Total Pagos Emitidos</span>
+                  <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Total Pagos Emitidos</span>
                   <p className="font-bold text-emerald-700 text-base mt-1 font-mono">
                     -{formatDualCurrency(
                       activeProviderStatements.filter(s => s.type === "Pago Emitido").reduce((sum, s) => sum + s.amount, 0),
@@ -717,7 +717,7 @@ export default function CuentasPorPagarView({
                 </div>
 
                 <div className="bg-zinc-50 p-3.5 rounded-md border border-zinc-200 text-left">
-                  <span className="text-[9px] text-zinc-450 uppercase font-bold tracking-wider block">Balance Neto Pendiente</span>
+                  <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Balance Neto Pendiente</span>
                   <p className={`font-black text-base mt-1 font-mono ${providerBalance > 0 ? "text-red-650" : "text-emerald-700"}`}>
                     {formatDualCurrency(providerBalance, jur, currentExchangeRate)}
                   </p>
@@ -727,7 +727,7 @@ export default function CuentasPorPagarView({
 
             {/* General Ledger Table */}
             <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-3xs space-y-4">
-              <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-3">
+              <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-100 pb-3">
                 <FileText className="w-4 h-4 text-zinc-700" /> Registro Detallado de Facturas y Egresos
               </h4>
               
@@ -746,7 +746,7 @@ export default function CuentasPorPagarView({
                   <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
                     {activeProviderStatements.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="p-6 text-center text-zinc-450 italic bg-zinc-50/10">
+                        <td colSpan={6} className="p-6 text-center text-zinc-400 italic bg-zinc-50/10">
                           No se registran movimientos en el libro mayor de este proveedor.
                         </td>
                       </tr>
@@ -826,7 +826,7 @@ export default function CuentasPorPagarView({
                   <span>Detalle del Servicio</span>
                   <span className="font-mono">{activeObligationForPayment.locatorId}</span>
                 </div>
-                <p className="text-zinc-650 font-semibold">{activeObligationForPayment.serviceDetail}</p>
+                <p className="text-zinc-600 font-semibold">{activeObligationForPayment.serviceDetail}</p>
                 {activeObligationForPayment.isExempt && (
                   <span className="inline-flex items-center gap-1 text-[8.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border bg-green-50 text-green-700 border-green-200">
                     Exento {jur.taxName}
@@ -1090,7 +1090,7 @@ export default function CuentasPorPagarView({
                 </button>
                 <button
                   type="submit"
-                  className="w-1/2 py-2.5 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md"
+                  className="w-1/2 py-2.5 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md"
                 >
                   Confirmar Egreso
                 </button>

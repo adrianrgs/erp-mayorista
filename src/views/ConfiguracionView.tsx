@@ -7,6 +7,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../components/ui/DialogProvider";
 import { nextSequentialId } from "../lib/idGenerator";
+import Button from "../components/ui/Button";
 import {
   Building2,
   Users,
@@ -87,7 +88,7 @@ export default function ConfiguracionView({
 
       <div>
         <h2 className="text-xl font-black text-zinc-900 uppercase tracking-wider">Ajustes del Sistema</h2>
-        <p className="text-xs text-zinc-450 mt-1">Configure los parámetros generales, datos oficiales y accesos de administración del ERP.</p>
+        <p className="text-xs text-zinc-400 mt-1">Configure los parámetros generales, datos oficiales y accesos de administración del ERP.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -97,7 +98,7 @@ export default function ConfiguracionView({
 
           <button
             onClick={() => setActiveTab("empresa")}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left font-semibold ${activeTab === "empresa" ? "bg-zinc-900 text-white shadow-xs" : "text-zinc-550 hover:text-zinc-900 hover:bg-zinc-50"}`}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left font-semibold ${activeTab === "empresa" ? "bg-zinc-900 text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50"}`}
           >
             <Building2 className="w-4.5 h-4.5" />
             <span className="text-xs">Datos de la Empresa</span>
@@ -105,7 +106,7 @@ export default function ConfiguracionView({
 
           <button
             onClick={() => setActiveTab("usuarios")}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left font-semibold ${activeTab === "usuarios" ? "bg-zinc-900 text-white shadow-xs" : "text-zinc-550 hover:text-zinc-900 hover:bg-zinc-50"}`}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left font-semibold ${activeTab === "usuarios" ? "bg-zinc-900 text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50"}`}
           >
             <Users className="w-4.5 h-4.5" />
             <span className="text-xs">Usuarios y Accesos</span>
@@ -113,7 +114,7 @@ export default function ConfiguracionView({
 
           <button
             onClick={() => setActiveTab("permisos")}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left font-semibold ${activeTab === "permisos" ? "bg-zinc-900 text-white shadow-xs" : "text-zinc-550 hover:text-zinc-900 hover:bg-zinc-50"}`}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left font-semibold ${activeTab === "permisos" ? "bg-zinc-900 text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50"}`}
           >
             <Layers className="w-4.5 h-4.5" />
             <span className="text-xs">Permisos y Roles</span>
@@ -121,7 +122,7 @@ export default function ConfiguracionView({
 
           <button
             onClick={() => setActiveTab("autorizaciones")}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left font-semibold ${activeTab === "autorizaciones" ? "bg-zinc-900 text-white shadow-xs" : "text-zinc-550 hover:text-zinc-900 hover:bg-zinc-50"}`}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left font-semibold ${activeTab === "autorizaciones" ? "bg-zinc-900 text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50"}`}
           >
             <ShieldAlert className="w-4.5 h-4.5" />
             <span className="text-xs">Autorizaciones</span>
@@ -190,31 +191,31 @@ function EmpresaTab({ formData, onChange, onSubmit }: { formData: CompanyConfig;
     <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
       <div className="md:col-span-7 bg-white border border-zinc-200 rounded-lg p-5 shadow-xs">
         <h3 className="font-black text-xs text-zinc-900 uppercase tracking-widest border-b border-zinc-100 pb-3 mb-4 flex items-center gap-2">
-          <Building2 className="w-4 h-4 text-zinc-650" /> Datos de Identidad Corporativa
+          <Building2 className="w-4 h-4 text-zinc-600" /> Datos de Identidad Corporativa
         </h3>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
             <div className="sm:col-span-9">
-              <label htmlFor="name" className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Nombre de la Empresa</label>
+              <label htmlFor="name" className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Nombre de la Empresa</label>
               <input type="text" id="name" name="name" required autoComplete="organization" value={formData.name} onChange={onChange}
                 className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-900 font-semibold" />
             </div>
             <div className="sm:col-span-3">
-              <label htmlFor="logoLetter" className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Logo (Letra)</label>
+              <label htmlFor="logoLetter" className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Logo (Letra)</label>
               <input type="text" id="logoLetter" name="logoLetter" required maxLength={2} value={formData.logoLetter} onChange={onChange}
                 className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-900 font-bold text-center uppercase" />
             </div>
           </div>
 
           <div>
-            <label htmlFor="subtitle" className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Giro Comercial / Subtítulo</label>
+            <label htmlFor="subtitle" className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Giro Comercial / Subtítulo</label>
             <input type="text" id="subtitle" name="subtitle" required value={formData.subtitle} onChange={onChange}
               className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-900 font-semibold" />
           </div>
 
           <div>
-            <label htmlFor="tagline" className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Descripción del Negocio (Documentos)</label>
+            <label htmlFor="tagline" className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Descripción del Negocio (Documentos)</label>
             <input type="text" id="tagline" name="tagline" value={formData.tagline || ""} onChange={onChange}
               placeholder="Ej: Operador Mayorista de Turismo / Agencia de Viajes Minorista"
               className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-900 font-semibold" />
@@ -223,33 +224,33 @@ function EmpresaTab({ formData, onChange, onSubmit }: { formData: CompanyConfig;
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="rif" className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">RIF / Identificación Fiscal</label>
+              <label htmlFor="rif" className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">RIF / Identificación Fiscal</label>
               <input type="text" id="rif" name="rif" required value={formData.rif} onChange={onChange}
                 className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-900 font-semibold" />
             </div>
             <div>
-              <label htmlFor="phone" className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Teléfono de Contacto</label>
+              <label htmlFor="phone" className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Teléfono de Contacto</label>
               <input type="text" id="phone" name="phone" required autoComplete="tel" value={formData.phone} onChange={onChange}
                 className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-900 font-semibold" />
             </div>
           </div>
 
           <div>
-            <label htmlFor="address" className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Dirección Fiscal / Corporativa</label>
+            <label htmlFor="address" className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Dirección Fiscal / Corporativa</label>
             <input type="text" id="address" name="address" required value={formData.address} onChange={onChange}
               className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-900 font-semibold" />
           </div>
 
           <div>
-            <label htmlFor="email" className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Correo Electrónico de Facturación</label>
+            <label htmlFor="email" className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Correo Electrónico de Facturación</label>
             <input type="email" id="email" name="email" required autoComplete="email" value={formData.email} onChange={onChange}
               className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-900 font-semibold" />
           </div>
 
           <div className="pt-2">
-            <button type="submit" className="w-full py-2.5 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer flex items-center justify-center gap-2 transition-colors">
+            <Button type="submit" className="w-full uppercase tracking-wider">
               <Save className="w-4 h-4 text-zinc-300" /> Guardar Ajustes
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -291,7 +292,7 @@ function EmpresaTab({ formData, onChange, onSubmit }: { formData: CompanyConfig;
                 <h1 className="font-bold text-sm tracking-tight leading-none text-white line-clamp-1">{formData.name || "Foratour ERP"}</h1>
                 <span className="text-[8px] bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono px-1 rounded-sm">V0</span>
               </div>
-              <p className="text-[9px] text-zinc-550 font-medium mt-1 uppercase tracking-wider line-clamp-1">{formData.subtitle || "Wholesale Logistics"}</p>
+              <p className="text-[9px] text-zinc-500 font-medium mt-1 uppercase tracking-wider line-clamp-1">{formData.subtitle || "Wholesale Logistics"}</p>
             </div>
           </div>
         </div>
@@ -355,15 +356,15 @@ function UsuariosTab({
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-      <div className="xl:col-span-7 bg-white border border-zinc-200 rounded-lg shadow-xs overflow-hidden">
+    <div className="grid grid-cols-1 2xl:grid-cols-12 gap-6">
+      <div className="2xl:col-span-7 bg-white border border-zinc-200 rounded-lg shadow-xs overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-zinc-100">
           <h3 className="font-black text-xs text-zinc-900 uppercase tracking-widest flex items-center gap-2">
-            <Users className="w-4 h-4 text-zinc-650" /> Usuarios del Sistema
+            <Users className="w-4 h-4 text-zinc-600" /> Usuarios del Sistema
           </h3>
-          <button onClick={startCreate} className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer">
+          <Button onClick={startCreate} size="sm" className="uppercase tracking-wider">
             <Plus className="w-3.5 h-3.5" /> Nuevo Usuario
-          </button>
+          </Button>
         </div>
         <table className="w-full text-xs">
           <thead>
@@ -417,33 +418,33 @@ function UsuariosTab({
       </div>
 
       {showForm && (
-        <div className="xl:col-span-5 bg-white border border-zinc-200 rounded-lg p-5 shadow-xs h-fit">
+        <div className="2xl:col-span-5 bg-white border border-zinc-200 rounded-lg p-5 shadow-xs h-fit">
           <h3 className="font-black text-xs text-zinc-900 uppercase tracking-widest border-b border-zinc-100 pb-3 mb-4">
             {editingId ? "Editar Usuario" : "Nuevo Usuario"}
           </h3>
           <form onSubmit={handleSubmit} className="space-y-3.5">
             <div>
-              <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Nombre Completo</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Nombre Completo</label>
               <input type="text" required value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
                 className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white focus:outline-none focus:border-zinc-900 font-semibold" />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Usuario (login)</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Usuario (login)</label>
               <input type="text" required disabled={!!editingId} value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
                 className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white focus:outline-none focus:border-zinc-900 font-mono disabled:bg-zinc-100 disabled:text-zinc-400" />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Correo</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Correo</label>
               <input type="email" required value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white focus:outline-none focus:border-zinc-900 font-semibold" />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">{editingId ? "Nueva Contraseña (opcional)" : "Contraseña Inicial"}</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">{editingId ? "Nueva Contraseña (opcional)" : "Contraseña Inicial"}</label>
               <input type="password" required={!editingId} placeholder={editingId ? "Dejar en blanco para no cambiarla" : ""} value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                 className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white focus:outline-none focus:border-zinc-900 font-mono" />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Rol Asignado</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Rol Asignado</label>
               <select required value={form.rolId} onChange={e => setForm(f => ({ ...f, rolId: e.target.value }))}
                 className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white focus:outline-none focus:border-zinc-900 font-semibold cursor-pointer">
                 <option value="" disabled>-- Seleccione un rol --</option>
@@ -451,12 +452,12 @@ function UsuariosTab({
               </select>
             </div>
             <div className="flex gap-2 pt-2">
-              <button type="button" onClick={() => setShowForm(false)} className="flex-1 py-2 border border-zinc-200 rounded text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-zinc-50">
+              <Button type="button" variant="secondary" onClick={() => setShowForm(false)} className="flex-1 uppercase tracking-wider">
                 Cancelar
-              </button>
-              <button type="submit" className="flex-1 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer">
+              </Button>
+              <Button type="submit" className="flex-1 uppercase tracking-wider">
                 Guardar
-              </button>
+              </Button>
             </div>
           </form>
         </div>
@@ -532,13 +533,13 @@ function PermisosTab({
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-      <div className="xl:col-span-4 bg-white border border-zinc-200 rounded-lg shadow-xs p-4 space-y-2 h-fit">
+    <div className="grid grid-cols-1 2xl:grid-cols-12 gap-6">
+      <div className="2xl:col-span-4 bg-white border border-zinc-200 rounded-lg shadow-xs p-4 space-y-2 h-fit">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-black text-xs text-zinc-900 uppercase tracking-widest">Roles</h3>
-          <button onClick={startCreate} className="flex items-center gap-1 px-2 py-1 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-[9px] font-bold uppercase tracking-wider cursor-pointer">
+          <Button onClick={startCreate} size="sm" className="uppercase tracking-wider">
             <Plus className="w-3 h-3" /> Nuevo
-          </button>
+          </Button>
         </div>
         {roles.map(r => {
           const enUso = usuarios.some(u => u.rolId === r.id);
@@ -559,19 +560,19 @@ function PermisosTab({
         {roles.length === 0 && !draft && <p className="text-[11px] text-zinc-400 px-2 py-3">Sin roles creados todavía.</p>}
       </div>
 
-      <div className="xl:col-span-8 bg-white border border-zinc-200 rounded-lg shadow-xs p-5">
+      <div className="2xl:col-span-8 bg-white border border-zinc-200 rounded-lg shadow-xs p-5">
         {!editing ? (
           <p className="text-xs text-zinc-400">Seleccione un rol de la lista o cree uno nuevo.</p>
         ) : (
           <div className="space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Nombre del Rol</label>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Nombre del Rol</label>
                 <input type="text" value={editing.nombre} onChange={e => setDraft({ ...editing, nombre: e.target.value })}
                   className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white focus:outline-none focus:border-zinc-900 font-semibold" />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1.5">Descripción</label>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Descripción</label>
                 <input type="text" value={editing.descripcion || ""} onChange={e => setDraft({ ...editing, descripcion: e.target.value })}
                   className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white focus:outline-none focus:border-zinc-900" />
               </div>
@@ -583,7 +584,7 @@ function PermisosTab({
             </label>
 
             {!editing.esAdministrador && (
-              <div className="border border-zinc-200 rounded-lg overflow-hidden">
+              <div className="border border-zinc-200 rounded-lg overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-zinc-50 text-[9px] uppercase text-zinc-400 font-bold tracking-wider">
@@ -621,13 +622,13 @@ function PermisosTab({
 
             <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100">
               {draft && (
-                <button onClick={() => setDraft(null)} className="px-4 py-2 border border-zinc-200 rounded text-xs font-bold uppercase tracking-wider cursor-pointer hover:bg-zinc-50">
+                <Button variant="secondary" onClick={() => setDraft(null)} className="uppercase tracking-wider">
                   Cancelar
-                </button>
+                </Button>
               )}
-              <button onClick={handleSave} className="px-5 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer flex items-center gap-2">
+              <Button onClick={handleSave} className="uppercase tracking-wider">
                 <Save className="w-3.5 h-3.5" /> Guardar Rol
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -688,9 +689,9 @@ function AutorizacionesTab({
     <div className="space-y-6">
       <div className="bg-white border border-zinc-200 rounded-lg shadow-xs p-5">
         <h3 className="font-black text-xs text-zinc-900 uppercase tracking-widest border-b border-zinc-100 pb-3 mb-4 flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-zinc-650" /> Reglas de Doble Aprobación
+          <ShieldCheck className="w-4 h-4 text-zinc-600" /> Reglas de Doble Aprobación
         </h3>
-        <p className="text-[11px] text-zinc-450 mb-4">Defina qué acciones sensibles requieren aprobación de un rol superior cuando quien las intenta no tiene el permiso directo.</p>
+        <p className="text-[11px] text-zinc-400 mb-4">Defina qué acciones sensibles requieren aprobación de un rol superior cuando quien las intenta no tiene el permiso directo.</p>
 
         <form onSubmit={handleCreateRegla} className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-5">
           <select value={nuevaRegla.modulo} onChange={e => setNuevaRegla(f => ({ ...f, modulo: e.target.value as ProjectView, accion: "" }))} required
@@ -708,15 +709,15 @@ function AutorizacionesTab({
             <option value="">-- Rol Aprobador --</option>
             {roles.map(r => <option key={r.id} value={r.id}>{r.nombre}</option>)}
           </select>
-          <button type="submit" className="flex items-center justify-center gap-1.5 px-3 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer">
+          <Button type="submit" className="uppercase tracking-wider">
             <Plus className="w-3.5 h-3.5" /> Agregar Regla
-          </button>
+          </Button>
         </form>
 
         <div className="space-y-2">
           {reglasAutorizacion.length === 0 && <p className="text-[11px] text-zinc-400">Sin reglas configuradas.</p>}
           {reglasAutorizacion.map(r => (
-            <div key={r.id} className="flex items-center justify-between px-3 py-2 bg-zinc-50 border border-zinc-150 rounded-lg text-xs">
+            <div key={r.id} className="flex items-center justify-between px-3 py-2 bg-zinc-50 border border-zinc-100 rounded-lg text-xs">
               <span className="font-semibold text-zinc-700">{nombreModulo(r.modulo)} → {NOMBRE_ACCION[r.accion]} <span className="text-zinc-400 font-normal">requiere aprobación de</span> {nombreRol(r.rolAprobadorId)}</span>
               <button
                 onClick={() => onUpdateReglaAutorizacion({ ...r, activa: !r.activa })}
@@ -731,7 +732,7 @@ function AutorizacionesTab({
 
       <div className="bg-white border border-zinc-200 rounded-lg shadow-xs p-5">
         <h3 className="font-black text-xs text-zinc-900 uppercase tracking-widest border-b border-zinc-100 pb-3 mb-4 flex items-center gap-2">
-          <Clock className="w-4 h-4 text-zinc-650" /> Solicitudes Pendientes
+          <Clock className="w-4 h-4 text-zinc-600" /> Solicitudes Pendientes
         </h3>
         {pendientes.length === 0 && <p className="text-[11px] text-zinc-400">No hay solicitudes esperando su aprobación.</p>}
         <div className="space-y-2">
@@ -739,7 +740,7 @@ function AutorizacionesTab({
             <div key={s.id} className="flex items-center justify-between px-3 py-2.5 bg-amber-50/50 border border-amber-150 rounded-lg text-xs">
               <div>
                 <p className="font-bold text-zinc-800">{s.descripcion}</p>
-                <p className="text-[10px] text-zinc-450">Solicitado por {s.solicitanteNombre} — {new Date(s.createdAt).toLocaleString("es-ES")}</p>
+                <p className="text-[10px] text-zinc-400">Solicitado por {s.solicitanteNombre} — {new Date(s.createdAt).toLocaleString("es-ES")}</p>
               </div>
               <div className="flex gap-1.5 flex-shrink-0">
                 <button onClick={() => resolver(s, "Rechazada")} className="p-1.5 rounded bg-white border border-zinc-200 hover:bg-red-50 hover:border-red-200 text-zinc-500 hover:text-red-600 cursor-pointer">
@@ -756,7 +757,7 @@ function AutorizacionesTab({
 
       <div className="bg-white border border-zinc-200 rounded-lg shadow-xs p-5">
         <h3 className="font-black text-xs text-zinc-900 uppercase tracking-widest border-b border-zinc-100 pb-3 mb-4 flex items-center gap-2">
-          <History className="w-4 h-4 text-zinc-650" /> Historial de Auditoría
+          <History className="w-4 h-4 text-zinc-600" /> Historial de Auditoría
         </h3>
         <table className="w-full text-xs">
           <thead>

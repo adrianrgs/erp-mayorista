@@ -57,6 +57,8 @@ import { resolveSaleClient, isCreditEligible } from "../lib/clientResolver";
 import { nextSequentialId } from "../lib/idGenerator";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
 import { getStatusBadge, formatDate } from "../components/reservas/reservasFormat";
+import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
 
 interface ReservasViewProps {
   reservations: Reservation[];
@@ -250,7 +252,7 @@ export default function ReservasView({
   // --- HELPERS TO RESOLVE PAYMENT STATUSES ---
   const getClientPaymentStatus = (resId: string) => {
     const resInvoices = (invoices || []).filter(inv => inv.clientName.includes(`Localizador ${resId}`) && inv.type === "Cobro");
-    if (resInvoices.length === 0) return { status: "Sin Facturar", color: "text-zinc-550 bg-zinc-50 border-zinc-200" };
+    if (resInvoices.length === 0) return { status: "Sin Facturar", color: "text-zinc-500 bg-zinc-50 border-zinc-200" };
     const allPaid = resInvoices.every(inv => inv.status === "Pagado");
     const anyPaid = resInvoices.some(inv => inv.status === "Pagado");
     if (allPaid) return { status: "Cobrado Total", color: "text-emerald-700 bg-emerald-50 border-emerald-250 font-extrabold" };
@@ -260,7 +262,7 @@ export default function ReservasView({
 
   const getProviderPaymentStatus = (resId: string) => {
     const obligation = (payableObligations || []).find(o => o.locatorId === resId);
-    if (!obligation) return { status: "No Emitido", color: "text-zinc-550 bg-zinc-50 border-zinc-200", obligation: null };
+    if (!obligation) return { status: "No Emitido", color: "text-zinc-500 bg-zinc-50 border-zinc-200", obligation: null };
     if (obligation.status === "Pagado Total") {
       return { status: "Pagado", color: "text-emerald-700 bg-emerald-50 border-emerald-250 font-extrabold", obligation };
     }
@@ -1883,12 +1885,13 @@ export default function ReservasView({
             </div>
             
             {puede(ProjectView.RESERVAS, AccionPermiso.CREAR) && (
-              <button
+              <Button
                 onClick={handleStartNewExpediente}
-                className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-xs self-start md:self-auto"
+                size="lg"
+                className="uppercase tracking-wider shadow-xs self-start md:self-auto"
               >
                 <Plus className="w-4 h-4" /> Nuevo Expediente
-              </button>
+              </Button>
             )}
           </div>
 
@@ -1925,15 +1928,15 @@ export default function ReservasView({
               className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
                 filterStatus === "Todas"
                   ? "bg-zinc-950 text-white border-zinc-950 ring-2 ring-zinc-900/10"
-                  : "bg-white border-zinc-200 hover:border-zinc-350 hover:shadow-xs"
+                  : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-xs"
               }`}
             >
               <div className="space-y-1">
                 <span className="text-[9px] font-bold uppercase tracking-widest block text-zinc-400">Total Reservas</span>
                 <span className="text-2xl font-black block">{totalRes}</span>
-                <span className={`text-[9.5px] font-semibold block ${filterStatus === "Todas" ? "text-zinc-300" : "text-zinc-450"}`}>Expedientes generales</span>
+                <span className={`text-[9.5px] font-semibold block ${filterStatus === "Todas" ? "text-zinc-300" : "text-zinc-400"}`}>Expedientes generales</span>
               </div>
-              <div className={`p-2.5 rounded-md border ${filterStatus === "Todas" ? "bg-zinc-800 border-zinc-700 text-white" : "bg-zinc-50 border-zinc-200 text-zinc-650"}`}>
+              <div className={`p-2.5 rounded-md border ${filterStatus === "Todas" ? "bg-zinc-800 border-zinc-700 text-white" : "bg-zinc-50 border-zinc-200 text-zinc-600"}`}>
                 <FileText className="w-5.5 h-5.5" />
               </div>
             </div>
@@ -1943,7 +1946,7 @@ export default function ReservasView({
               className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
                 filterStatus === "Confirmada"
                   ? "bg-emerald-50/20 border-emerald-500 ring-2 ring-emerald-500/10"
-                  : "bg-white border-zinc-200 hover:border-zinc-350 hover:shadow-xs"
+                  : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-xs"
               }`}
             >
               <div className="space-y-1">
@@ -1951,7 +1954,7 @@ export default function ReservasView({
                 <span className="text-2xl font-black text-zinc-900 block">{totalConfirmadas}</span>
                 <span className="text-[9.5px] text-emerald-600 font-semibold block">Vouchers aprobados</span>
               </div>
-              <div className={`p-2.5 rounded-md border ${filterStatus === "Confirmada" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-zinc-50 border-zinc-200 text-zinc-650"}`}>
+              <div className={`p-2.5 rounded-md border ${filterStatus === "Confirmada" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-zinc-50 border-zinc-200 text-zinc-600"}`}>
                 <CheckCircle2 className="w-5.5 h-5.5" />
               </div>
             </div>
@@ -1961,7 +1964,7 @@ export default function ReservasView({
               className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
                 filterStatus === "Pendientes"
                   ? "bg-amber-50/20 border-amber-500 ring-2 ring-amber-500/10"
-                  : "bg-white border-zinc-200 hover:border-zinc-350 hover:shadow-xs"
+                  : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-xs"
               }`}
             >
               <div className="space-y-1">
@@ -1969,7 +1972,7 @@ export default function ReservasView({
                 <span className="text-2xl font-black text-amber-700 block">{totalPendientes}</span>
                 <span className="text-[9.5px] text-amber-600 font-semibold block">Falta pago o cotización</span>
               </div>
-              <div className={`p-2.5 rounded-md border ${filterStatus === "Pendientes" ? "bg-amber-50 border-amber-200 text-amber-750" : "bg-zinc-50 border-zinc-200 text-zinc-650"}`}>
+              <div className={`p-2.5 rounded-md border ${filterStatus === "Pendientes" ? "bg-amber-50 border-amber-200 text-amber-750" : "bg-zinc-50 border-zinc-200 text-zinc-600"}`}>
                 <TrendingUp className="w-5.5 h-5.5" />
               </div>
             </div>
@@ -1979,7 +1982,7 @@ export default function ReservasView({
               className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
                 filterStatus === "Cancelada"
                   ? "bg-red-50/20 border-red-500 ring-2 ring-red-500/10"
-                  : "bg-white border-zinc-200 hover:border-zinc-350 hover:shadow-xs"
+                  : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-xs"
               }`}
             >
               <div className="space-y-1">
@@ -1987,7 +1990,7 @@ export default function ReservasView({
                 <span className="text-2xl font-black text-red-650 block">{totalCanceladas}</span>
                 <span className="text-[9.5px] text-red-500 font-semibold block">Créditos de anulación</span>
               </div>
-              <div className={`p-2.5 rounded-md border ${filterStatus === "Cancelada" ? "bg-red-50 border-red-200 text-red-600" : "bg-zinc-50 border-zinc-200 text-zinc-650"}`}>
+              <div className={`p-2.5 rounded-md border ${filterStatus === "Cancelada" ? "bg-red-50 border-red-200 text-red-600" : "bg-zinc-50 border-zinc-200 text-zinc-600"}`}>
                 <XCircle className="w-5.5 h-5.5" />
               </div>
             </div>
@@ -1997,7 +2000,7 @@ export default function ReservasView({
               className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
                 filterStatus === "Rechazadas"
                   ? "bg-red-100 border-red-600 ring-2 ring-red-500/20"
-                  : "bg-white border-zinc-200 hover:border-zinc-350 hover:shadow-xs"
+                  : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-xs"
               }`}
             >
               <div className="space-y-1">
@@ -2005,7 +2008,7 @@ export default function ReservasView({
                 <span className="text-2xl font-black text-red-700 block">{rejectedReservations.length}</span>
                 <span className="text-[9.5px] text-red-600 font-semibold block">Facturas devueltas</span>
               </div>
-              <div className={`p-2.5 rounded-md border ${filterStatus === "Rechazadas" ? "bg-red-200 border-red-300 text-red-700" : "bg-zinc-50 border-zinc-200 text-zinc-650"}`}>
+              <div className={`p-2.5 rounded-md border ${filterStatus === "Rechazadas" ? "bg-red-200 border-red-300 text-red-700" : "bg-zinc-50 border-zinc-200 text-zinc-600"}`}>
                 <AlertTriangle className="w-5.5 h-5.5" />
               </div>
             </div>
@@ -2026,7 +2029,7 @@ export default function ReservasView({
 
             <div className="flex flex-wrap items-center gap-4 w-full md:w-auto justify-between md:justify-end">
               <div className="flex items-center gap-2">
-                <Filter className="w-3.5 h-3.5 text-zinc-450" />
+                <Filter className="w-3.5 h-3.5 text-zinc-400" />
                 <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Estatus:</span>
                 <select
                   value={filterStatus}
@@ -2045,7 +2048,7 @@ export default function ReservasView({
               </div>
 
               <div className="flex items-center gap-2">
-                <ArrowUpDown className="w-3.5 h-3.5 text-zinc-450" />
+                <ArrowUpDown className="w-3.5 h-3.5 text-zinc-400" />
                 <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Ordenar:</span>
                 <select
                   value={sortBy}
@@ -2058,12 +2061,14 @@ export default function ReservasView({
               </div>
 
               {(search !== "" || filterStatus !== "Todas" || sortBy !== "ultimas") && (
-                <button
+                <Button
                   onClick={clearFilters}
-                  className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded text-[9.5px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer border border-zinc-200"
+                  variant="secondary"
+                  size="sm"
+                  className="uppercase tracking-wider"
                 >
                   Limpiar Filtros
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -2119,14 +2124,14 @@ export default function ReservasView({
                             </div>
                           )}
                         </td>
-                        <td className="px-2 py-2.5 text-zinc-750 font-semibold truncate text-[11px]">
+                        <td className="px-2 py-2.5 text-zinc-700 font-semibold truncate text-[11px]">
                           {r.hotelName}
                         </td>
                         <td className="px-2 py-2.5 text-zinc-500 font-bold whitespace-nowrap text-center text-[11px]">
                           {r.servicios?.length || 1}
                         </td>
                         <td className="px-2 py-2.5 text-right font-bold text-zinc-950 whitespace-nowrap text-[11px]">{formatDualCurrency(r.totalPrice, jur, currentExchangeRate)}</td>
-                        <td className="px-2 py-2.5 text-zinc-650 font-semibold truncate text-[11px]">{r.agenciaName || "Directo"}</td>
+                        <td className="px-2 py-2.5 text-zinc-600 font-semibold truncate text-[11px]">{r.agenciaName || "Directo"}</td>
                         <td className="px-2 py-2.5 whitespace-nowrap text-center text-[11px]">
                           <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-bold uppercase border inline-flex items-center gap-1 truncate max-w-full ${getStatusBadge(r.status)}`}>
                             {r.status}
@@ -2157,7 +2162,7 @@ export default function ReservasView({
                                       setSelectedObligationForReceipt(pPay.obligation);
                                       setShowProvReceiptModal(true);
                                     }}
-                                    className="p-1 hover:bg-zinc-150 rounded text-zinc-600 transition-colors cursor-pointer"
+                                    className="p-1 hover:bg-zinc-100 rounded text-zinc-600 transition-colors cursor-pointer"
                                   >
                                     <Download className="w-3 h-3 text-emerald-600" />
                                   </button>
@@ -2241,21 +2246,24 @@ export default function ReservasView({
                 </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
-                <button
+                <Button
                   type="button"
                   onClick={handleCancelCart}
-                  className="px-2.5 py-1 border border-zinc-200 hover:bg-zinc-50 rounded text-[10.5px] font-bold uppercase cursor-pointer bg-white whitespace-nowrap"
+                  variant="secondary"
+                  size="sm"
+                  className="uppercase whitespace-nowrap"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={() => handleConfirmExpediente()}
                   disabled={(cartServices.length === 0 && cartLinkedFlights.filter(f => f.facturarConjunto).length === 0) || !cartHolder.trim()}
-                  className="px-2.5 py-1 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-[10.5px] font-black uppercase cursor-pointer transition-all whitespace-nowrap disabled:bg-zinc-200 disabled:text-zinc-400 disabled:cursor-not-allowed"
+                  size="sm"
+                  className="uppercase whitespace-nowrap"
                 >
                   Guardar Reserva
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -2305,56 +2313,64 @@ export default function ReservasView({
                 </select>
               </div>
 
-              <button
+              <Button
                 onClick={() => setShowB2BModal(true)}
-                className="px-2.5 py-1 border border-zinc-900 bg-zinc-900 hover:bg-zinc-800 rounded text-white font-bold text-[10.5px] uppercase cursor-pointer transition-all flex items-center gap-1 whitespace-nowrap"
+                size="sm"
+                className="uppercase whitespace-nowrap"
                 title={isCanalDirecto(activeRes) ? "Compartir Cotización con Cliente" : "Compartir Formato B2B"}
               >
                 <Share2 className="w-3 h-3" />
                 <span>{isCanalDirecto(activeRes) ? "Cotización Cliente" : "Formato B2B"}</span>
-              </button>
+              </Button>
 
               {activeRes.servicios?.some(s => s.statusFacturacion === "Facturado") && (
-                <button
+                <Button
                   onClick={() => setShowVoucherModal(true)}
-                  className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[10.5px] font-bold uppercase cursor-pointer transition-all flex items-center gap-1 whitespace-nowrap animate-fade-in"
+                  variant="success"
+                  size="sm"
+                  className="uppercase whitespace-nowrap animate-fade-in"
                   title="Generar Voucher de Viaje Oficial para Pasajero"
                 >
                   <Printer className="w-3 h-3" />
                   <span>Voucher</span>
-                </button>
+                </Button>
               )}
 
               {expedienteMode === "edit" ? (
                 <>
-                  <button
+                  <Button
                     type="button"
                     onClick={handleCancelCart}
-                    className="px-2.5 py-1 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-zinc-700 hover:text-zinc-950 font-bold text-[10.5px] uppercase cursor-pointer transition-all flex items-center gap-1 whitespace-nowrap"
+                    variant="secondary"
+                    size="sm"
+                    className="uppercase whitespace-nowrap"
                     title="Cancelar Edición"
                   >
                     <XCircle className="w-3 h-3" />
                     <span>Cancelar</span>
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
                     onClick={() => handleConfirmExpediente()}
                     disabled={(cartServices.length === 0 && cartLinkedFlights.filter(f => f.facturarConjunto).length === 0) || !cartHolder.trim()}
-                    className="px-2.5 py-1 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-[10.5px] font-black uppercase cursor-pointer transition-all flex items-center gap-1 whitespace-nowrap disabled:bg-zinc-200 disabled:text-zinc-400 disabled:cursor-not-allowed"
+                    size="sm"
+                    className="uppercase whitespace-nowrap"
                     title="Guardar Cambios"
                   >
                     <span>Guardar</span>
-                  </button>
+                  </Button>
                 </>
               ) : (
-                <button
+                <Button
                   onClick={handleEditReservation}
-                  className="px-2.5 py-1 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-zinc-700 hover:text-zinc-950 font-bold text-[10.5px] uppercase cursor-pointer transition-all flex items-center gap-1 whitespace-nowrap"
+                  variant="secondary"
+                  size="sm"
+                  className="uppercase whitespace-nowrap"
                   title="Editar Expediente"
                 >
                   <Edit className="w-3 h-3" />
                   <span>Editar</span>
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -2399,7 +2415,7 @@ export default function ReservasView({
 
               {/* Resumen Comercial */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
-                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2">Datos Comerciales del Expediente</h4>
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-100 pb-2">Datos Comerciales del Expediente</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-semibold text-zinc-800">
                   <div>
                     <span className="text-[9px] text-zinc-400 uppercase tracking-wider block">Agencia Emisora</span>
@@ -2418,9 +2434,9 @@ export default function ReservasView({
 
               {/* Listado de Servicios del Carrito */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
-                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2">Servicios Incluidos en el Expediente</h4>
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-100 pb-2">Servicios Incluidos en el Expediente</h4>
                 
-                <div className="divide-y divide-zinc-250">
+                <div className="divide-y divide-zinc-200">
                   {activeRes.servicios && activeRes.servicios.length > 0 ? (
                     activeRes.servicios.map((s) => {
                       const comisionPct = s.comisionB2B !== undefined ? s.comisionB2B : 10;
@@ -2433,7 +2449,7 @@ export default function ReservasView({
                           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div className="space-y-1 max-w-md">
                               <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-zinc-300 bg-zinc-100 text-zinc-850">
+                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-zinc-300 bg-zinc-100 text-zinc-800">
                                   {s.tipo}
                                 </span>
                                 <span className="text-[9px] font-mono text-zinc-400">{s.id}</span>
@@ -2619,7 +2635,7 @@ export default function ReservasView({
                       const comisionAmt = pvp - vuelo.precioVenta;
 
                       return (
-                        <div key={vuelo.id} className="py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-t border-zinc-150">
+                        <div key={vuelo.id} className="py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-t border-zinc-100">
                           <div className="space-y-1 max-w-md">
                             <div className="flex items-center gap-2">
                               <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border border-blue-300 bg-blue-100 text-blue-800">
@@ -2672,7 +2688,7 @@ export default function ReservasView({
               {/* Peticiones especiales */}
               {activeRes.specialRequests && (
                 <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-2 shadow-xs">
-                  <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block flex items-center gap-1.5 text-zinc-650">
+                  <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block flex items-center gap-1.5 text-zinc-600">
                     <Info className="w-4 h-4" /> Notas Especiales del Expediente
                   </h4>
                   <p className="text-xs text-zinc-700 leading-relaxed font-semibold p-3 bg-zinc-50 border border-zinc-200 rounded-md">
@@ -2712,27 +2728,27 @@ export default function ReservasView({
                 
                 return (
                   <div className="space-y-3 text-xs">
-                    <div className="flex items-center justify-between py-2 border-b border-zinc-850">
+                    <div className="flex items-center justify-between py-2 border-b border-zinc-800">
                       <span className="font-semibold text-zinc-400 uppercase text-[9.5px] tracking-wider">Total Venta Final (PVP)</span>
                       <span className="font-black text-lg text-white">{formatDualCurrency(totalPvp, jur, currentExchangeRate)}</span>
                     </div>
 
-                      <div className="flex items-center justify-between py-2 border-b border-zinc-850 text-amber-400 font-semibold">
+                      <div className="flex items-center justify-between py-2 border-b border-zinc-800 text-amber-400 font-semibold">
                         <span>Comisión Retenida B2B</span>
                         <span>-{formatCurrency(totalComisionesB2B, "USD")}</span>
                       </div>
 
-                      <div className="flex items-center justify-between py-2 border-b border-zinc-850">
-                        <span className="text-zinc-450">Total a Cobrar B2B (Monto Facturado)</span>
+                      <div className="flex items-center justify-between py-2 border-b border-zinc-800">
+                        <span className="text-zinc-400">Total a Cobrar B2B (Monto Facturado)</span>
                         <span className="font-black text-base text-zinc-100">{formatDualCurrency(totalVenta, jur, currentExchangeRate)}</span>
                       </div>
 
-                      <div className="flex items-center justify-between py-2 border-b border-zinc-850">
+                      <div className="flex items-center justify-between py-2 border-b border-zinc-800">
                         <span className="text-zinc-400">Costo Neto Mayorista (a Pagar)</span>
-                        <span className="font-bold text-zinc-250">{formatCurrency(totalNeto, "USD")}</span>
+                        <span className="font-bold text-zinc-200">{formatCurrency(totalNeto, "USD")}</span>
                       </div>
 
-                      <div className="flex items-center justify-between py-2 border-b border-zinc-850">
+                      <div className="flex items-center justify-between py-2 border-b border-zinc-800">
                         <span className="text-zinc-400">Margen de Utilidad Propio</span>
                         <span className="font-extrabold text-emerald-400">+{formatCurrency(nuestraGanancia, "USD")}</span>
                       </div>
@@ -2749,12 +2765,12 @@ export default function ReservasView({
               {/* Historial de Variaciones y Ajustes como Línea de Tiempo */}
               {activeRes.variaciones && activeRes.variaciones.length > 0 && (
                 <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
-                  <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2 flex items-center gap-1.5 text-zinc-650">
+                  <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-100 pb-2 flex items-center gap-1.5 text-zinc-600">
                     <Activity className="w-4 h-4 text-zinc-500" /> Línea de Tiempo Contable
                   </h4>
                   
                   {/* Timeline layout */}
-                  <div className="relative pl-5 border-l-2 border-zinc-150 ml-1.5 space-y-4 py-1 text-left">
+                  <div className="relative pl-5 border-l-2 border-zinc-100 ml-1.5 space-y-4 py-1 text-left">
                     {activeRes.variaciones.map((v, idx) => {
                       const isSupplement = v.type === "Suplemento";
                       return (
@@ -2781,7 +2797,7 @@ export default function ReservasView({
                               </span>
                               <span className="text-zinc-300">|</span>
                               <span>Neto:</span>
-                              <span className="font-mono font-bold text-zinc-650">
+                              <span className="font-mono font-bold text-zinc-600">
                                 {isSupplement ? "+" : ""}${v.amountNet.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
                               </span>
                             </div>
@@ -2807,10 +2823,10 @@ export default function ReservasView({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
               {/* Acciones del Expediente */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-3 shadow-xs lg:col-span-2">
-                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block text-zinc-650 border-b border-zinc-150 pb-2">Acciones del Expediente</h4>
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block text-zinc-600 border-b border-zinc-100 pb-2">Acciones del Expediente</h4>
                 <div className="flex flex-wrap items-center gap-2">
                   {activeRes.status !== "Cancelada" ? (
-                    <button
+                    <Button
                       onClick={() => intentarAccionSensible({
                         modulo: ProjectView.RESERVAS,
                         accion: AccionPermiso.ANULAR,
@@ -2833,15 +2849,17 @@ export default function ReservasView({
                           });
                         },
                       })}
-                      className="px-3 py-1.5 border border-red-200 bg-red-50 hover:bg-red-100 rounded text-red-600 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
+                      variant="danger"
+                      size="sm"
+                      className="uppercase"
                       title="Anular Expediente"
                     >
                       <XCircle className="w-3.5 h-3.5" />
                       <span>Anular</span>
-                    </button>
+                    </Button>
                   ) : (
                     <>
-                      <button
+                      <Button
                         onClick={() => {
                           showConfirm({
                             title: "Reactivar Expediente",
@@ -2856,14 +2874,16 @@ export default function ReservasView({
                             }
                           });
                         }}
-                        className="px-3 py-1.5 border border-amber-200 bg-amber-50 hover:bg-amber-100 rounded text-amber-700 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
+                        variant="warning"
+                        size="sm"
+                        className="uppercase"
                         title="Reactivar Expediente"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>Reactivar</span>
-                      </button>
+                      </Button>
                       {puede(ProjectView.RESERVAS, AccionPermiso.ELIMINAR) && (
-                        <button
+                        <Button
                           onClick={() => intentarAccionSensible({
                             modulo: ProjectView.RESERVAS,
                             accion: AccionPermiso.ELIMINAR,
@@ -2887,12 +2907,14 @@ export default function ReservasView({
                               });
                             },
                           })}
-                          className="px-3 py-1.5 border border-red-300 bg-red-100 hover:bg-red-200 rounded text-red-700 font-bold text-xs uppercase cursor-pointer transition-all flex items-center gap-1"
+                          variant="danger"
+                          size="sm"
+                          className="uppercase"
                           title="Eliminar Permanente"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           <span>Eliminar Permanente</span>
-                        </button>
+                        </Button>
                       )}
                     </>
                   )}
@@ -2901,7 +2923,7 @@ export default function ReservasView({
 
               {/* Tipo de Expediente y Facturación */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
-                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block text-zinc-650">Estado del Expediente</h4>
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest block text-zinc-600">Estado del Expediente</h4>
                 {activeRes.tipo === "Cotización" ? (
                   <div className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-700 text-xs rounded font-semibold leading-relaxed flex items-center gap-2">
                     <Clock className="w-4 h-4 text-zinc-500" />
@@ -2934,7 +2956,7 @@ export default function ReservasView({
 
                       return (
                         <div className="space-y-3 text-xs font-semibold">
-                          <div className="flex justify-between text-[11px] text-zinc-655">
+                          <div className="flex justify-between text-[11px] text-zinc-700">
                             <span>Estado Facturación:</span>
                             <span className={hasPending ? "text-amber-700 font-bold" : "text-emerald-700 font-extrabold"}>
                               {hasPending ? "Pendiente por Facturar" : "Totalmente Facturado"}
@@ -2963,18 +2985,18 @@ export default function ReservasView({
                             return (
                               <div className="space-y-3 text-xs font-semibold">
                                 <div className="space-y-1">
-                                  <div className="flex justify-between text-[11px] text-zinc-655">
+                                  <div className="flex justify-between text-[11px] text-zinc-700">
                                     <span>Servicios/Vuelos Facturados:</span>
                                     <span className="text-emerald-700 font-extrabold">{billedServices.length + billedFlights.length} / {services.length + jointFlights.length}</span>
                                   </div>
                                   {hasSolicitado && (
-                                    <div className="flex justify-between text-[11px] text-zinc-655">
+                                    <div className="flex justify-between text-[11px] text-zinc-700">
                                       <span>En Revisión Facturación:</span>
                                       <span className="text-blue-700 font-extrabold">{pendingServices.length + pendingFlights.length + sentAdjustments.length}</span>
                                     </div>
                                   )}
                                   {hasBorradorOrRechazado && (
-                                    <div className="flex justify-between text-[11px] text-zinc-655">
+                                    <div className="flex justify-between text-[11px] text-zinc-700">
                                       <span>Pendientes de Enviar:</span>
                                       <span className="text-amber-700 font-extrabold">{unsentServices.length + unsentFlights.length + unsentAdjustments.length} (${pendingTotal} USD)</span>
                                     </div>
@@ -2982,13 +3004,13 @@ export default function ReservasView({
                                 </div>
 
                                 {hasBorradorOrRechazado && (
-                                  <button
+                                  <Button
                                     onClick={handleOpenSendBillingModal}
-                                    className="w-full py-2 px-3 bg-zinc-950 hover:bg-zinc-800 text-white font-bold text-xs uppercase rounded cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                                    className="w-full uppercase"
                                   >
                                     <Send className="w-3.5 h-3.5" />
                                     Enviar a Facturación
-                                  </button>
+                                  </Button>
                                 )}
 
                                 {!hasBorradorOrRechazado && hasSolicitado && (
@@ -3024,8 +3046,8 @@ export default function ReservasView({
 
                 return (
                   <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-3 shadow-xs">
-                    <div className="flex items-center justify-between border-b border-zinc-150 pb-2">
-                      <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest text-zinc-650">Condición de Cobro B2B</h4>
+                    <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                      <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest text-zinc-600">Condición de Cobro B2B</h4>
                       <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${
                         activeRes.status === "Cancelada" ? "text-red-750 bg-red-50 border-red-200" : b2bPayment.color
                       }`}>
@@ -3038,7 +3060,7 @@ export default function ReservasView({
                         No se han registrado pagos del cliente para este expediente.
                       </div>
                     ) : (
-                      <div className="divide-y divide-zinc-150">
+                      <div className="divide-y divide-zinc-100">
                         {clientVouchers.map(v => (
                           <div key={v.id} className="py-2.5 flex items-center justify-between gap-3">
                             <div className="min-w-0">
@@ -3052,7 +3074,7 @@ export default function ReservasView({
                                   {v.status}
                                 </span>
                               </div>
-                              <p className="text-[9.5px] text-zinc-450 font-medium truncate">
+                              <p className="text-[9.5px] text-zinc-400 font-medium truncate">
                                 {v.method}{v.bankName ? ` (${v.bankName})` : ""} · {formatDate(v.date)}
                               </p>
                             </div>
@@ -3085,7 +3107,7 @@ export default function ReservasView({
 
               {/* Resumen de Salud Financiera (Widget de Conciliación) */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
-                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2 flex items-center gap-1.5 text-zinc-600">
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-100 pb-2 flex items-center gap-1.5 text-zinc-600">
                   🛡️ Estado de Caja y Saldos
                 </h4>
                 {(() => {
@@ -3135,11 +3157,11 @@ export default function ReservasView({
                     <div className="space-y-3.5">
                       {/* KPIs */}
                       <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-left">
+                        <div className="bg-zinc-50 border border-zinc-100 rounded p-2.5 text-left">
                           <span className="text-[9px] uppercase font-bold text-zinc-400 block">Precio Original</span>
                           <span className="font-mono text-zinc-700 font-bold block mt-0.5">${originalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
                         </div>
-                        <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-left">
+                        <div className="bg-zinc-50 border border-zinc-100 rounded p-2.5 text-left">
                           <span className="text-[9px] uppercase font-bold text-zinc-400 block">Ajustes (Modif.)</span>
                           <span className={`font-mono font-bold block mt-0.5 ${adjustments >= 0 ? "text-amber-600" : "text-emerald-700"}`}>
                             {adjustments >= 0 ? "+" : ""}${adjustments.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
@@ -3164,7 +3186,7 @@ export default function ReservasView({
                       </div>
 
                       {/* Pending to collect */}
-                      <div className="flex justify-between items-center bg-zinc-50 border border-zinc-150 rounded p-2.5">
+                      <div className="flex justify-between items-center bg-zinc-50 border border-zinc-100 rounded p-2.5">
                         <span className="text-[10px] font-bold text-zinc-500">Saldo Pendiente de Cobro:</span>
                         <span className={`font-mono font-black text-sm ${pctCobrado === 100 ? "text-emerald-700" : "text-red-600 animate-pulse"}`}>
                           ${Math.max(0, billedTotal - totalCobrado).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
@@ -3192,12 +3214,12 @@ export default function ReservasView({
 
                 return (
                   <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-3 shadow-xs text-left">
-                    <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2 text-zinc-650">
+                    <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-100 pb-2 text-zinc-600">
                       Liquidación a Proveedores
                     </h4>
 
                     {resObligations.length === 0 ? (
-                      <div className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-550 text-[11px] rounded font-semibold leading-relaxed">
+                      <div className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-500 text-[11px] rounded font-semibold leading-relaxed">
                         No hay obligaciones de costo neto emitidas en Cuentas por Pagar para este expediente. Asegúrese de enviar a facturar y aprobar la reserva.
                       </div>
                     ) : (
@@ -3206,9 +3228,9 @@ export default function ReservasView({
                           const { label, color } = oblStatusInfo(obl);
                           const remaining = obl.netCost - obl.paidAmount;
                           return (
-                            <div key={obl.id} className="border border-zinc-150 rounded-lg overflow-hidden">
+                            <div key={obl.id} className="border border-zinc-100 rounded-lg overflow-hidden">
                               {/* Provider header */}
-                              <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 border-b border-zinc-150">
+                              <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 border-b border-zinc-100">
                                 <span className="text-[10px] font-extrabold text-zinc-800 uppercase tracking-wide">{obl.providerName}</span>
                                 <span className={`px-2 py-0.5 rounded text-[8px] uppercase tracking-wider border font-bold ${color}`}>{label}</span>
                               </div>
@@ -3236,13 +3258,14 @@ export default function ReservasView({
                                     <span className="font-mono text-[10px] text-zinc-600 truncate max-w-[160px]" title={obl.attachedFile}>
                                       {obl.attachedFile}
                                     </span>
-                                    <button
+                                    <Button
                                       type="button"
                                       onClick={() => { setSelectedObligationForReceipt(obl); setShowProvReceiptModal(true); }}
-                                      className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-[9px] font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1"
+                                      size="sm"
+                                      className="uppercase tracking-wider"
                                     >
                                       <Download className="w-3 h-3" /> Ver
-                                    </button>
+                                    </Button>
                                   </div>
                                 )}
                               </div>
@@ -3282,7 +3305,7 @@ export default function ReservasView({
             <div className="lg:col-span-8 space-y-6">
               {/* Datos Generales / Cabecera */}
               <fieldset disabled={expedienteMode === "view"} className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs border-0 min-w-0">
-                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2 flex items-center gap-2">
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-100 pb-2 flex items-center gap-2">
                   <User className="w-4 h-4 text-zinc-400" /> Datos Generales del Expediente
                 </h4>
 
@@ -3432,7 +3455,7 @@ export default function ReservasView({
 
                     {/* Filtered options dropdown */}
                     {showDirectClientDropdown && (
-                      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-150">
+                      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-100">
                         {directClients.filter(c => {
                           const query = directClientSearch.toLowerCase();
                           return (
@@ -3459,7 +3482,7 @@ export default function ReservasView({
                               <span className="text-[10px] text-zinc-400 font-mono block">
                                 Cod: {c.id} {c.cedula ? `| Cédula: ${c.cedula}` : ""}
                               </span>
-                              <span className="text-[9.5px] text-zinc-450 font-medium block truncate max-w-[280px] sm:max-w-md">
+                              <span className="text-[9.5px] text-zinc-400 font-medium block truncate max-w-[280px] sm:max-w-md">
                                 {c.telefono} {c.email && c.email !== "N/A" ? `| ${c.email}` : ""}
                               </span>
                             </div>
@@ -3551,7 +3574,7 @@ export default function ReservasView({
 
                     {/* Filtered options dropdown */}
                     {showAgencyDropdown && (
-                      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-150">
+                      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-100">
                         {clients.filter(c => {
                           const query = agencySearch.toLowerCase();
                           return (
@@ -3592,7 +3615,7 @@ export default function ReservasView({
                                 <span className="text-[10px] text-zinc-400 font-mono block">
                                   Cod: {c.id} | RIF: {c.rif}
                                 </span>
-                                <span className="text-[9.5px] text-zinc-450 font-medium block truncate max-w-[280px] sm:max-w-md">
+                                <span className="text-[9.5px] text-zinc-400 font-medium block truncate max-w-[280px] sm:max-w-md">
                                   Contacto: {c.contactoNombre} | {c.email}
                                 </span>
                               </div>
@@ -3779,18 +3802,18 @@ export default function ReservasView({
                   
                   return (
                     <div className="space-y-3.5 text-xs">
-                      <div className="flex items-center justify-between py-1 border-b border-zinc-850">
+                      <div className="flex items-center justify-between py-1 border-b border-zinc-800">
                         <span className="text-zinc-400 uppercase text-[9.5px]">Total Venta B2B PVP</span>
                         <span className="font-black text-xl text-white">${totalVenta.toLocaleString("es-ES")} USD</span>
                       </div>
 
-                      <div className="flex items-center justify-between py-1 border-b border-zinc-850">
+                      <div className="flex items-center justify-between py-1 border-b border-zinc-800">
                         <span className="text-zinc-400">Total Costo Neto</span>
                         <span className="font-bold text-zinc-300">${totalNeto.toLocaleString("es-ES")} USD</span>
                       </div>
 
-                      <div className="flex items-center justify-between py-1 border-b border-zinc-850">
-                        <span className="text-zinc-450">Margen Mayorista Directo</span>
+                      <div className="flex items-center justify-between py-1 border-b border-zinc-800">
+                        <span className="text-zinc-400">Margen Mayorista Directo</span>
                         <span className="font-bold text-emerald-400">+${totalMargen.toLocaleString("es-ES")} USD</span>
                       </div>
 
@@ -3809,16 +3832,17 @@ export default function ReservasView({
 
           {activeExpedienteTab === "pasajeros" && (
             <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs max-w-3xl">
-              <div className="flex items-center justify-between border-b border-zinc-150 pb-2">
+              <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                 <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest">Pasajeros del Expediente</h4>
                 {expedienteMode !== "view" && (
-                  <button
+                  <Button
                     type="button"
                     onClick={handleAddPasajero}
-                    className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-[10.5px] font-bold uppercase cursor-pointer transition-all flex items-center gap-1.5"
+                    size="sm"
+                    className="uppercase"
                   >
                     <Plus className="w-3.5 h-3.5" /> Agregar Pasajero
-                  </button>
+                  </Button>
                 )}
               </div>
 
@@ -3829,7 +3853,7 @@ export default function ReservasView({
               ) : (
                 <div className="space-y-2.5">
                   {(expedienteMode === "view" ? effectivePasajeros : cartPasajeros).map((p) => (
-                    <div key={p.id} className="flex items-center gap-3 border border-zinc-150 rounded-md p-3 bg-zinc-50/50">
+                    <div key={p.id} className="flex items-center gap-3 border border-zinc-100 rounded-md p-3 bg-zinc-50/50">
                       {expedienteMode === "view" ? (
                         <>
                           <span className="flex-1 text-xs font-bold text-zinc-900">{p.nombre || "(sin nombre)"}</span>
@@ -3891,11 +3915,11 @@ export default function ReservasView({
               <fieldset disabled={expedienteMode === "view"} className="border-0 p-0 m-0 min-w-0 space-y-6">
               {/* Carrito de Servicios */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
-                <div className="flex items-center justify-between border-b border-zinc-150 pb-2">
+                <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                   <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest flex items-center gap-2">
                     <ShoppingCart className="w-4 h-4 text-zinc-500" /> Carrito de Servicios del Expediente
                   </h4>
-                  <span className="text-[10px] font-bold text-zinc-450 uppercase">{cartServices.length} Servicios Agregados</span>
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase">{cartServices.length} Servicios Agregados</span>
                 </div>
 
                 <div className="divide-y divide-zinc-200">
@@ -3911,9 +3935,9 @@ export default function ReservasView({
                         <div key={item.id} className="py-3 flex justify-between items-center gap-4 group">
                           <div className="space-y-1 min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-zinc-50 border border-zinc-200 text-zinc-700">
+                              <Badge variant="neutral">
                                 {item.tipo}
-                              </span>
+                              </Badge>
                               <span className="text-[9px] font-mono text-zinc-400">{item.id}</span>
                             </div>
                             {item.tipo === ServiceType.ALOJAMIENTO && item.detalles?.lodgingRooms ? (
@@ -3934,7 +3958,7 @@ export default function ReservasView({
                                       .join(", ");
                                     return (
                                       <div key={room.id} className="text-[11px] flex justify-between items-start gap-2 py-0.5 border-b border-zinc-100 last:border-0">
-                                        <div className="text-zinc-650 text-left">
+                                        <div className="text-zinc-600 text-left">
                                           <span className="font-bold text-zinc-800">Hab {rIdx + 1}: {roomTypeName}</span>
                                           {guestsNames && <span className="block text-[10px] text-zinc-400 italic">Pasajeros: {guestsNames}</span>}
                                         </div>
@@ -3953,7 +3977,7 @@ export default function ReservasView({
                           </div>
                           <div className="text-right flex-shrink-0 flex items-center gap-2">
                             <div>
-                              <p className="text-xs font-black text-zinc-955">${item.precioVenta.toLocaleString("es-ES")} USD</p>
+                              <p className="text-xs font-black text-zinc-950">${item.precioVenta.toLocaleString("es-ES")} USD</p>
                               <p className="text-[9px] text-zinc-400 font-medium">Neto: ${item.precioNeto.toLocaleString("es-ES")} | Margen: +${sProfit.toLocaleString("es-ES")}</p>
                             </div>
                             <button
@@ -3991,15 +4015,15 @@ export default function ReservasView({
                           </div>
                           <div className="flex-1 space-y-1">
                             <div className="flex items-center gap-2">
-                              <span className="px-2 py-0.5 bg-blue-100 text-blue-750 text-[9px] font-black uppercase tracking-wider rounded border border-blue-200">
+                              <Badge variant="info">
                                 Boleto Aéreo GDS
-                              </span>
+                              </Badge>
                             </div>
                             <p className="text-xs font-bold text-zinc-900 leading-tight truncate">Itinerario Vuelo - PNR: {vuelo.pnr}</p>
                           </div>
                           <div className="text-right flex-shrink-0 flex flex-col items-end gap-1">
                             <p className="text-[9px] text-zinc-400 font-bold uppercase block">Neto B2B a Cobrar</p>
-                            <p className="text-sm font-black text-zinc-955">${vuelo.precioVenta.toLocaleString("es-ES")} USD</p>
+                            <p className="text-sm font-black text-zinc-950">${vuelo.precioVenta.toLocaleString("es-ES")} USD</p>
                             <p className="text-[9px] text-zinc-500 font-medium">PVP: ${(vuelo.precioPvp || vuelo.precioVenta).toLocaleString("es-ES")} | Margen: <span className="text-emerald-600 font-bold">+${vProfit.toLocaleString("es-ES")}</span></p>
                           </div>
                         </div>
@@ -4011,16 +4035,16 @@ export default function ReservasView({
 
               {/* Botonera de Agregar Servicios */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
-                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-150 pb-2">
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-100 pb-2">
                   Añadir Servicio a esta Reserva
                 </h4>
                 
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+                <div className="flex flex-wrap gap-3">
                   {/* Alojamiento */}
                   <button
                     type="button"
                     onClick={() => handleOpenAddService(ServiceType.ALOJAMIENTO)}
-                    className="p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
+                    className="w-24 flex-shrink-0 p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
                   >
                     <Calendar className="w-6 h-6 text-zinc-500" />
                     <span className="text-[10px] font-bold uppercase tracking-wider">Alojamiento</span>
@@ -4030,7 +4054,7 @@ export default function ReservasView({
                   <button
                     type="button"
                     onClick={() => handleOpenAddService(ServiceType.TRASLADO)}
-                    className="p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
+                    className="w-24 flex-shrink-0 p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
                   >
                     <Truck className="w-6 h-6 text-zinc-500" />
                     <span className="text-[10px] font-bold uppercase tracking-wider">Traslados</span>
@@ -4040,7 +4064,7 @@ export default function ReservasView({
                   <button
                     type="button"
                     onClick={() => handleOpenAddService(ServiceType.RENT_A_CAR)}
-                    className="p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
+                    className="w-24 flex-shrink-0 p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
                   >
                     <Car className="w-6 h-6 text-zinc-500" />
                     <span className="text-[10px] font-bold uppercase tracking-wider">Rent a Car</span>
@@ -4050,7 +4074,7 @@ export default function ReservasView({
                   <button
                     type="button"
                     onClick={() => handleOpenAddService(ServiceType.SEGURO)}
-                    className="p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
+                    className="w-24 flex-shrink-0 p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
                   >
                     <Shield className="w-6 h-6 text-zinc-500" />
                     <span className="text-[10px] font-bold uppercase tracking-wider">Seguro de Viaje</span>
@@ -4060,7 +4084,7 @@ export default function ReservasView({
                   <button
                     type="button"
                     onClick={() => handleOpenAddService(ServiceType.MANUAL)}
-                    className="p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
+                    className="w-24 flex-shrink-0 p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
                   >
                     <FileText className="w-6 h-6 text-zinc-500" />
                     <span className="text-[10px] font-bold uppercase tracking-wider">Entrada Manual</span>
@@ -4070,7 +4094,7 @@ export default function ReservasView({
                   <button
                     type="button"
                     onClick={() => handleOpenAddService(ServiceType.SERVICIO_VARIO)}
-                    className="p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
+                    className="w-24 flex-shrink-0 p-4 border border-zinc-200 rounded-lg flex flex-col items-center justify-center gap-2 hover:bg-zinc-50 hover:border-zinc-400 transition-all cursor-pointer text-center text-zinc-700 hover:text-zinc-950"
                   >
                     <Compass className="w-6 h-6 text-zinc-500" />
                     <span className="text-[10px] font-bold uppercase tracking-wider">Servicio Vario</span>
@@ -4104,18 +4128,18 @@ export default function ReservasView({
                   
                   return (
                     <div className="space-y-3.5 text-xs">
-                      <div className="flex items-center justify-between py-1 border-b border-zinc-850">
+                      <div className="flex items-center justify-between py-1 border-b border-zinc-800">
                         <span className="text-zinc-400 uppercase text-[9.5px]">Total Venta B2B PVP</span>
                         <span className="font-black text-xl text-white">${totalVenta.toLocaleString("es-ES")} USD</span>
                       </div>
 
-                      <div className="flex items-center justify-between py-1 border-b border-zinc-850">
+                      <div className="flex items-center justify-between py-1 border-b border-zinc-800">
                         <span className="text-zinc-400">Total Costo Neto</span>
                         <span className="font-bold text-zinc-300">${totalNeto.toLocaleString("es-ES")} USD</span>
                       </div>
 
-                      <div className="flex items-center justify-between py-1 border-b border-zinc-850">
-                        <span className="text-zinc-450">Margen Mayorista Directo</span>
+                      <div className="flex items-center justify-between py-1 border-b border-zinc-800">
+                        <span className="text-zinc-400">Margen Mayorista Directo</span>
                         <span className="font-bold text-emerald-400">+${totalMargen.toLocaleString("es-ES")} USD</span>
                       </div>
 
@@ -4158,13 +4182,14 @@ export default function ReservasView({
               </div>
             </div>
 
-            <button
+            <Button
               type="button"
               onClick={handleBackToCart}
-              className="px-3.5 py-1.5 border border-zinc-200 hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer bg-white"
+              variant="secondary"
+              className="uppercase tracking-wider"
             >
               Volver al Carrito
-            </button>
+            </Button>
           </div>
 
           {/* Formulario de Servicio */}
@@ -4271,7 +4296,7 @@ export default function ReservasView({
 
                     {/* Filtered options dropdown */}
                     {showHotelDropdown && (
-                      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-150">
+                      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-100">
                         {detailedProperties.filter(p => 
                           p.nombre.toLowerCase().includes(hotelSearchQuery.toLowerCase()) ||
                           p.id.toLowerCase().includes(hotelSearchQuery.toLowerCase())
@@ -4377,11 +4402,11 @@ export default function ReservasView({
                 </div>
 
                 {/* Rooms Configuration Builder */}
-                <div className="space-y-4 border-t border-zinc-150 pt-4">
+                <div className="space-y-4 border-t border-zinc-100 pt-4">
                   <div className="flex justify-between items-center">
                     <div>
                       <h4 className="text-xs font-black text-zinc-900 uppercase tracking-wider">Distribución de Habitaciones</h4>
-                      <p className="text-[10.5px] text-zinc-450 mt-0.5">Estadía calculada: <span className="font-bold text-zinc-805">{getStayNights()} noche(s)</span></p>
+                      <p className="text-[10.5px] text-zinc-400 mt-0.5">Estadía calculada: <span className="font-bold text-zinc-800">{getStayNights()} noche(s)</span></p>
                       {(() => {
                         const roomTypeId = lodgingRooms[0]?.roomTypeId;
                         if (!roomTypeId) return null;
@@ -4394,13 +4419,14 @@ export default function ReservasView({
                         );
                       })()}
                     </div>
-                    <button
+                    <Button
                       type="button"
                       onClick={handleAddRoom}
-                      className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-[10.5px] font-bold uppercase tracking-wide cursor-pointer transition-all flex items-center gap-1"
+                      size="sm"
+                      className="uppercase tracking-wide"
                     >
                       <Plus className="w-3.5 h-3.5" /> Añadir Habitación
-                    </button>
+                    </Button>
                   </div>
 
                   <div className="space-y-3.5">
@@ -4417,7 +4443,7 @@ export default function ReservasView({
                       const activeRoomTypes = promoRoomTypes.length > 0 ? promoRoomTypes : fallbackRoomTypes;
 
                       return (
-                        <div key={room.id} className="p-4 border border-zinc-205 rounded-lg bg-zinc-50/50 space-y-4 shadow-2xs font-sans">
+                        <div key={room.id} className="p-4 border border-zinc-200 rounded-lg bg-zinc-50/50 space-y-4 shadow-2xs font-sans">
                           <div className="flex justify-between items-center pb-2 border-b border-zinc-200/60">
                             <span className="text-xs font-extrabold text-zinc-900 uppercase tracking-wider">Habitación #{index + 1}</span>
                             <button
@@ -4459,7 +4485,7 @@ export default function ReservasView({
                                 type="number"
                                 min="1"
                                 max="6"
-                                className="w-full p-2.5 border border-zinc-250 rounded text-xs font-bold bg-white text-zinc-900 focus:outline-none"
+                                className="w-full p-2.5 border border-zinc-200 rounded text-xs font-bold bg-white text-zinc-900 focus:outline-none"
                                 value={room.adultsCount}
                                 onChange={(e) => handleRoomPaxChange(room.id, parseInt(e.target.value) || 1)}
                               />
@@ -4468,10 +4494,10 @@ export default function ReservasView({
 
                           {/* Guest Names Inputs */}
                           <div className="space-y-2">
-                            <label className="text-[9.5px] font-bold text-zinc-455 uppercase tracking-widest block">Asignación de Pasajeros</label>
+                            <label className="text-[9.5px] font-bold text-zinc-500 uppercase tracking-widest block">Asignación de Pasajeros</label>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                               {room.guests.map((guest, guestIndex) => (
-                                <div key={guestIndex} className="space-y-2 bg-white border border-zinc-150 p-2.5 rounded-md shadow-2xs">
+                                <div key={guestIndex} className="space-y-2 bg-white border border-zinc-100 p-2.5 rounded-md shadow-2xs">
                                   <div className="relative flex items-center">
                                     <select
                                       required
@@ -4484,7 +4510,7 @@ export default function ReservasView({
                                         }
                                         handleRoomGuestAssign(room.id, guestIndex, e.target.value);
                                       }}
-                                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-850 focus:outline-none cursor-pointer"
+                                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-800 focus:outline-none cursor-pointer"
                                     >
                                       <option value="" disabled>Seleccionar pasajero...</option>
                                       {cartPasajeros.map(p => (
@@ -4911,7 +4937,7 @@ export default function ReservasView({
                       type="number"
                       min="1"
                       readOnly
-                      className="w-full p-2.5 border border-zinc-150 bg-zinc-50 rounded text-xs font-bold text-zinc-500 text-right cursor-not-allowed"
+                      className="w-full p-2.5 border border-zinc-100 bg-zinc-50 rounded text-xs font-bold text-zinc-500 text-right cursor-not-allowed"
                       value={carDays}
                     />
                   </div>
@@ -5005,7 +5031,7 @@ export default function ReservasView({
                       type="number"
                       min="1"
                       readOnly
-                      className="w-full p-2.5 border border-zinc-150 bg-zinc-50 rounded text-xs font-bold text-zinc-500 text-right cursor-not-allowed"
+                      className="w-full p-2.5 border border-zinc-100 bg-zinc-50 rounded text-xs font-bold text-zinc-500 text-right cursor-not-allowed"
                       value={insDays}
                     />
                   </div>
@@ -5202,7 +5228,7 @@ export default function ReservasView({
 
             {/* --- COSTOS COMUNES --- */}
             {(activeServiceType === ServiceType.ALOJAMIENTO && alojamientoModo === "catalogo") ? (
-              <div className="border-t border-zinc-150 pt-4 space-y-4 font-sans">
+              <div className="border-t border-zinc-100 pt-4 space-y-4 font-sans">
                 {/* Inputs for Commissions and PVP */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
@@ -5212,7 +5238,7 @@ export default function ReservasView({
                       <input
                         type="text"
                         readOnly
-                        className="w-full pl-6 pr-3 py-2.5 border border-zinc-150 bg-zinc-50 rounded text-xs font-extrabold text-zinc-700 text-right cursor-not-allowed"
+                        className="w-full pl-6 pr-3 py-2.5 border border-zinc-100 bg-zinc-50 rounded text-xs font-extrabold text-zinc-700 text-right cursor-not-allowed"
                         value={calculateTotalPvpLodgingPrice().toLocaleString("es-ES")}
                       />
                     </div>
@@ -5267,7 +5293,7 @@ export default function ReservasView({
                         value={calculateTotalNetLodgingPrice().toLocaleString("es-ES")}
                       />
                     </div>
-                    <span className="text-[9px] text-zinc-450 font-medium leading-tight block">
+                    <span className="text-[9px] text-zinc-400 font-medium leading-tight block">
                       Reteniendo {comisionB2B + comisionPropia}% de descuento sobre el PVP.
                     </span>
                   </div>
@@ -5283,7 +5309,7 @@ export default function ReservasView({
                         value={calculateTotalSaleLodgingPrice().toLocaleString("es-ES")}
                       />
                     </div>
-                    <span className="text-[9px] text-zinc-450 font-medium leading-tight block">
+                    <span className="text-[9px] text-zinc-400 font-medium leading-tight block">
                       {cartCanalVenta === "Directo" ? "Cliente Directo: sin comisión de agencia, precio de venta = PVP." : `Agencia B2B retiene su ${comisionB2B}% de comisión.`}
                     </span>
                   </div>
@@ -5306,7 +5332,7 @@ export default function ReservasView({
                 </div>
               </div>
             ) : (activeServiceType === ServiceType.TRASLADO || activeServiceType === ServiceType.SEGURO || activeServiceType === ServiceType.MANUAL) ? (
-              <div className="border-t border-zinc-150 pt-4 space-y-4 font-sans">
+              <div className="border-t border-zinc-100 pt-4 space-y-4 font-sans">
                 {/* Inputs for PVP and Commissions */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
@@ -5327,7 +5353,7 @@ export default function ReservasView({
                       />
                     </div>
                     {activeServiceType === ServiceType.SEGURO && (
-                      <span className="text-[9.5px] text-zinc-450 font-bold leading-tight block mt-1">
+                      <span className="text-[9.5px] text-zinc-400 font-bold leading-tight block mt-1">
                         PVP Total: ${((parseFloat(salePrice) || 0) * insPax).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD ({insPax} Pax)
                       </span>
                     )}
@@ -5391,7 +5417,7 @@ export default function ReservasView({
                             value={costoNeto.toLocaleString("es-ES")}
                           />
                         </div>
-                        <span className="text-[9px] text-zinc-450 font-medium leading-tight block">
+                        <span className="text-[9px] text-zinc-400 font-medium leading-tight block">
                           Reteniendo {comisionB2B + comisionPropia}% de descuento sobre el PVP Base.
                         </span>
                       </div>
@@ -5407,7 +5433,7 @@ export default function ReservasView({
                             value={netoB2B.toLocaleString("es-ES")}
                           />
                         </div>
-                        <span className="text-[9px] text-zinc-450 font-medium leading-tight block">
+                        <span className="text-[9px] text-zinc-400 font-medium leading-tight block">
                           {cartCanalVenta === "Directo" ? "Cliente Directo: sin comisión de agencia, precio de venta = PVP." : `Agencia B2B retiene su ${comisionB2B}% de comisión.`}
                         </span>
                       </div>
@@ -5433,7 +5459,7 @@ export default function ReservasView({
               </div>
             ) : (
               <>
-                <div className="border-t border-zinc-150 pt-4 grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div className="border-t border-zinc-100 pt-4 grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-tight flex items-end min-h-[28px]">Costo Neto Mayorista ($)</label>
                     <div className="relative">
@@ -5537,7 +5563,7 @@ export default function ReservasView({
                   <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-md text-xs space-y-2 text-zinc-700 font-semibold">
                     <div className="flex justify-between items-center">
                       <span>{cartCanalVenta === "Directo" ? "Importe a Pagar por el Cliente:" : "Importe Neto B2B (a Pagar por Agencia):"}</span>
-                      <span className="text-zinc-955 font-black">
+                      <span className="text-zinc-950 font-black">
                         ${((parseFloat(salePrice) || 0) * (1 - comisionB2B / 100)).toFixed(2)} USD
                       </span>
                     </div>
@@ -5553,20 +5579,21 @@ export default function ReservasView({
             )}
 
             {/* Actions */}
-            <div className="flex justify-end gap-3 pt-2 border-t border-zinc-150">
-              <button
+            <div className="flex justify-end gap-3 pt-2 border-t border-zinc-100">
+              <Button
                 type="button"
                 onClick={handleBackToCart}
-                className="px-4 py-2 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                variant="secondary"
+                className="uppercase tracking-wider"
               >
                 Volver
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                className="px-6 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs"
+                className="uppercase tracking-wider shadow-xs"
               >
                 {editingServiceId ? "Guardar Cambios del Servicio" : "Agregar al Carrito"}
-              </button>
+              </Button>
             </div>
 
           </form>
@@ -5611,7 +5638,7 @@ export default function ReservasView({
                       {companyConfig.logoLetter}
                     </div>
                     <div>
-                      <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans uppercase">{companyConfig.name}</h2>
+                      <h2 className="font-black text-base tracking-tight leading-none text-zinc-950 font-sans uppercase">{companyConfig.name}</h2>
                       <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">{companyConfig.subtitle}</span>
                     </div>
                   </div>
@@ -5625,7 +5652,7 @@ export default function ReservasView({
                     {isDirecto ? "Cotización de Viaje" : "Ficha de Reserva B2B"}
                   </span>
                   <div className="mt-2 text-xs font-bold text-zinc-900 font-sans">
-                    Localizador: <span className="font-mono text-zinc-955 font-black">{activeRes.id}</span>
+                    Localizador: <span className="font-mono text-zinc-950 font-black">{activeRes.id}</span>
                   </div>
                   <div className="text-[10px] text-zinc-400 font-medium font-sans">
                     Fecha Emisión: {formatDate(activeRes.createdAt || "2026-06-01")}
@@ -5638,21 +5665,21 @@ export default function ReservasView({
                 <div className="space-y-2.5">
                   <h4 className="font-bold text-[10px] uppercase text-zinc-400 tracking-wider">Información del Viaje</h4>
                   <div className="grid grid-cols-3 gap-y-1 text-zinc-700">
-                    <span className="font-bold text-zinc-450">Pasajero Titular:</span>
+                    <span className="font-bold text-zinc-400">Pasajero Titular:</span>
                     <span className="col-span-2 font-extrabold text-zinc-950">{activeRes.holder}</span>
 
-                    <span className="font-bold text-zinc-450">Pasajeros:</span>
+                    <span className="font-bold text-zinc-400">Pasajeros:</span>
                     <span className="col-span-2 font-bold text-zinc-900">{activeRes.pax} Pax</span>
 
-                    <span className="font-bold text-zinc-455">Check-In:</span>
+                    <span className="font-bold text-zinc-500">Check-In:</span>
                     <span className="col-span-2 font-mono text-zinc-900">{formatDate(activeRes.checkIn)}</span>
 
-                    <span className="font-bold text-zinc-455">Check-Out:</span>
+                    <span className="font-bold text-zinc-500">Check-Out:</span>
                     <span className="col-span-2 font-mono text-zinc-900">{formatDate(activeRes.checkOut)}</span>
                     
                     {activeRes.flightNo && (
                       <>
-                        <span className="font-bold text-zinc-455">Vuelo Asignado:</span>
+                        <span className="font-bold text-zinc-500">Vuelo Asignado:</span>
                         <span className="col-span-2 font-bold text-zinc-900 uppercase">{activeRes.flightNo}</span>
                       </>
                     )}
@@ -5660,24 +5687,24 @@ export default function ReservasView({
                 </div>
 
                 <div className="space-y-2.5">
-                  <h4 className="font-bold text-[10px] uppercase text-zinc-455 tracking-wider">{isDirecto ? "Información de Contacto" : "Agencia Minorista (Emisora)"}</h4>
+                  <h4 className="font-bold text-[10px] uppercase text-zinc-500 tracking-wider">{isDirecto ? "Información de Contacto" : "Agencia Minorista (Emisora)"}</h4>
                   <div className="grid grid-cols-3 gap-y-1 text-zinc-700">
                     {!isDirecto && (
                       <>
-                        <span className="font-bold text-zinc-450">Agencia B2B:</span>
+                        <span className="font-bold text-zinc-400">Agencia B2B:</span>
                         <span className="col-span-2 font-extrabold text-zinc-950">{activeRes.agenciaName || "Directo"}</span>
                       </>
                     )}
 
-                    <span className="font-bold text-zinc-450">Teléfono:</span>
+                    <span className="font-bold text-zinc-400">Teléfono:</span>
                     <span className="col-span-2 font-semibold text-zinc-900">{activeRes.telefono || "Sin registrar"}</span>
 
-                    <span className="font-bold text-zinc-450">Email:</span>
+                    <span className="font-bold text-zinc-400">Email:</span>
                     <span className="col-span-2 font-semibold text-zinc-900">{activeRes.email || "Sin registrar"}</span>
 
                     {!isDirecto && (
                       <>
-                        <span className="font-bold text-zinc-455">Mercado Tarifario:</span>
+                        <span className="font-bold text-zinc-500">Mercado Tarifario:</span>
                         <span className="col-span-2 font-bold text-zinc-900 uppercase">{activeRes.mercado || "INTERNACIONAL"}</span>
                       </>
                     )}
@@ -5716,8 +5743,8 @@ export default function ReservasView({
                 return (
                   <React.Fragment>
                     <div className="space-y-3 font-sans">
-                      <h4 className="font-bold text-[10px] uppercase text-zinc-450 tracking-wider">Detalle de Servicios Incluidos</h4>
-                      <div className="border border-zinc-200 rounded-lg overflow-hidden">
+                      <h4 className="font-bold text-[10px] uppercase text-zinc-400 tracking-wider">Detalle de Servicios Incluidos</h4>
+                      <div className="border border-zinc-200 rounded-lg overflow-x-auto">
                         <table className="w-full text-left border-collapse text-xs">
                           <thead>
                             <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase text-[9px] font-extrabold tracking-wider">
@@ -5752,22 +5779,22 @@ export default function ReservasView({
                                         <td className="p-3 font-bold text-zinc-900">{s.tipo}</td>
                                         <td className="p-3 text-left leading-normal">
                                           <span className="text-zinc-900 font-extrabold">{hotelName}</span>
-                                          <span className="block text-[9.5px] text-zinc-455 font-medium mt-0.5">
+                                          <span className="block text-[9.5px] text-zinc-500 font-medium mt-0.5">
                                             IN: {formatDate(s.detalles.checkInDate)} / OUT: {formatDate(s.detalles.checkOutDate)} ({formatTarifaLabel(s.detalles, s.detalles.lodgingRooms[0]?.roomTypeId, activeRes.mercado || "NACIONAL")})
                                           </span>
                                         </td>
                                         {isDirecto ? (
-                                          <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                          <td className="p-3 text-right font-bold text-zinc-950">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                         ) : (
                                           <>
                                             <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                            <td className="p-3 text-center font-bold text-zinc-650">
+                                            <td className="p-3 text-center font-bold text-zinc-600">
                                               {comisionPct}%
                                               <span className="text-[10.5px] text-zinc-400 block font-normal">
                                                 (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
                                               </span>
                                             </td>
-                                            <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                            <td className="p-3 text-right font-bold text-zinc-950">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                           </>
                                         )}
                                       </tr>
@@ -5780,12 +5807,12 @@ export default function ReservasView({
                                           <tr key={`${s.id}-rm-${rIdx}`} className="border-b border-zinc-100 last:border-b-zinc-200 bg-white">
                                             <td className="p-2.5"></td>
                                             <td className="p-2.5 text-[9.5px] text-zinc-400 font-bold uppercase tracking-wider pl-5">Hab {rIdx + 1}</td>
-                                            <td className="p-2.5 text-zinc-650 pl-5 text-left">
-                                              <span className="font-semibold text-zinc-850 text-xs">{roomTypeName}</span>
+                                            <td className="p-2.5 text-zinc-600 pl-5 text-left">
+                                              <span className="font-semibold text-zinc-800 text-xs">{roomTypeName}</span>
                                               {guestsNames && <span className="block text-[10px] text-zinc-400 italic">Pasajeros: {guestsNames}</span>}
                                             </td>
                                             {isDirecto ? (
-                                              <td className="p-2.5 text-right text-zinc-850 font-bold text-xs">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                              <td className="p-2.5 text-right text-zinc-800 font-bold text-xs">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                             ) : (
                                               <>
                                                 <td className="p-2.5 text-right text-zinc-700 text-xs font-semibold">${rates.pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
@@ -5795,7 +5822,7 @@ export default function ReservasView({
                                                     (${rates.comisionB2BVal.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
                                                   </span>
                                                 </td>
-                                                <td className="p-2.5 text-right text-zinc-850 font-bold text-xs">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                                <td className="p-2.5 text-right text-zinc-800 font-bold text-xs">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                               </>
                                             )}
                                           </tr>
@@ -5811,17 +5838,17 @@ export default function ReservasView({
                                     <td className="p-3 font-bold text-zinc-900">{s.tipo}</td>
                                     <td className="p-3 font-medium text-zinc-700 leading-normal">{s.descripcion}</td>
                                     {isDirecto ? (
-                                      <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                      <td className="p-3 text-right font-bold text-zinc-950">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                     ) : (
                                       <>
                                         <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                        <td className="p-3 text-center font-bold text-zinc-650">
+                                        <td className="p-3 text-center font-bold text-zinc-600">
                                           {comisionPct}%
                                           <span className="text-[10.5px] text-zinc-400 block font-normal">
                                             (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
                                           </span>
                                         </td>
-                                        <td className="p-3 text-right font-bold text-zinc-955">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-3 text-right font-bold text-zinc-950">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                       </>
                                     )}
                                   </tr>
@@ -5865,7 +5892,7 @@ export default function ReservasView({
                     {/* Notes */}
                     {activeRes.specialRequests && (
                       <div className="mt-6 space-y-2 font-sans">
-                        <h5 className="font-bold text-[10px] uppercase text-zinc-455 tracking-wider">Observaciones / Requerimientos Especiales</h5>
+                        <h5 className="font-bold text-[10px] uppercase text-zinc-500 tracking-wider">Observaciones / Requerimientos Especiales</h5>
                         <p className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-700 rounded text-xs leading-relaxed font-semibold">
                           {activeRes.specialRequests}
                         </p>
@@ -5877,23 +5904,23 @@ export default function ReservasView({
                       <div className="w-full sm:w-80 bg-zinc-50 border border-zinc-200 p-4.5 rounded-lg space-y-2.5">
                         {isDirecto ? (
                           <div className="flex justify-between items-end">
-                            <span className="text-xs text-zinc-655 uppercase font-black tracking-wide">Total a Pagar:</span>
-                            <span className="text-lg font-black text-zinc-955 font-mono">${totalPvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                            <span className="text-xs text-zinc-700 uppercase font-black tracking-wide">Total a Pagar:</span>
+                            <span className="text-lg font-black text-zinc-950 font-mono">${totalPvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
                           </div>
                         ) : (
                           <>
-                            <div className="flex justify-between items-center text-xs text-zinc-550 uppercase font-bold tracking-wider">
+                            <div className="flex justify-between items-center text-xs text-zinc-500 uppercase font-bold tracking-wider">
                               <span>Total Venta Final (PVP):</span>
                               <span className="text-zinc-900 font-bold">${totalPvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
                             </div>
-                            <div className="flex justify-between items-center text-xs text-zinc-550 uppercase font-bold tracking-wider">
+                            <div className="flex justify-between items-center text-xs text-zinc-500 uppercase font-bold tracking-wider">
                               <span>Comisión de Agencia B2B:</span>
                               <span className="text-zinc-900 font-bold">-${totalComisionesB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
                             </div>
                             <div className="h-[1px] bg-zinc-200"></div>
                             <div className="flex justify-between items-end">
-                              <span className="text-xs text-zinc-655 uppercase font-black tracking-wide">Neto a Pagar a Foratour:</span>
-                              <span className="text-lg font-black text-zinc-955 font-mono">${totalVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                              <span className="text-xs text-zinc-700 uppercase font-black tracking-wide">Neto a Pagar a Foratour:</span>
+                              <span className="text-lg font-black text-zinc-950 font-mono">${totalVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
                             </div>
                           </>
                         )}
@@ -5917,25 +5944,26 @@ export default function ReservasView({
 
             {/* Modal Actions */}
             <div className="bg-zinc-50 border-t border-zinc-200 px-5 py-4 flex justify-between items-center no-print">
-              <span className="text-[10px] text-zinc-450 font-bold uppercase tracking-wider flex items-center gap-1.5 font-sans">
-                <Info className="w-3.5 h-3.5 text-zinc-450" />
+              <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                <Info className="w-3.5 h-3.5 text-zinc-400" />
                 Presione Ctrl+P o use el botón para imprimir o guardar como PDF
               </span>
               
               <div className="flex gap-2.5">
-                <button
+                <Button
                   onClick={() => setShowB2BModal(false)}
-                  className="px-4 py-2 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer font-sans"
+                  variant="secondary"
+                  className="uppercase tracking-wider font-sans"
                 >
                   Cerrar
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={() => window.print()}
-                  className="px-5 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs flex items-center gap-1.5 font-sans"
+                  className="uppercase tracking-wider shadow-xs font-sans"
                 >
                   <Printer className="w-4 h-4" />
                   <span>{isDirecto ? "Imprimir / PDF Cotización" : "Imprimir / PDF B2B"}</span>
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -6040,7 +6068,7 @@ export default function ReservasView({
                       {companyConfig.logoLetter}
                     </div>
                     <div>
-                      <h2 className="font-black text-base tracking-tight leading-none text-zinc-955 font-sans uppercase">{companyConfig.name}</h2>
+                      <h2 className="font-black text-base tracking-tight leading-none text-zinc-950 font-sans uppercase">{companyConfig.name}</h2>
                       <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block font-sans">{companyConfig.subtitle}</span>
                     </div>
                   </div>
@@ -6061,7 +6089,7 @@ export default function ReservasView({
               <div className="border border-emerald-250 bg-emerald-50/40 rounded-lg p-4 mb-6 flex items-center justify-between gap-4">
                 <div className="space-y-1">
                   <h4 className="text-xs font-extrabold uppercase text-emerald-800 font-sans">Estado: SERVICIOS CONCILIADOS Y CONFIRMADOS</h4>
-                  <p className="text-[10.5px] text-zinc-650 leading-relaxed font-semibold font-sans">
+                  <p className="text-[10.5px] text-zinc-600 leading-relaxed font-semibold font-sans">
                     Este documento acredita que los servicios listados a continuación están totalmente pagados al proveedor y garantizados por {companyConfig.name}. Presente este voucher al proveedor del servicio al iniciar su viaje.
                   </p>
                 </div>
@@ -6076,8 +6104,8 @@ export default function ReservasView({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6 border-b border-zinc-200 pb-6">
                 <div className="space-y-1.5">
                   <h5 className="text-[9px] font-black text-zinc-400 uppercase tracking-wider font-sans">Titular de la Reserva</h5>
-                  <p className="text-sm font-black text-zinc-955 leading-tight uppercase font-sans">{activeRes.holder}</p>
-                  <div className="text-xs text-zinc-650 font-semibold space-y-0.5">
+                  <p className="text-sm font-black text-zinc-950 leading-tight uppercase font-sans">{activeRes.holder}</p>
+                  <div className="text-xs text-zinc-600 font-semibold space-y-0.5">
                     <p className="font-mono">📱 Contacto Tel: {activeRes.telefono || "Sin registrar"}</p>
                     <p className="font-mono">✉ Contacto Email: {activeRes.email || "Sin registrar"}</p>
                   </div>
@@ -6085,17 +6113,17 @@ export default function ReservasView({
                 
                 <div className="space-y-1.5 sm:text-right font-sans">
                   <h5 className="text-[9px] font-black text-zinc-400 uppercase tracking-wider">Detalles de Operación</h5>
-                  <p className="text-xs font-semibold text-zinc-850">
+                  <p className="text-xs font-semibold text-zinc-800">
                     Fecha de Ingreso: <span className="font-bold text-zinc-950 font-mono">{activeRes.checkIn}</span>
                   </p>
-                  <p className="text-xs font-semibold text-zinc-850">
+                  <p className="text-xs font-semibold text-zinc-800">
                     Fecha de Salida: <span className="font-bold text-zinc-950 font-mono">{activeRes.checkOut}</span>
                   </p>
-                  <p className="text-xs font-semibold text-zinc-850">
+                  <p className="text-xs font-semibold text-zinc-800">
                     Total Pasajeros: <span className="font-bold text-zinc-950">{activeRes.pax} Pax</span>
                   </p>
                   {activeRes.flightNo && (
-                    <p className="text-xs font-semibold text-zinc-850">
+                    <p className="text-xs font-semibold text-zinc-800">
                       Vuelo de Conexión: <span className="font-bold font-mono text-zinc-900">{activeRes.flightNo}</span>
                     </p>
                   )}
@@ -6109,7 +6137,7 @@ export default function ReservasView({
                 
                 return (
                   <div className="space-y-4 mb-6">
-                    <h5 className="text-[9.5px] font-black text-zinc-455 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Itinerario de Vuelo Aéreo</h5>
+                    <h5 className="text-[9.5px] font-black text-zinc-500 uppercase tracking-widest border-b border-zinc-100 pb-1.5 font-sans">Itinerario de Vuelo Aéreo</h5>
                     <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30">
                       {vuelosFacturados.map((vuelo) => (
                         <div key={vuelo.id} className="p-4 bg-white space-y-3 break-inside-avoid print:break-inside-avoid">
@@ -6117,7 +6145,7 @@ export default function ReservasView({
                             <span className="px-2 py-0.5 bg-blue-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
                               BOLETO AÉREO GDS
                             </span>
-                            <span className="text-[9px] font-mono text-zinc-455 font-semibold">PNR: {vuelo.pnr}</span>
+                            <span className="text-[9px] font-mono text-zinc-500 font-semibold">PNR: {vuelo.pnr}</span>
                           </div>
                           
                           <div className="space-y-2 mt-2">
@@ -6137,7 +6165,7 @@ export default function ReservasView({
                             ))}
                           </div>
                           
-                          <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-[10.5px] text-zinc-650 font-semibold space-y-1 font-sans mt-3">
+                          <div className="bg-zinc-50 border border-zinc-100 rounded p-2.5 text-[10.5px] text-zinc-600 font-semibold space-y-1 font-sans mt-3">
                             <span className="text-[8.5px] font-black text-zinc-400 uppercase tracking-wider block">Instrucciones de Embarque</span>
                             <p>Preséntese en el mostrador de la aerolínea 3 horas antes de la salida programada del vuelo para el check-in internacional, o 2 horas antes para vuelos domésticos. El equipaje permitido dependerá de la política de la clase {vuelo.segmentos[0]?.clase || "Y"}.</p>
                           </div>
@@ -6150,7 +6178,7 @@ export default function ReservasView({
 
               {/* Services List (Only Billed) */}
               <div className="space-y-4 mb-6">
-                <h5 className="text-[9.5px] font-black text-zinc-455 uppercase tracking-widest border-b border-zinc-150 pb-1.5 font-sans">Servicios Confirmados</h5>
+                <h5 className="text-[9.5px] font-black text-zinc-500 uppercase tracking-widest border-b border-zinc-100 pb-1.5 font-sans">Servicios Confirmados</h5>
                 <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30">
                   {activeRes.servicios?.filter(s => s.statusFacturacion === "Facturado").map((s) => (
                     <div key={s.id} className="p-4 bg-white space-y-2 break-inside-avoid print:break-inside-avoid">
@@ -6158,15 +6186,15 @@ export default function ReservasView({
                         <span className="px-2 py-0.5 bg-zinc-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
                           {s.tipo}
                         </span>
-                        <span className="text-[9px] font-mono text-zinc-455 font-semibold">Cód. Servicio: {s.id}</span>
+                        <span className="text-[9px] font-mono text-zinc-500 font-semibold">Cód. Servicio: {s.id}</span>
                       </div>
                       
                       <div className="text-xs text-zinc-900">
-                        <p className="font-extrabold text-sm text-zinc-955 leading-snug font-sans">{s.descripcion}</p>
+                        <p className="font-extrabold text-sm text-zinc-950 leading-snug font-sans">{s.descripcion}</p>
                       </div>
 
                       {/* Pax instructions based on service type */}
-                      <div className="bg-zinc-50 border border-zinc-150 rounded p-2.5 text-[10.5px] text-zinc-650 font-semibold space-y-1 font-sans">
+                      <div className="bg-zinc-50 border border-zinc-100 rounded p-2.5 text-[10.5px] text-zinc-600 font-semibold space-y-1 font-sans">
                         <span className="text-[8.5px] font-black text-zinc-400 uppercase tracking-wider block">Instrucciones para el Viajero</span>
                         {s.tipo === ServiceType.ALOJAMIENTO && (
                           <p>Presente este voucher impreso o digital al momento del Check-in en la recepción del hotel. El alojamiento incluye desayuno e impuestos locales, salvo tasas municipales de pago directo en destino si las hubiere.</p>
@@ -6191,8 +6219,8 @@ export default function ReservasView({
 
               {/* Special Requests if present */}
               {activeRes.specialRequests && (
-                <div className="bg-zinc-50 border border-zinc-150 rounded-lg p-4 mb-6 space-y-1 font-sans">
-                  <h5 className="text-[9px] font-black text-zinc-455 uppercase tracking-wider">Notas de Coordinación / Requerimientos</h5>
+                <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-4 mb-6 space-y-1 font-sans">
+                  <h5 className="text-[9px] font-black text-zinc-500 uppercase tracking-wider">Notas de Coordinación / Requerimientos</h5>
                   <p className="text-xs text-zinc-800 leading-relaxed font-semibold italic">{activeRes.specialRequests}</p>
                 </div>
               )}
@@ -6206,19 +6234,21 @@ export default function ReservasView({
 
             {/* Actions */}
             <div className="bg-zinc-50 border-t border-zinc-200 px-5 py-4 flex justify-end gap-2.5 no-print font-sans">
-              <button
+              <Button
                 onClick={() => setShowVoucherModal(false)}
-                className="px-4 py-2 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                variant="secondary"
+                className="uppercase tracking-wider"
               >
                 Cerrar
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => window.print()}
-                className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs flex items-center gap-1.5"
+                variant="success"
+                className="uppercase tracking-wider shadow-xs"
               >
                 <Printer className="w-4 h-4" />
                 <span>Imprimir Voucher (PDF)</span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -6327,7 +6357,7 @@ export default function ReservasView({
                 return (
                   <div className="space-y-4 text-left">
                     {/* Agency Type Label */}
-                    <div className="bg-zinc-50 border border-zinc-200 p-3 rounded text-xs font-semibold text-zinc-750 space-y-1">
+                    <div className="bg-zinc-50 border border-zinc-200 p-3 rounded text-xs font-semibold text-zinc-700 space-y-1">
                       <div className="flex justify-between">
                         <span>Canal de Venta:</span>
                         <span className="font-bold text-zinc-900">{clientLabel}</span>
@@ -6355,7 +6385,7 @@ export default function ReservasView({
                             className={`py-2 px-3 border rounded text-xs font-bold transition-all ${
                               billingFacturacionTipo === "Crédito"
                                 ? "bg-zinc-950 border-zinc-950 text-white"
-                                : "bg-white border-zinc-250 text-zinc-700 hover:bg-zinc-50"
+                                : "bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50"
                             }`}
                           >
                             Facturar a Crédito
@@ -6366,7 +6396,7 @@ export default function ReservasView({
                             className={`py-2 px-3 border rounded text-xs font-bold transition-all ${
                               billingFacturacionTipo === "Pago Contado"
                                 ? "bg-zinc-950 border-zinc-950 text-white"
-                                : "bg-white border-zinc-250 text-zinc-700 hover:bg-zinc-50"
+                                : "bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50"
                             }`}
                           >
                             Pago Contado (Inmediato)
@@ -6383,14 +6413,14 @@ export default function ReservasView({
 
                     {/* Receipt Details Fields (Always visible if Pago Contado) */}
                     {billingFacturacionTipo === "Pago Contado" && (
-                      <div className="space-y-3 pt-2 border-t border-zinc-150 animate-fade-in">
+                      <div className="space-y-3 pt-2 border-t border-zinc-100 animate-fade-in">
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Método de Pago</label>
                             <select
                               value={billingMetodo}
                               onChange={(e) => setBillingMetodo(e.target.value)}
-                              className="w-full px-2.5 py-1.5 border border-zinc-250 rounded text-xs font-semibold bg-white focus:outline-none focus:border-zinc-500 cursor-pointer"
+                              className="w-full px-2.5 py-1.5 border border-zinc-200 rounded text-xs font-semibold bg-white focus:outline-none focus:border-zinc-500 cursor-pointer"
                             >
                               <option value="Transferencia Bancaria">Transferencia</option>
                               <option value="Pago Móvil">Pago Móvil</option>
@@ -6406,7 +6436,7 @@ export default function ReservasView({
                               value={billingMonto}
                               onChange={(e) => setBillingMonto(e.target.value)}
                               placeholder="Monto"
-                              className="w-full px-2.5 py-1.5 border border-zinc-250 rounded text-xs font-semibold bg-white focus:outline-none focus:border-zinc-500 font-mono"
+                              className="w-full px-2.5 py-1.5 border border-zinc-200 rounded text-xs font-semibold bg-white focus:outline-none focus:border-zinc-500 font-mono"
                             />
                           </div>
                         </div>
@@ -6417,7 +6447,7 @@ export default function ReservasView({
                             value={billingRef}
                             onChange={(e) => setBillingRef(e.target.value)}
                             placeholder="Ej: REF-90214 o Nro Operación"
-                            className="w-full px-2.5 py-1.5 border border-zinc-250 rounded text-xs font-semibold bg-white focus:outline-none focus:border-zinc-500 uppercase font-mono"
+                            className="w-full px-2.5 py-1.5 border border-zinc-200 rounded text-xs font-semibold bg-white focus:outline-none focus:border-zinc-500 uppercase font-mono"
                           />
                         </div>
                         <div className="mt-3">
@@ -6445,21 +6475,22 @@ export default function ReservasView({
 
             {/* Modal Footer */}
             <div className="bg-zinc-50 border-t border-zinc-200 px-5 py-3.5 flex justify-end gap-2.5">
-              <button
+              <Button
                 type="button"
                 onClick={() => setShowSendBillingModal(false)}
-                className="px-4 py-1.5 border border-zinc-250 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase cursor-pointer"
+                variant="secondary"
+                className="uppercase"
               >
                 Cancelar
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={handleConfirmSendBilling}
-                className="px-5 py-1.5 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase cursor-pointer shadow-xs flex items-center gap-1.5"
+                className="uppercase shadow-xs"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Confirmar & Enviar</span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -6501,42 +6532,42 @@ export default function ReservasView({
                   <CheckCircle2 className="w-48 h-48" />
                 </div>
 
-                <div className="flex justify-between border-b border-zinc-850 pb-2 mb-3 items-center">
+                <div className="flex justify-between border-b border-zinc-800 pb-2 mb-3 items-center">
                   <span className="text-[9.5px] uppercase font-black text-zinc-500 tracking-wider">Foratour ERP - Comprobante de Egreso</span>
                   <span className="text-[10.5px] font-black text-emerald-400">{selectedObligationForReceipt.id}</span>
                 </div>
 
                 <div className="space-y-2 font-semibold">
                   <div className="grid grid-cols-3">
-                    <span className="text-zinc-550 text-[10px] uppercase">Beneficiario:</span>
+                    <span className="text-zinc-500 text-[10px] uppercase">Beneficiario:</span>
                     <span className="col-span-2 font-bold text-white uppercase text-[11px] truncate">{selectedObligationForReceipt.providerName}</span>
                   </div>
                   <div className="grid grid-cols-3">
-                    <span className="text-zinc-550 text-[10px] uppercase">Localizador:</span>
+                    <span className="text-zinc-500 text-[10px] uppercase">Localizador:</span>
                     <span className="col-span-2 font-bold text-white text-[11px]">{selectedObligationForReceipt.locatorId}</span>
                   </div>
                   <div className="grid grid-cols-3">
-                    <span className="text-zinc-550 text-[10px] uppercase">Importe Neto:</span>
+                    <span className="text-zinc-500 text-[10px] uppercase">Importe Neto:</span>
                     <span className="col-span-2 font-bold text-zinc-100 text-[11.5px]">${selectedObligationForReceipt.netCost.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
                   </div>
                   <div className="grid grid-cols-3">
-                    <span className="text-zinc-550 text-[10px] uppercase">Método Pago:</span>
+                    <span className="text-zinc-500 text-[10px] uppercase">Método Pago:</span>
                     <span className="col-span-2 font-bold text-zinc-100 text-[11px]">{selectedObligationForReceipt.paymentMethod || "Transferencia Bancaria"}</span>
                   </div>
                   <div className="grid grid-cols-3">
-                    <span className="text-zinc-550 text-[10px] uppercase">Nro Operación:</span>
+                    <span className="text-zinc-500 text-[10px] uppercase">Nro Operación:</span>
                     <span className="col-span-2 font-bold text-emerald-400 text-[11.5px] tracking-wide select-all">{selectedObligationForReceipt.reference || "N/A"}</span>
                   </div>
                   {selectedObligationForReceipt.date && (
                     <div className="grid grid-cols-3">
-                      <span className="text-zinc-555 text-[10px] uppercase">Fecha Emisión:</span>
+                      <span className="text-zinc-600 text-[10px] uppercase">Fecha Emisión:</span>
                       <span className="col-span-2 font-bold text-zinc-200 text-[11px]">{formatDate(selectedObligationForReceipt.date)}</span>
                     </div>
                   )}
                 </div>
 
                 {selectedObligationForReceipt.notes && (
-                  <div className="border-t border-zinc-850 pt-2.5 mt-3 text-[10px] text-zinc-400 italic">
+                  <div className="border-t border-zinc-800 pt-2.5 mt-3 text-[10px] text-zinc-400 italic">
                     Notas: {selectedObligationForReceipt.notes}
                   </div>
                 )}
@@ -6544,56 +6575,58 @@ export default function ReservasView({
 
               {/* Support file reference */}
               <div className="space-y-1.5 bg-zinc-50 border border-zinc-200 p-4 rounded">
-                <span className="text-[10px] uppercase font-bold text-zinc-455 block">Archivo Adjunto de Tesorería</span>
+                <span className="text-[10px] uppercase font-bold text-zinc-500 block">Archivo Adjunto de Tesorería</span>
                 <div className="flex items-center justify-between bg-white border border-zinc-200 rounded p-2.5">
                   <div className="flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-zinc-450" />
+                    <FileText className="w-5 h-5 text-zinc-400" />
                     <div>
                       <span className="font-bold text-zinc-800 block text-[11px]">{selectedObligationForReceipt.attachedFile || "soporte_pago.pdf"}</span>
-                      <span className="text-[9.5px] text-zinc-450 block">Tamaño: 1.2 MB | Formato: PDF</span>
+                      <span className="text-[9.5px] text-zinc-400 block">Tamaño: 1.2 MB | Formato: PDF</span>
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[9px] font-bold uppercase">
+                  <Badge variant="success">
                     Verificado
-                  </span>
+                  </Badge>
                 </div>
               </div>
             </div>
 
             {/* Modal Footer */}
             <div className="bg-zinc-50 border-t border-zinc-200 px-5 py-4 flex justify-between gap-3 font-semibold">
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   setShowProvReceiptModal(false);
                   setSelectedObligationForReceipt(null);
                 }}
-                className="px-4 py-2 border border-zinc-250 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase cursor-pointer"
+                variant="secondary"
+                className="uppercase"
               >
                 Cerrar
-              </button>
+              </Button>
 
               <div className="flex gap-2">
-                <button
+                <Button
                   type="button"
                   onClick={() => {
                     showAlert({ title: "Descarga de soporte", message: `Simulando descarga de soporte: ${selectedObligationForReceipt.attachedFile || "soporte_pago.pdf"}`, type: "info" });
                   }}
-                  className="px-4 py-2 border border-zinc-250 hover:bg-zinc-100 text-zinc-700 bg-white rounded text-xs font-bold uppercase cursor-pointer flex items-center gap-1.5 shadow-3xs"
+                  variant="secondary"
+                  className="uppercase shadow-3xs"
                 >
                   <Download className="w-3.5 h-3.5" /> Descargar PDF
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
                   onClick={() => {
                     showAlert({ title: "Comprobante enviado", message: `El comprobante de pago ha sido enviado exitosamente al correo del proveedor legal: ${selectedObligationForReceipt.providerName}.`, type: "success" });
                     setShowProvReceiptModal(false);
                     setSelectedObligationForReceipt(null);
                   }}
-                  className="px-5 py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase cursor-pointer shadow-xs flex items-center gap-1.5"
+                  className="uppercase shadow-xs"
                 >
                   <Send className="w-3.5 h-3.5 text-emerald-400" /> Enviar a Proveedor
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -6636,48 +6669,48 @@ export default function ReservasView({
                   <CheckCircle2 className="w-48 h-48" />
                 </div>
 
-                <div className="flex justify-between border-b border-zinc-850 pb-2 mb-3 items-center">
+                <div className="flex justify-between border-b border-zinc-800 pb-2 mb-3 items-center">
                   <span className="text-[9.5px] uppercase font-black text-zinc-500 tracking-wider">Foratour ERP - Comprobante de Ingreso</span>
                   <span className="text-[10.5px] font-black text-emerald-400">{selectedVoucherForReceipt.id}</span>
                 </div>
 
                 <div className="space-y-2 font-semibold">
                   <div className="grid grid-cols-3">
-                    <span className="text-zinc-550 text-[10px] uppercase">Cliente:</span>
+                    <span className="text-zinc-500 text-[10px] uppercase">Cliente:</span>
                     <span className="col-span-2 font-bold text-white uppercase text-[11px] truncate">{selectedVoucherForReceipt.clientName}</span>
                   </div>
                   <div className="grid grid-cols-3">
-                    <span className="text-zinc-550 text-[10px] uppercase">Localizador:</span>
+                    <span className="text-zinc-500 text-[10px] uppercase">Localizador:</span>
                     <span className="col-span-2 font-bold text-white text-[11px]">{selectedVoucherForReceipt.locatorId || activeRes.id}</span>
                   </div>
                   <div className="grid grid-cols-3">
-                    <span className="text-zinc-550 text-[10px] uppercase">Importe:</span>
+                    <span className="text-zinc-500 text-[10px] uppercase">Importe:</span>
                     <span className="col-span-2 font-bold text-zinc-100 text-[11.5px]">${selectedVoucherForReceipt.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
                   </div>
                   <div className="grid grid-cols-3">
-                    <span className="text-zinc-550 text-[10px] uppercase">Método Pago:</span>
+                    <span className="text-zinc-500 text-[10px] uppercase">Método Pago:</span>
                     <span className="col-span-2 font-bold text-zinc-100 text-[11px]">{selectedVoucherForReceipt.method}{selectedVoucherForReceipt.bankName ? ` (${selectedVoucherForReceipt.bankName})` : ""}</span>
                   </div>
                   <div className="grid grid-cols-3">
-                    <span className="text-zinc-550 text-[10px] uppercase">Nro Referencia:</span>
+                    <span className="text-zinc-500 text-[10px] uppercase">Nro Referencia:</span>
                     <span className="col-span-2 font-bold text-emerald-400 text-[11.5px] tracking-wide select-all">{selectedVoucherForReceipt.reference || "N/A"}</span>
                   </div>
                   {selectedVoucherForReceipt.invoiceId && (
                     <div className="grid grid-cols-3">
-                      <span className="text-zinc-550 text-[10px] uppercase">Factura:</span>
+                      <span className="text-zinc-500 text-[10px] uppercase">Factura:</span>
                       <span className="col-span-2 font-bold text-zinc-200 text-[11px]">{selectedVoucherForReceipt.invoiceId}</span>
                     </div>
                   )}
                   {selectedVoucherForReceipt.date && (
                     <div className="grid grid-cols-3">
-                      <span className="text-zinc-555 text-[10px] uppercase">Fecha:</span>
+                      <span className="text-zinc-600 text-[10px] uppercase">Fecha:</span>
                       <span className="col-span-2 font-bold text-zinc-200 text-[11px]">{formatDate(selectedVoucherForReceipt.date)}</span>
                     </div>
                   )}
                 </div>
 
                 {selectedVoucherForReceipt.notes && (
-                  <div className="border-t border-zinc-850 pt-2.5 mt-3 text-[10px] text-zinc-400 italic">
+                  <div className="border-t border-zinc-800 pt-2.5 mt-3 text-[10px] text-zinc-400 italic">
                     Notas: {selectedVoucherForReceipt.notes}
                   </div>
                 )}
@@ -6685,48 +6718,50 @@ export default function ReservasView({
 
               {/* Support file reference */}
               <div className="space-y-1.5 bg-zinc-50 border border-zinc-200 p-4 rounded">
-                <span className="text-[10px] uppercase font-bold text-zinc-455 block">Archivo Adjunto de Cobranzas</span>
+                <span className="text-[10px] uppercase font-bold text-zinc-500 block">Archivo Adjunto de Cobranzas</span>
                 <div className="flex items-center justify-between bg-white border border-zinc-200 rounded p-2.5">
                   <div className="flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-zinc-450" />
+                    <FileText className="w-5 h-5 text-zinc-400" />
                     <div>
                       <span className="font-bold text-zinc-800 block text-[11px]">{selectedVoucherForReceipt.attachedFile || "comprobante_registrado.jpg"}</span>
-                      <span className="text-[9.5px] text-zinc-450 block">Tamaño: 1.2 MB | Formato: PDF</span>
+                      <span className="text-[9.5px] text-zinc-400 block">Tamaño: 1.2 MB | Formato: PDF</span>
                     </div>
                   </div>
-                  <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase border ${
-                    selectedVoucherForReceipt.status === "Verificado" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                    selectedVoucherForReceipt.status === "Rechazado" ? "bg-red-50 text-red-700 border-red-200" :
-                    "bg-amber-50 text-amber-700 border-amber-200"
-                  }`}>
+                  <Badge variant={
+                    selectedVoucherForReceipt.status === "Verificado" ? "success" :
+                    selectedVoucherForReceipt.status === "Rechazado" ? "danger" :
+                    "warning"
+                  }>
                     {selectedVoucherForReceipt.status}
-                  </span>
+                  </Badge>
                 </div>
               </div>
             </div>
 
             {/* Modal Footer */}
             <div className="bg-zinc-50 border-t border-zinc-200 px-5 py-4 flex justify-between gap-3 font-semibold">
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   setShowClientReceiptModal(false);
                   setSelectedVoucherForReceipt(null);
                 }}
-                className="px-4 py-2 border border-zinc-250 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase cursor-pointer"
+                variant="secondary"
+                className="uppercase"
               >
                 Cerrar
-              </button>
+              </Button>
 
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   showAlert({ title: "Descarga de soporte", message: `Simulando descarga de soporte: ${selectedVoucherForReceipt.attachedFile || "comprobante_registrado.jpg"}`, type: "info" });
                 }}
-                className="px-4 py-2 border border-zinc-250 hover:bg-zinc-100 text-zinc-700 bg-white rounded text-xs font-bold uppercase cursor-pointer flex items-center gap-1.5 shadow-3xs"
+                variant="secondary"
+                className="uppercase shadow-3xs"
               >
                 <Download className="w-3.5 h-3.5" /> Descargar PDF
-              </button>
+              </Button>
             </div>
 
           </div>
@@ -6760,13 +6795,13 @@ export default function ReservasView({
 
             {/* Content */}
             <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto text-left">
-              <p className="text-[11px] text-zinc-650 leading-relaxed font-semibold">
+              <p className="text-[11px] text-zinc-600 leading-relaxed font-semibold">
                 Hemos recalculado los costos de esta modificación. A continuación se desglosa el impacto contable para el cliente y proveedores:
               </p>
 
               {/* Auditoria de cambios */}
-              <div className="bg-zinc-50 border border-zinc-150 rounded-md p-4 space-y-2">
-                <span className="text-[9px] uppercase font-bold text-zinc-450 block">Detalles del Ajuste</span>
+              <div className="bg-zinc-50 border border-zinc-100 rounded-md p-4 space-y-2">
+                <span className="text-[9px] uppercase font-bold text-zinc-400 block">Detalles del Ajuste</span>
                 <ul className="space-y-1.5 text-xs text-zinc-700 font-medium">
                   {financialImpactPreview.log.map((logItem: string, i: number) => (
                     <li key={i} className="flex gap-2 items-start leading-normal">
@@ -6843,23 +6878,24 @@ export default function ReservasView({
 
             {/* Footer */}
             <div className="bg-zinc-50 border-t border-zinc-200 px-5 py-4 flex justify-between gap-3 font-semibold">
-              <button
+              <Button
                 type="button"
                 onClick={() => {
                   setFinancialImpactPreview(null);
                   setPendingSaveReservation(null);
                 }}
-                className="px-4 py-2 border border-zinc-250 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase cursor-pointer"
+                variant="secondary"
+                className="uppercase"
               >
                 Volver y Editar
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 onClick={handleConfirmFinancialImpactSave}
-                className="px-5 py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase cursor-pointer shadow-xs flex items-center gap-1.5"
+                className="uppercase shadow-xs"
               >
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Confirmar y Guardar
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -6983,7 +7019,7 @@ export default function ReservasView({
                                 {segmentos.length} tramo{segmentos.length !== 1 ? "s" : ""}
                               </span>
                             </div>
-                            <button
+                            <Button
                               id={`btn-vincular-${b.id}`}
                               onClick={() => {
                                 if (!cartLinkedFlights.some(f => f.id === b.id)) {
@@ -6992,11 +7028,12 @@ export default function ReservasView({
                                 setCartFlightNo(prev => prev ? `${prev}, ${b.pnr}` : b.pnr);
                                 setShowBoletoDrawer(false);
                               }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 text-white text-[10px] font-bold rounded hover:bg-zinc-700 transition-colors cursor-pointer flex-shrink-0"
+                              size="sm"
+                              className="flex-shrink-0"
                             >
                               <Plane className="w-3 h-3" />
                               Vincular
-                            </button>
+                            </Button>
                           </div>
 
                           {/* Ruta visual */}
@@ -7033,11 +7070,7 @@ export default function ReservasView({
                                 <ArrowRight className="w-2.5 h-2.5 text-zinc-300 flex-shrink-0" />
                                 <span className="font-bold text-zinc-800">{seg.destino}</span>
                                 <span className="ml-auto text-zinc-400 font-mono">{seg.horaSalida}</span>
-                                <span className={`text-[8px] font-black px-1 py-0.5 rounded border ${
-                                  seg.status.startsWith("HK")
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                    : "bg-amber-50 text-amber-700 border-amber-200"
-                                }`}>{seg.status}</span>
+                                <Badge variant={seg.status.startsWith("HK") ? "success" : "warning"}>{seg.status}</Badge>
                               </div>
                             ))}
                           </div>
@@ -7062,15 +7095,15 @@ export default function ReservasView({
                               </span>
                             </div>
                             {margen !== null && (
-                              <span className={`font-bold px-1.5 py-0.5 rounded ${
+                              <Badge variant={
                                 parseFloat(margen) >= 10
-                                  ? "bg-emerald-50 text-emerald-700"
+                                  ? "success"
                                   : parseFloat(margen) >= 5
-                                  ? "bg-amber-50 text-amber-700"
-                                  : "bg-red-50 text-red-700"
-                              }`}>
+                                  ? "warning"
+                                  : "danger"
+                              }>
                                 Margen {margen}%
-                              </span>
+                              </Badge>
                             )}
                           </div>
                         </div>
@@ -7187,19 +7220,20 @@ export default function ReservasView({
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-2">
-                <button
+                <Button
                   type="button"
                   onClick={() => setShowNewDirectClientModal(false)}
-                  className="px-4 py-2 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                  variant="secondary"
+                  className="uppercase tracking-wider"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  className="px-6 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer"
+                  className="uppercase tracking-wider"
                 >
                   Guardar y Seleccionar
-                </button>
+                </Button>
               </div>
             </form>
           </div>

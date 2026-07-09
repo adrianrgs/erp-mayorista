@@ -218,14 +218,14 @@ export default function AdministracionView({
     <div className="space-y-8 font-sans pb-8">
       
       {/* HEADER SECTION */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-150 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-100 pb-5">
         <div>
           <h2 className="text-zinc-950 font-black text-2xl tracking-tight uppercase">BI & Comando Directivo</h2>
           <p className="text-xs text-zinc-500 font-semibold mt-0.5 uppercase tracking-wider">Monitoreo de Salud Financiera y Rendimiento Comercial Mayorista</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-          <span className="text-[10px] uppercase font-black tracking-widest text-zinc-455">Datos Actualizados en Tiempo Real</span>
+          <span className="text-[10px] uppercase font-black tracking-widest text-zinc-500">Datos Actualizados en Tiempo Real</span>
         </div>
       </div>
 
@@ -247,7 +247,7 @@ export default function AdministracionView({
               ${Math.round(totalPvpSales).toLocaleString("es-ES")} <span className="text-[10px] font-bold text-zinc-400">USD</span>
             </h3>
           </div>
-          <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-450 font-medium">
+          <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
             <span>Volumen Público</span>
             <Globe className="w-4 h-4 text-blue-500" />
           </div>
@@ -261,7 +261,7 @@ export default function AdministracionView({
               ${totalGrossSales.toLocaleString("es-ES")} <span className="text-[10px] font-bold text-zinc-400">USD</span>
             </h3>
           </div>
-          <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-450 font-medium">
+          <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
             <span>Billed to B2B</span>
             <TrendingUp className="w-4 h-4 text-indigo-500" />
           </div>
@@ -270,12 +270,12 @@ export default function AdministracionView({
         {/* Comisiones Cedidas B2B (Descuentos otorgados) */}
         <div className="bg-white border border-zinc-200 rounded-xl p-4.5 relative overflow-hidden shadow-2xs flex flex-col justify-between">
           <div className="space-y-1">
-            <span className="text-[9px] uppercase font-black tracking-widest text-zinc-450 block">Comisiones B2B Cedidas</span>
+            <span className="text-[9px] uppercase font-black tracking-widest text-zinc-400 block">Comisiones B2B Cedidas</span>
             <h3 className="text-2xl font-black text-zinc-900 tracking-tight text-amber-700">
               -${Math.round(totalB2BCommissions).toLocaleString("es-ES")} <span className="text-[10px] font-bold text-zinc-400">USD</span>
             </h3>
           </div>
-          <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-450 font-medium">
+          <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
             <span>Retenido por Agencias</span>
             <Percent className="w-4 h-4 text-amber-500" />
           </div>
@@ -289,7 +289,7 @@ export default function AdministracionView({
               ${projectedProfit.toLocaleString("es-ES")} <span className="text-[10px] font-bold text-zinc-400">USD</span>
             </h3>
           </div>
-          <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-450 font-semibold">
+          <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-semibold">
             <span>Markup: {profitMarginPercent}%</span>
             <Wallet className="w-4 h-4 text-emerald-500" />
           </div>
@@ -303,7 +303,7 @@ export default function AdministracionView({
               ${realLiquidity.toLocaleString("es-ES")} <span className="text-[10px] font-bold text-zinc-400">USD</span>
             </h3>
           </div>
-          <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-450 font-medium">
+          <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
             <span>Ratio Cashflow</span>
             <Activity className={`w-4 h-4 ${realLiquidity >= 0 ? "text-emerald-500 animate-pulse" : "text-red-500"}`} />
           </div>
@@ -321,10 +321,10 @@ export default function AdministracionView({
           <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-4 shadow-xs">
             <div className="flex justify-between items-center">
               <div>
-                <h4 className="font-extrabold text-zinc-955 text-sm uppercase tracking-wider">Top 5 Agencias B2B del Mes</h4>
-                <p className="text-[10.5px] text-zinc-450 font-semibold mt-0.5 uppercase tracking-wide">Rendimiento por facturación y volumen de reservas</p>
+                <h4 className="font-extrabold text-zinc-950 text-sm uppercase tracking-wider">Top 5 Agencias B2B del Mes</h4>
+                <p className="text-[10.5px] text-zinc-400 font-semibold mt-0.5 uppercase tracking-wide">Rendimiento por facturación y volumen de reservas</p>
               </div>
-              <span className="px-2 py-0.5 bg-zinc-100 text-zinc-650 rounded text-[9px] font-black uppercase">
+              <span className="px-2 py-0.5 bg-zinc-100 text-zinc-600 rounded text-[9px] font-black uppercase">
                 Ranking MTD
               </span>
             </div>
@@ -338,7 +338,7 @@ export default function AdministracionView({
                     </span>
                     <div className="space-y-0.5">
                       <span className="font-black text-xs text-zinc-900 block">{agency.name}</span>
-                      <span className="text-[10px] text-zinc-450 font-semibold block uppercase">{agency.count} Expedientes emitidos</span>
+                      <span className="text-[10px] text-zinc-400 font-semibold block uppercase">{agency.count} Expedientes emitidos</span>
                     </div>
                   </div>
                   <div className="text-right font-mono">
@@ -356,8 +356,8 @@ export default function AdministracionView({
           {/* Rendimiento de Destinos/Hoteles */}
           <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-4 shadow-xs">
             <div>
-              <h4 className="font-extrabold text-zinc-955 text-sm uppercase tracking-wider">Rendimiento de Propiedades & Destinos</h4>
-              <p className="text-[10.5px] text-zinc-455 font-semibold mt-0.5 uppercase tracking-wide">Listado de hoteles con mayor tracción comercial</p>
+              <h4 className="font-extrabold text-zinc-950 text-sm uppercase tracking-wider">Rendimiento de Propiedades & Destinos</h4>
+              <p className="text-[10.5px] text-zinc-500 font-semibold mt-0.5 uppercase tracking-wide">Listado de hoteles con mayor tracción comercial</p>
             </div>
 
             <div className="divide-y divide-zinc-100">
@@ -365,7 +365,7 @@ export default function AdministracionView({
                 <div key={hotel.name} className="py-3.5 flex items-center justify-between gap-4">
                   <div className="space-y-0.5">
                     <span className="font-black text-xs text-zinc-900 block">{hotel.name}</span>
-                    <span className="text-[9.5px] text-zinc-450 font-bold uppercase block tracking-wider">📍 {hotel.destination} · {hotel.count} Noches reservadas</span>
+                    <span className="text-[9.5px] text-zinc-400 font-bold uppercase block tracking-wider">📍 {hotel.destination} · {hotel.count} Noches reservadas</span>
                   </div>
                   <div className="text-right">
                     <span className="font-black text-zinc-950 font-mono text-xs block">${hotel.volume.toLocaleString("es-ES")} USD</span>
@@ -392,7 +392,7 @@ export default function AdministracionView({
           <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-5 shadow-xs">
             <div>
               <h4 className="font-extrabold text-zinc-950 text-sm uppercase tracking-wider">Distribución de Ingresos</h4>
-              <p className="text-[10.5px] text-zinc-450 font-semibold mt-0.5 uppercase tracking-wide">Desglose de facturación consolidada por tipo de producto</p>
+              <p className="text-[10.5px] text-zinc-400 font-semibold mt-0.5 uppercase tracking-wide">Desglose de facturación consolidada por tipo de producto</p>
             </div>
 
             <div className="space-y-4">
@@ -449,7 +449,7 @@ export default function AdministracionView({
               </div>
             </div>
             
-            <div className="bg-zinc-50 border border-zinc-150 rounded-lg p-3 text-[10.5px] text-zinc-655 font-semibold leading-relaxed flex gap-2">
+            <div className="bg-zinc-50 border border-zinc-100 rounded-lg p-3 text-[10.5px] text-zinc-700 font-semibold leading-relaxed flex gap-2">
               <Info className="w-4.5 h-4.5 text-zinc-400 flex-shrink-0 mt-0.5" />
               <p>La distribución porcentual rige la priorización de contratos netos negociados con consolidadores.</p>
             </div>
@@ -457,8 +457,8 @@ export default function AdministracionView({
 
           {/* CENTRO DE CONFIGURACIONES GLOBALES */}
           <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-6 shadow-xs">
-            <div className="border-b border-zinc-150 pb-3 flex items-center gap-1.5">
-              <Settings className="w-4.5 h-4.5 text-zinc-850 animate-spin-slow" />
+            <div className="border-b border-zinc-100 pb-3 flex items-center gap-1.5">
+              <Settings className="w-4.5 h-4.5 text-zinc-800 animate-spin-slow" />
               <h4 className="font-extrabold text-zinc-950 text-sm uppercase tracking-wider">Ajustes & Tasa Oficial</h4>
             </div>
 
@@ -468,7 +468,7 @@ export default function AdministracionView({
               
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1 text-left">
-                  <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider">1 USD a EUR (€)</span>
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">1 USD a EUR (€)</span>
                   <input
                     type="number"
                     step="0.001"
@@ -478,7 +478,7 @@ export default function AdministracionView({
                   />
                 </div>
                 <div className="space-y-1 text-left">
-                  <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider">1 USD a VES (Bs)</span>
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">1 USD a VES (Bs)</span>
                   <input
                     type="number"
                     step="0.01"
@@ -499,7 +499,7 @@ export default function AdministracionView({
             </div>
 
             {/* Calculadora de Cotizaciones Alimentada por Tasas */}
-            <div className="pt-4 border-t border-zinc-150 space-y-3">
+            <div className="pt-4 border-t border-zinc-100 space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-[10px] uppercase font-black tracking-widest text-zinc-400">Conversor Rápido de Divisas</span>
                 <div className="flex rounded border border-zinc-200 overflow-hidden font-bold">
@@ -528,10 +528,10 @@ export default function AdministracionView({
                     onChange={e => setCalcUsd(parseFloat(e.target.value) || 0)}
                   />
                 </div>
-                <div className="flex-shrink-0 pt-4 text-zinc-450 font-bold">➔</div>
+                <div className="flex-shrink-0 pt-4 text-zinc-400 font-bold">➔</div>
                 <div className="flex-1 space-y-1">
                   <span className="text-[8.5px] font-bold text-zinc-400 uppercase tracking-wider">Resultado ({calcTarget})</span>
-                  <div className="w-full px-3 py-1.5 bg-zinc-50 border border-zinc-150 rounded-lg text-xs font-black text-zinc-900">
+                  <div className="w-full px-3 py-1.5 bg-zinc-50 border border-zinc-100 rounded-lg text-xs font-black text-zinc-900">
                     {calcTarget === "EUR" ? "€" : "Bs"} {calculatedCalcVal.toLocaleString("es-ES")}
                   </div>
                 </div>
@@ -539,18 +539,18 @@ export default function AdministracionView({
             </div>
 
             {/* Accesos de Empleados / Usuarios Activos */}
-            <div className="pt-4 border-t border-zinc-150 space-y-3">
+            <div className="pt-4 border-t border-zinc-100 space-y-3">
               <span className="text-[10px] uppercase font-black tracking-widest text-zinc-400 block">Monitoreo de Accesos (Usuarios Activos)</span>
               
               <div className="grid grid-cols-2 gap-3 text-left">
                 {departments.map((dept) => (
-                  <div key={dept.name} className="p-2.5 bg-zinc-50 border border-zinc-150 rounded-lg space-y-1 flex flex-col justify-between shadow-2xs">
-                    <span className="text-[9px] font-black text-zinc-650 leading-tight block">{dept.name}</span>
+                  <div key={dept.name} className="p-2.5 bg-zinc-50 border border-zinc-100 rounded-lg space-y-1 flex flex-col justify-between shadow-2xs">
+                    <span className="text-[9px] font-black text-zinc-600 leading-tight block">{dept.name}</span>
                     <div className="flex items-center justify-between gap-2 mt-1">
                       <span className="flex items-center gap-1 text-[11px] font-black text-zinc-900">
                         <span className={`w-1.5 h-1.5 rounded-full ${dept.color}`} /> {dept.active} / {dept.total}
                       </span>
-                      <span className="text-[8px] bg-zinc-200 border border-zinc-250 font-black px-1.5 py-0.25 text-zinc-500 rounded uppercase">
+                      <span className="text-[8px] bg-zinc-200 border border-zinc-200 font-black px-1.5 py-0.25 text-zinc-500 rounded uppercase">
                         Activos
                       </span>
                     </div>

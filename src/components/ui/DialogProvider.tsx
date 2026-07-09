@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
+import Button from "./Button";
 
 type DialogType = "alert" | "confirm";
 
@@ -67,7 +68,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     info: <Info className="w-6 h-6 text-blue-500" />,
     warning: <AlertTriangle className="w-6 h-6 text-amber-500" />,
     danger: <AlertCircle className="w-6 h-6 text-red-500" />,
-    success: <CheckCircle2 className="w-6 h-6 text-green-500" />,
+    success: <CheckCircle2 className="w-6 h-6 text-emerald-500" />,
   };
 
   const currentIcon = options.type ? IconMap[options.type] : IconMap["info"];
@@ -81,7 +82,7 @@ export function DialogProvider({ children }: { children: ReactNode }) {
             {/* Header */}
             <div className="flex justify-between items-start p-5 pb-0">
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-full ${options.type === "danger" ? "bg-red-50" : options.type === "warning" ? "bg-amber-50" : options.type === "success" ? "bg-green-50" : "bg-blue-50"}`}>
+                <div className={`p-2 rounded-full ${options.type === "danger" ? "bg-red-50" : options.type === "warning" ? "bg-amber-50" : options.type === "success" ? "bg-emerald-50" : "bg-blue-50"}`}>
                   {currentIcon}
                 </div>
                 {options.title && (
@@ -119,24 +120,18 @@ export function DialogProvider({ children }: { children: ReactNode }) {
             {/* Footer */}
             <div className="px-5 py-4 bg-zinc-50 border-t border-zinc-200 flex justify-end gap-3">
               {dialogType === "confirm" && (
-                <button
-                  onClick={handleClose}
-                  className="px-4 py-2 bg-white border border-zinc-200 text-zinc-700 rounded-md text-sm font-semibold hover:bg-zinc-100 transition-colors cursor-pointer"
-                >
+                <Button variant="secondary" onClick={handleClose}>
                   {options.cancelText || "Cancelar"}
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                variant={options.type === "danger" ? "danger" : options.type === "warning" ? "warning" : options.type === "success" ? "success" : "primary"}
                 onClick={handleConfirm}
                 disabled={options.requireInputToConfirm ? inputValue !== options.requireInputToConfirm : false}
-                className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors cursor-pointer text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed
-                  ${options.type === "danger" ? "bg-red-600 hover:bg-red-700" : 
-                    options.type === "warning" ? "bg-amber-600 hover:bg-amber-700" : 
-                    options.type === "success" ? "bg-green-600 hover:bg-green-700" : 
-                    "bg-zinc-900 hover:bg-zinc-800"}`}
+                className="shadow-sm"
               >
                 {options.confirmText || (dialogType === "confirm" ? "Confirmar" : "Aceptar")}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

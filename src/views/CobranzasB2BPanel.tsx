@@ -438,7 +438,7 @@ export default function CobranzasB2BPanel({
             <span className="text-2xl font-black block text-zinc-900">{debtorClientsCount} Agencia(s)</span>
             <span className="text-[9.5px] text-zinc-400 font-semibold block">Cuentas corrientes en mora</span>
           </div>
-          <div className="p-2.5 rounded-md border bg-zinc-50 border-zinc-200 text-zinc-650">
+          <div className="p-2.5 rounded-md border bg-zinc-50 border-zinc-200 text-zinc-600">
             <Users className="w-5.5 h-5.5" />
           </div>
         </div>
@@ -468,12 +468,12 @@ export default function CobranzasB2BPanel({
         <div className="lg:col-span-4 bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
           <div>
             <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest">Cartera de Clientes B2B</h4>
-            <p className="text-[10px] text-zinc-450 mt-1">Seleccione un cliente para gestionar sus cuentas corrientes</p>
+            <p className="text-[10px] text-zinc-400 mt-1">Seleccione un cliente para gestionar sus cuentas corrientes</p>
           </div>
 
           {/* Search bar */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-450" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
             <input
               type="text"
               placeholder="Buscar por nombre, RIF..."
@@ -503,7 +503,7 @@ export default function CobranzasB2BPanel({
                 >
                   <div className="space-y-0.5 max-w-[65%]">
                     <p className="font-extrabold text-[11.5px] truncate">{client.nombre}</p>
-                    <p className={`text-[9.5px] font-mono ${isSelected ? "text-zinc-400" : "text-zinc-450"}`}>RIF: {client.rif}</p>
+                    <p className={`text-[9.5px] font-mono ${isSelected ? "text-zinc-400" : "text-zinc-400"}`}>RIF: {client.rif}</p>
                   </div>
                   <div className="text-right">
                     <span className={`text-[11.5px] font-black block font-mono ${
@@ -511,7 +511,7 @@ export default function CobranzasB2BPanel({
                         ? "text-white" 
                         : hasDebt 
                           ? "text-red-650" 
-                          : "text-zinc-450"
+                          : "text-zinc-400"
                     }`}>
                       ${client.saldoDeber.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
                     </span>
@@ -537,12 +537,12 @@ export default function CobranzasB2BPanel({
             <>
               {/* Client standing info card */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-150 pb-3 gap-3">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-100 pb-3 gap-3">
                   <div>
                     <span className="px-2 py-0.5 bg-zinc-100 border border-zinc-200 rounded text-[9px] font-bold text-zinc-700 uppercase">
                       ID: {activeClient.id}
                     </span>
-                    <h3 className="font-black text-base text-zinc-955 uppercase mt-1.5">{activeClient.nombre}</h3>
+                    <h3 className="font-black text-base text-zinc-950 uppercase mt-1.5">{activeClient.nombre}</h3>
                   </div>
                   <div>
                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
@@ -558,21 +558,21 @@ export default function CobranzasB2BPanel({
                 {/* Balances summary */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="bg-zinc-50 p-3.5 rounded-md border border-zinc-200 text-left">
-                    <span className="text-[9px] text-zinc-450 uppercase font-bold tracking-wider block">Saldo Deudor Acumulado</span>
+                    <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Saldo Deudor Acumulado</span>
                     <p className="font-black text-red-650 text-base mt-1 font-mono">
                       ${activeClient.saldoDeber.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
                     </p>
                   </div>
                   
                   <div className="bg-zinc-50 p-3.5 rounded-md border border-zinc-200 text-left">
-                    <span className="text-[9px] text-zinc-455 uppercase font-bold tracking-wider block">Límite de Crédito Mayorista</span>
+                    <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider block">Límite de Crédito Mayorista</span>
                     <p className="font-bold text-zinc-800 text-sm mt-1 font-mono">
                       ${(activeClient.limiteCredito || 0).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
                     </p>
                   </div>
 
                   <div className="bg-zinc-50 p-3.5 rounded-md border border-zinc-200 text-left">
-                    <span className="text-[9px] text-zinc-450 uppercase font-bold tracking-wider block">Saldo a Favor (Abonos)</span>
+                    <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Saldo a Favor (Abonos)</span>
                     <div className="flex items-end justify-between mt-1">
                       <p className="font-black text-emerald-700 text-sm font-mono">
                         +${activeClient.saldoFavor.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
@@ -593,7 +593,7 @@ export default function CobranzasB2BPanel({
                 {/* Credit limit visual indicator */}
                 {activeClient.limiteCredito && activeClient.limiteCredito > 0 && (
                   <div className="space-y-1.5 pt-1">
-                    <div className="flex justify-between items-center text-[10.5px] font-bold text-zinc-650">
+                    <div className="flex justify-between items-center text-[10.5px] font-bold text-zinc-600">
                       <span>Uso de Línea de Crédito</span>
                       <span>
                         {Math.min(100, Math.round((activeClient.saldoDeber / activeClient.limiteCredito) * 100))}% Utilizado
@@ -601,7 +601,7 @@ export default function CobranzasB2BPanel({
                     </div>
                     <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden border border-zinc-200">
                       <div 
-                        className={`h-full rounded-full transition-all duration-505 ${
+                        className={`h-full rounded-full transition-all duration-500 ${
                           (activeClient.saldoDeber / activeClient.limiteCredito) > 0.8
                             ? "bg-red-500"
                             : (activeClient.saldoDeber / activeClient.limiteCredito) > 0.5
@@ -764,7 +764,7 @@ export default function CobranzasB2BPanel({
                     className={`px-5 py-3.5 border-r border-zinc-200 transition-all cursor-pointer flex items-center gap-1.5 ${
                       activeTab === "facturas"
                         ? "bg-white text-zinc-950 border-b-2 border-b-zinc-950 font-black"
-                        : "text-zinc-450 hover:text-zinc-805"
+                        : "text-zinc-400 hover:text-zinc-800"
                     }`}
                   >
                     <FileText className="w-4 h-4" /> Facturas Pendientes
@@ -773,8 +773,8 @@ export default function CobranzasB2BPanel({
                     onClick={() => setActiveTab("comprobantes")}
                     className={`px-5 py-3.5 border-r border-zinc-200 transition-all cursor-pointer flex items-center gap-1.5 ${
                       activeTab === "comprobantes"
-                        ? "bg-white text-zinc-955 border-b-2 border-b-zinc-955 font-black"
-                        : "text-zinc-450 hover:text-zinc-805"
+                        ? "bg-white text-zinc-950 border-b-2 border-b-zinc-950 font-black"
+                        : "text-zinc-400 hover:text-zinc-800"
                     }`}
                   >
                     <CreditCard className="w-4 h-4" /> Registro de Comprobantes
@@ -790,7 +790,7 @@ export default function CobranzasB2BPanel({
                       className={`px-5 py-3.5 border-r border-zinc-200 transition-all cursor-pointer flex items-center gap-1.5 ${
                         activeTab === "retenciones"
                           ? "bg-white text-indigo-700 border-b-2 border-b-indigo-600 font-black"
-                          : "text-zinc-450 hover:text-zinc-805"
+                          : "text-zinc-400 hover:text-zinc-800"
                       }`}
                     >
                       <Scale className="w-4 h-4" /> Retenciones
@@ -1007,7 +1007,7 @@ export default function CobranzasB2BPanel({
                       return (
                         <div className="space-y-4">
                           <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-450" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
                             <input
                               type="text"
                               placeholder="Buscar factura por código o expediente (ej. FAC-1234 o RES-5678)..."
@@ -1031,7 +1031,7 @@ export default function CobranzasB2BPanel({
                               <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
                                 {filteredInvoices.length === 0 ? (
                                   <tr>
-                                    <td colSpan={6} className="p-6 text-center text-zinc-450 italic bg-zinc-50/20">
+                                    <td colSpan={6} className="p-6 text-center text-zinc-400 italic bg-zinc-50/20">
                                       {invoiceSearchQuery ? "No se encontraron facturas ni expedientes que coincidan con la búsqueda." : "Este cliente no posee facturas pendientes de cobro en cartera."}
                                     </td>
                                   </tr>
@@ -1121,20 +1121,20 @@ export default function CobranzasB2BPanel({
                               <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
                                 {clientVouchers.length === 0 ? (
                                   <tr>
-                                    <td colSpan={6} className="p-6 text-center text-zinc-450 italic bg-zinc-50/20">
+                                    <td colSpan={6} className="p-6 text-center text-zinc-400 italic bg-zinc-50/20">
                                       No se registran comprobantes de pago reportados por esta agencia.
                                     </td>
                                   </tr>
                                 ) : (
                                   clientVouchers.map((vou) => (
                                     <tr key={vou.id} className="hover:bg-zinc-50/50 transition-colors">
-                                      <td className="p-3 font-mono font-bold text-zinc-650">
+                                      <td className="p-3 font-mono font-bold text-zinc-600">
                                         <p>{vou.id}</p>
                                         {vou.invoiceId && <p className="text-[9px] text-zinc-400 font-normal">Factura: {vou.invoiceId}</p>}
                                       </td>
                                       <td className="p-3 text-zinc-800">
                                         <p className="font-bold font-mono">{vou.reference}</p>
-                                        <p className="text-[9.5px] text-zinc-455">{vou.method} {vou.bankName ? `(${vou.bankName})` : ""}</p>
+                                        <p className="text-[9.5px] text-zinc-500">{vou.method} {vou.bankName ? `(${vou.bankName})` : ""}</p>
                                       </td>
                                       <td className="p-3 text-right font-mono font-black text-zinc-900">${vou.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
                                       <td className="p-3 font-mono text-[10.5px]">{formatDate(vou.date)}</td>
@@ -1171,7 +1171,7 @@ export default function CobranzasB2BPanel({
                                             <div className="flex gap-1.5 justify-end">
                                               <button
                                                 onClick={() => handleVerifyVoucher(vou, false)}
-                                                className="p-1 hover:bg-red-50 hover:text-red-700 border border-zinc-200 text-zinc-450 rounded cursor-pointer transition-colors"
+                                                className="p-1 hover:bg-red-50 hover:text-red-700 border border-zinc-200 text-zinc-400 rounded cursor-pointer transition-colors"
                                                 title="Rechazar Comprobante"
                                               >
                                                 <X className="w-3.5 h-3.5" />
@@ -1202,7 +1202,7 @@ export default function CobranzasB2BPanel({
               </div>
             </>
           ) : (
-            <div className="bg-white border border-zinc-200 rounded-lg p-10 text-center text-zinc-450 italic shadow-xs">
+            <div className="bg-white border border-zinc-200 rounded-lg p-10 text-center text-zinc-400 italic shadow-xs">
               No se ha seleccionado ninguna agencia B2B en la cartera.
             </div>
           )}
@@ -1239,7 +1239,7 @@ export default function CobranzasB2BPanel({
                   <input
                     type="text"
                     readOnly
-                    className="w-full p-2 border border-zinc-200 bg-zinc-50 rounded text-xs font-mono font-bold text-zinc-550 focus:outline-none"
+                    className="w-full p-2 border border-zinc-200 bg-zinc-50 rounded text-xs font-mono font-bold text-zinc-500 focus:outline-none"
                     value={paymentForm.invoiceId}
                   />
                 </div>
@@ -1346,7 +1346,7 @@ export default function CobranzasB2BPanel({
                       }
                     }}
                   />
-                  <UploadCloud className="w-6 h-6 text-zinc-450 mb-1" />
+                  <UploadCloud className="w-6 h-6 text-zinc-400 mb-1" />
                   {paymentForm.attachedFile ? (
                     <p className="text-[10.5px] font-bold text-zinc-800">✓ Archivo: {paymentForm.attachedFile}</p>
                   ) : (
@@ -1369,7 +1369,7 @@ export default function CobranzasB2BPanel({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs"
+                  className="px-5 py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-xs"
                 >
                   Saldar y Conciliar
                 </button>
@@ -1431,36 +1431,36 @@ export default function CobranzasB2BPanel({
                 {/* Receipt Fields */}
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">ID Voucher:</span>
+                    <span className="text-zinc-400 uppercase text-[9px] font-bold font-sans">ID Voucher:</span>
                     <span className="font-bold">{selectedVoucherForPreview.id}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">Cliente B2B:</span>
+                    <span className="text-zinc-400 uppercase text-[9px] font-bold font-sans">Cliente B2B:</span>
                     <span className="font-bold uppercase text-right max-w-[70%] truncate" title={selectedVoucherForPreview.clientName}>
                       {selectedVoucherForPreview.clientName}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">Referencia:</span>
+                    <span className="text-zinc-400 uppercase text-[9px] font-bold font-sans">Referencia:</span>
                     <span className="font-bold font-mono">{selectedVoucherForPreview.reference}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">Canal/Método:</span>
+                    <span className="text-zinc-400 uppercase text-[9px] font-bold font-sans">Canal/Método:</span>
                     <span className="font-bold">{selectedVoucherForPreview.method}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">Fecha Valor:</span>
+                    <span className="text-zinc-400 uppercase text-[9px] font-bold font-sans">Fecha Valor:</span>
                     <span className="font-bold font-mono">{selectedVoucherForPreview.date}</span>
                   </div>
                   {selectedVoucherForPreview.invoiceId && (
                     <div className="flex justify-between">
-                      <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">Factura Ref:</span>
+                      <span className="text-zinc-400 uppercase text-[9px] font-bold font-sans">Factura Ref:</span>
                       <span className="font-bold font-mono">{selectedVoucherForPreview.invoiceId}</span>
                     </div>
                   )}
                   {selectedVoucherForPreview.locatorId && (
                     <div className="flex justify-between">
-                      <span className="text-zinc-450 uppercase text-[9px] font-bold font-sans">Expediente:</span>
+                      <span className="text-zinc-400 uppercase text-[9px] font-bold font-sans">Expediente:</span>
                       <span className="font-bold font-mono text-zinc-900">{selectedVoucherForPreview.locatorId}</span>
                     </div>
                   )}
@@ -1493,7 +1493,7 @@ export default function CobranzasB2BPanel({
                 <button
                   type="button"
                   onClick={() => setSelectedVoucherForPreview(null)}
-                  className="w-full py-2.5 bg-zinc-950 hover:bg-zinc-850 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer text-center"
+                  className="w-full py-2.5 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer text-center"
                 >
                   Cerrar Vista
                 </button>
@@ -1535,11 +1535,11 @@ export default function CobranzasB2BPanel({
                 <div className="border-b-2 border-zinc-900 pb-4 mb-4">
                   <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded bg-zinc-955 text-white flex items-center justify-center font-black text-lg flex-shrink-0">
+                      <div className="w-9 h-9 rounded bg-zinc-950 text-white flex items-center justify-center font-black text-lg flex-shrink-0">
                         {companyConfig.logoLetter}
                       </div>
                       <div>
-                        <h1 className="text-2xl font-black tracking-tight text-zinc-955 uppercase leading-none">{companyConfig.name}</h1>
+                        <h1 className="text-2xl font-black tracking-tight text-zinc-950 uppercase leading-none">{companyConfig.name}</h1>
                         <p className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider mt-1">{companyConfig.subtitle}</p>
                       </div>
                     </div>
