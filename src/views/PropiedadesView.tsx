@@ -1226,14 +1226,14 @@ export default function PropiedadesView({
                   <ShieldAlert className="w-4 h-5 text-zinc-800" />
                   <h5 className="font-bold text-zinc-900 text-xs uppercase tracking-wider">Declarar Cierre Temporal de Ventas (Stop Sale)</h5>
                 </div>
-                {puede(ProjectView.PROPIEDADES, AccionPermiso.CREAR) && (
-                  <MultiDayCalendar
-                    propertyId={activePropertyId}
-                    stopSales={stopSales}
-                    onAddStopSale={handleAddStopSaleWithNotify}
-                    onDeleteStopSale={handleDeleteStopSale}
-                  />
-                )}
+                <MultiDayCalendar
+                  propertyId={activePropertyId}
+                  stopSales={stopSales}
+                  onAddStopSale={handleAddStopSaleWithNotify}
+                  onDeleteStopSale={handleDeleteStopSale}
+                  puedeCrear={puede(ProjectView.PROPIEDADES, AccionPermiso.CREAR)}
+                  puedeEliminar={puede(ProjectView.PROPIEDADES, AccionPermiso.ELIMINAR)}
+                />
 
                 {/* List of active Stop Sales for active property */}
                 <div className="space-y-3">
@@ -1244,6 +1244,7 @@ export default function PropiedadesView({
                       <thead>
                         <tr className="bg-zinc-50 font-bold text-zinc-500 uppercase tracking-wider text-[9px]">
                           <th className="p-3">Código Cierre</th>
+                          <th className="p-3">Tipo</th>
                           <th className="p-3">Desde (Inicio)</th>
                           <th className="p-3">Hasta (Fin)</th>
                           <th className="p-3">Descripción / Motivo</th>
@@ -1253,7 +1254,7 @@ export default function PropiedadesView({
                       <tbody className="divide-y divide-zinc-100 font-medium">
                         {stopSales.filter(s => s.property_id === activePropertyId).length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="p-5 text-center text-zinc-450 italic bg-white">
+                            <td colSpan={6} className="p-5 text-center text-zinc-450 italic bg-white">
                               No hay Stop Sales o cierres configurados para este hotel. Todo el periodo se mantiene con ventas abiertas.
                             </td>
                           </tr>
@@ -1261,6 +1262,13 @@ export default function PropiedadesView({
                           stopSales.filter(s => s.property_id === activePropertyId).map(s => (
                             <tr key={s.id}>
                               <td className="p-3 font-mono font-bold text-zinc-650">{s.id}</td>
+                              <td className="p-3">
+                                {(s.tipo ?? "Cierre") === "EnSolicitud" ? (
+                                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200 font-bold uppercase text-[9px]">Bajo Solicitud</span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded bg-red-100 text-red-700 border border-red-200 font-bold uppercase text-[9px]">Cierre</span>
+                                )}
+                              </td>
                               <td className="p-3 text-zinc-900">{formatDate(s.fechaInicio)}</td>
                               <td className="p-3 text-zinc-900">{formatDate(s.fechaFin)}</td>
                               <td className="p-3 text-zinc-650">{s.motivo || "Cierre de contingencia"}</td>

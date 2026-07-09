@@ -255,15 +255,15 @@ mutation UpdateRatePlan($id: String!, $propertyId: String, $roomTypeId: String, 
     updatedAt: $updatedAt, propertyId: $propertyId, roomTypeId: $roomTypeId, nombrePromocion: $nombrePromocion, fechaInicio: $fechaInicio, fechaFin: $fechaFin, tipoCobro: $tipoCobro, tarifaBase: $tarifaBase, tarifaExtraAdulto: $tarifaExtraAdulto, tarifaExtraNino: $tarifaExtraNino, politicasCancelacion: $politicasCancelacion, mercado: $mercado, comisionCedidaB2B: $comisionCedidaB2B })
 }
 
-mutation InsertStopSale($id: String!, $propertyId: String!, $fechaInicio: String!, $fechaFin: String!, $motivo: String, $updatedAt: String) @auth(level: PUBLIC) {
+mutation InsertStopSale($id: String!, $propertyId: String!, $fechaInicio: String!, $fechaFin: String!, $motivo: String, $tipo: String, $updatedAt: String) @auth(level: PUBLIC) {
   stopSale_insert(data: { id: $id,
-    updatedAt: $updatedAt, propertyId: $propertyId, fechaInicio: $fechaInicio, fechaFin: $fechaFin, motivo: $motivo })
+    updatedAt: $updatedAt, propertyId: $propertyId, fechaInicio: $fechaInicio, fechaFin: $fechaFin, motivo: $motivo, tipo: $tipo })
 }
 
-mutation UpdateStopSale($id: String!, $propertyId: String, $fechaInicio: String, $fechaFin: String, $motivo: String, $updatedAt: String) @auth(level: PUBLIC) {
+mutation UpdateStopSale($id: String!, $propertyId: String, $fechaInicio: String, $fechaFin: String, $motivo: String, $tipo: String, $updatedAt: String) @auth(level: PUBLIC) {
   stopSale_update(id: $id,
     data: {
-    updatedAt: $updatedAt, propertyId: $propertyId, fechaInicio: $fechaInicio, fechaFin: $fechaFin, motivo: $motivo })
+    updatedAt: $updatedAt, propertyId: $propertyId, fechaInicio: $fechaInicio, fechaFin: $fechaFin, motivo: $motivo, tipo: $tipo })
 }
 
 mutation InsertFlightTicket(

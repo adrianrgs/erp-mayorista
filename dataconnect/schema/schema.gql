@@ -46,6 +46,7 @@ type StopSale @table {
   fechaInicio: String!
   fechaFin: String!
   motivo: String
+  tipo: String
   updatedAt: String
 }
 

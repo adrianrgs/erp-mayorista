@@ -62,12 +62,18 @@ export interface RatePlan {
   comisionCedidaB2B?: number;
 }
 
+// "Cierre" = stop sale duro (no hay disponibilidad, se muestra en rojo). "EnSolicitud" = hay que
+// preguntarle al hotel si tiene disponibilidad antes de confirmar (se muestra en amarillo).
+// Los registros existentes sin `tipo` (creados antes de este campo) se tratan como "Cierre".
+export type StopSaleTipo = "Cierre" | "EnSolicitud";
+
 export interface StopSale {
   id: string;
   property_id: string;
   fechaInicio: string; // YYYY-MM-DD
   fechaFin: string; // YYYY-MM-DD
   motivo?: string;
+  tipo?: StopSaleTipo;
 }
 
 // Fecha mínima permisiva para editar RatePlan/ServiceRate: estos formularios editan

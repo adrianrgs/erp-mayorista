@@ -1494,7 +1494,8 @@ export default function App() {
         propertyId: newStop.property_id,
         fechaInicio: newStop.fechaInicio,
         fechaFin: newStop.fechaFin,
-        motivo: newStop.motivo
+        motivo: newStop.motivo,
+        tipo: newStop.tipo
       });
     } catch (e) {
       console.error("Error in handleAddStopSale:", e);
@@ -1508,7 +1509,8 @@ export default function App() {
         propertyId: updatedStop.property_id,
         fechaInicio: updatedStop.fechaInicio,
         fechaFin: updatedStop.fechaFin,
-        motivo: updatedStop.motivo
+        motivo: updatedStop.motivo,
+        tipo: updatedStop.tipo
       });
     } catch (e) {
       console.error("Error in handleUpdateStopSale:", e);

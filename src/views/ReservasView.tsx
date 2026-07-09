@@ -433,34 +433,48 @@ export default function ReservasView({
     const key = `${hotelId}|${checkInDate}|${checkOutDate}`;
     if (lastWarnedStopSaleKeyRef.current === key) return;
 
-    // Recorre cada noche de la estadía y marca si esa fecha puntual cae dentro de algún
-    // Stop Sale del hotel, para mostrar la secuencia día por día (verde = libre, rojo =
-    // con cierre) en vez de un aviso genérico de "hay solape".
-    const nightDays: { day: number; iso: string; blocked: boolean }[] = [];
+    // Recorre cada noche de la estadía y clasifica esa fecha puntual según el StopSale del
+    // hotel que la cubra (si hay varios solapados, el cierre duro prevalece sobre "en
+    // solicitud"), para mostrar la secuencia día por día (verde = libre, rojo = cierre,
+    // ámbar = bajo solicitud) en vez de un aviso genérico de "hay solape".
+    const nightDays: { day: number; iso: string; estado: "libre" | "cierre" | "solicitud" }[] = [];
     let cursor = new Date(checkInDate);
     const end = new Date(checkOutDate);
     while (cursor < end) {
       const iso = cursor.toISOString().split("T")[0];
-      const blocked = stopSales.some(s => s.property_id === hotelId && iso >= s.fechaInicio && iso <= s.fechaFin);
-      nightDays.push({ day: cursor.getUTCDate(), iso, blocked });
+      const matches = stopSales.filter(s => s.property_id === hotelId && iso >= s.fechaInicio && iso <= s.fechaFin);
+      const estado: "libre" | "cierre" | "solicitud" =
+        matches.some(s => (s.tipo ?? "Cierre") === "Cierre") ? "cierre" :
+        matches.length > 0 ? "solicitud" : "libre";
+      nightDays.push({ day: cursor.getUTCDate(), iso, estado });
       cursor = new Date(cursor.getTime() + 86400000);
     }
 
-    if (nightDays.some(d => d.blocked)) {
+    const hayCierre = nightDays.some(d => d.estado === "cierre");
+    const haySolicitud = nightDays.some(d => d.estado === "solicitud");
+
+    if (hayCierre || haySolicitud) {
       lastWarnedStopSaleKeyRef.current = key;
       showAlert({
-        title: "Stop Sale Registrado",
+        title: hayCierre ? "Stop Sale Registrado" : "Disponibilidad Bajo Solicitud",
         message: (
           <div className="space-y-2.5">
-            <p>El hotel seleccionado tiene un Stop Sale (cierre de ventas) vigente que se solapa con las fechas elegidas. Puede continuar si el hotel confirma disponibilidad igualmente.</p>
+            {hayCierre && (
+              <p>El hotel seleccionado tiene un Stop Sale (cierre de ventas) vigente que se solapa con las fechas elegidas. Puede continuar si el hotel confirma disponibilidad igualmente.</p>
+            )}
+            {haySolicitud && (
+              <p>Parte de la estadía cae en fechas marcadas como "Bajo Solicitud": consulte con el hotel si hay disponibilidad antes de confirmar.</p>
+            )}
             <div className="flex flex-wrap gap-1.5">
               {nightDays.map(d => (
                 <span
                   key={d.iso}
                   title={d.iso}
                   className={`inline-flex items-center justify-center w-7 h-7 rounded-md text-xs font-bold border ${
-                    d.blocked
+                    d.estado === "cierre"
                       ? "bg-red-100 text-red-700 border-red-300"
+                      : d.estado === "solicitud"
+                      ? "bg-amber-100 text-amber-700 border-amber-300"
                       : "bg-emerald-100 text-emerald-700 border-emerald-300"
                   }`}
                 >
