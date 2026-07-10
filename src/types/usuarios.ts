@@ -117,7 +117,26 @@ export interface SolicitudAutorizacion {
   resolvedAt?: string;
 }
 
-export type TipoRegistroAuditoria = "Login" | "CambioRolUsuario" | "CambioPermisosRol" | "SolicitudCreada" | "SolicitudResuelta";
+export type TipoRegistroAuditoria =
+  | "Login"
+  | "CambioRolUsuario"
+  | "CambioPermisosRol"
+  | "SolicitudCreada"
+  | "SolicitudResuelta"
+  // Eventos del ciclo de vida de un expediente de reserva (historial por expediente)
+  | "ReservaCreada"
+  | "ReservaModificada"
+  | "ReservaCancelada"
+  | "ReservaEliminada"
+  | "FacturaEmitida"
+  | "FacturaModificada"
+  | "CobroRegistrado"
+  | "CobroModificado"
+  | "PagoProveedor"
+  | "ObligacionCreada"
+  | "BoletoEmitido"
+  | "BoletoModificado"
+  | "TrasladoAsignado";
 
 export interface RegistroAuditoria {
   id: string;
@@ -125,5 +144,8 @@ export interface RegistroAuditoria {
   usuarioId: string;
   usuarioNombre: string;
   detalle: string;
+  // Vínculo opcional a una entidad concreta (p. ej. entidadTipo="Reserva", entidadId=localizador)
+  entidadTipo?: string;
+  entidadId?: string;
   createdAt: string;
 }

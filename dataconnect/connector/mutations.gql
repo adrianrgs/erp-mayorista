@@ -1219,6 +1219,8 @@ mutation InsertRegistroAuditoria(
   $usuarioId: String!
   $usuarioNombre: String!
   $detalle: String
+  $entidadTipo: String
+  $entidadId: String
   $createdAt: String!
 ) @auth(level: PUBLIC) {
   registroAuditoria_insert(data: {
@@ -1227,6 +1229,8 @@ mutation InsertRegistroAuditoria(
     usuarioId: $usuarioId
     usuarioNombre: $usuarioNombre
     detalle: $detalle
+    entidadTipo: $entidadTipo
+    entidadId: $entidadId
     createdAt: $createdAt
   })
 }

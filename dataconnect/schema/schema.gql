@@ -467,5 +467,9 @@ type RegistroAuditoria @table {
   usuarioId: String!
   usuarioNombre: String!
   detalle: String
+  # Vínculo opcional a una entidad concreta (p. ej. "Reserva" + id del expediente),
+  # para poder filtrar el historial por expediente. Nullable: filas antiguas no lo tienen.
+  entidadTipo: String
+  entidadId: String @col(dataType: "varchar(50)")
   createdAt: String!
 }

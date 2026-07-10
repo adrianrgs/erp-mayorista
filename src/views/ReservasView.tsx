@@ -45,7 +45,8 @@ import {
   Send,
   Clock,
   ArrowRight,
-  Activity
+  Activity,
+  History
 } from "lucide-react";
 import { FinancialInvoice, PayableObligation, PaymentVoucher } from "../types";
 import { useDialog } from "../components/ui/DialogProvider";
@@ -91,6 +92,9 @@ interface ReservasViewProps {
   reglasAutorizacion?: ReglaAutorizacion[];
   onCreateSolicitudAutorizacion?: (solicitud: SolicitudAutorizacion) => void;
   onAddRegistroAuditoria?: (registro: Omit<RegistroAuditoria, "createdAt">) => void;
+  // Bitácora global de auditoría (solo lectura). El expediente filtra los eventos ligados a
+  // esta reserva (entidadTipo="Reserva", entidadId=id) para la pestaña "Historial".
+  registrosAuditoria?: RegistroAuditoria[];
 }
 
 // Helper to calculate pricing for an individual room. Usa el mismo prorrateo por tramos de
@@ -216,6 +220,7 @@ export default function ReservasView({
   reglasAutorizacion = [],
   onCreateSolicitudAutorizacion = () => {},
   onAddRegistroAuditoria = () => {},
+  registrosAuditoria = [],
 }: ReservasViewProps) {
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const { showAlert, showConfirm } = useDialog();
@@ -229,7 +234,7 @@ export default function ReservasView({
   const [pendingSaveReservation, setPendingSaveReservation] = useState<Reservation | null>(null);
 
   // Pestaña activa dentro del expediente unificado (Level 2)
-  type ExpedienteTab = "resumen" | "datosGenerales" | "pasajeros" | "servicios" | "administracion";
+  type ExpedienteTab = "resumen" | "datosGenerales" | "pasajeros" | "servicios" | "administracion" | "historial";
   const [activeExpedienteTab, setActiveExpedienteTab] = useState<ExpedienteTab>("resumen");
   const [cartPasajeros, setCartPasajeros] = useState<ReservationPassenger[]>([]);
 
@@ -1878,12 +1883,34 @@ export default function ReservasView({
       {/* VIEW LEVEL 1: LISTADO PRINCIPAL */}
       {viewLevel === 1 && (
         <>
+          {/* Toggles (Activos / Anuladas) + acción principal en una misma fila */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-black text-zinc-900 tracking-tight uppercase">Módulo de Reservas y Booking Terrestre</h2>
-              <p className="text-xs text-zinc-400 mt-1">Gestión de expedientes de viaje B2B, allotments de alojamiento y liquidación de costos netos.</p>
+            {/* Tabs */}
+            <div className="inline-flex items-center gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200 self-start md:self-auto">
+              <button
+                type="button"
+                onClick={() => setActiveTab("Activos")}
+                className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  activeTab === "Activos"
+                    ? "bg-zinc-950 text-white shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-800"
+                }`}
+              >
+                Activos ({reservations.filter((r) => r.status !== "Cancelada").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("Canceladas")}
+                className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                  activeTab === "Canceladas"
+                    ? "bg-zinc-950 text-white shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-800"
+                }`}
+              >
+                Anuladas ({totalCanceladas})
+              </button>
             </div>
-            
+
             {puede(ProjectView.RESERVAS, AccionPermiso.CREAR) && (
               <Button
                 onClick={handleStartNewExpediente}
@@ -1893,32 +1920,6 @@ export default function ReservasView({
                 <Plus className="w-4 h-4" /> Nuevo Expediente
               </Button>
             )}
-          </div>
-
-          {/* Tabs */}
-          <div className="inline-flex items-center gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
-            <button
-              type="button"
-              onClick={() => setActiveTab("Activos")}
-              className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeTab === "Activos"
-                  ? "bg-zinc-950 text-white shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-800"
-              }`}
-            >
-              Activos ({reservations.filter((r) => r.status !== "Cancelada").length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("Canceladas")}
-              className={`px-5 py-2 rounded-md text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeTab === "Canceladas"
-                  ? "bg-zinc-950 text-white shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-800"
-              }`}
-            >
-              Anuladas ({totalCanceladas})
-            </button>
           </div>
 
           {/* KPIs */}
@@ -2394,6 +2395,7 @@ export default function ReservasView({
                   { key: "pasajeros", label: "Pasajeros", badge: effectivePasajeros.length },
                   { key: "servicios", label: "Servicios", badge: cartServices.length },
                   { key: "administracion", label: "Administración", badge: pendingAdminCount > 0 ? pendingAdminCount : undefined, badgeVariant: "alert" },
+                  { key: "historial", label: "Historial", badge: activeRes ? (registrosAuditoria.filter(r => r.entidadTipo === "Reserva" && r.entidadId === activeRes.id).length || undefined) : undefined },
                 ]}
                 active={activeExpedienteTab}
                 onChange={(k) => setActiveExpedienteTab(k as ExpedienteTab)}
@@ -2811,6 +2813,79 @@ export default function ReservasView({
             </div>
           </div>
           )}
+
+          {activeExpedienteTab === "historial" && !activeRes && (
+            <div className="bg-white border border-zinc-200 rounded-lg p-8 text-center text-zinc-500 text-xs font-semibold flex flex-col items-center gap-2">
+              <History className="w-5 h-5 text-zinc-400" />
+              El historial estará disponible después de guardar el expediente.
+            </div>
+          )}
+
+          {activeExpedienteTab === "historial" && activeRes && (() => {
+            // Eventos ligados a este expediente, en orden cronológico (desde su creación en adelante).
+            const eventos = registrosAuditoria
+              .filter(r => r.entidadTipo === "Reserva" && r.entidadId === activeRes.id)
+              .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+
+            // Etiqueta + color por tipo de evento (dot del timeline y chip).
+            const meta: Record<string, { label: string; dot: string; chip: string }> = {
+              ReservaCreada:     { label: "Expediente creado", dot: "bg-emerald-500", chip: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+              ReservaModificada: { label: "Modificación",      dot: "bg-blue-500",    chip: "bg-blue-50 border-blue-200 text-blue-700" },
+              ReservaCancelada:  { label: "Cancelación",       dot: "bg-red-500",     chip: "bg-red-50 border-red-200 text-red-700" },
+              ReservaEliminada:  { label: "Eliminación",       dot: "bg-red-600",     chip: "bg-red-50 border-red-200 text-red-700" },
+              FacturaEmitida:    { label: "Facturación",       dot: "bg-violet-500",  chip: "bg-violet-50 border-violet-200 text-violet-700" },
+              FacturaModificada: { label: "Factura",           dot: "bg-violet-400",  chip: "bg-violet-50 border-violet-200 text-violet-700" },
+              CobroRegistrado:   { label: "Cobro cliente",     dot: "bg-teal-500",    chip: "bg-teal-50 border-teal-200 text-teal-700" },
+              CobroModificado:   { label: "Cobro cliente",     dot: "bg-teal-400",    chip: "bg-teal-50 border-teal-200 text-teal-700" },
+              PagoProveedor:     { label: "Pago proveedor",    dot: "bg-amber-500",   chip: "bg-amber-50 border-amber-250 text-amber-700" },
+              ObligacionCreada:  { label: "Cuenta por pagar",  dot: "bg-amber-400",   chip: "bg-amber-50 border-amber-250 text-amber-700" },
+              BoletoEmitido:     { label: "Boleto aéreo",      dot: "bg-sky-500",     chip: "bg-sky-50 border-sky-200 text-sky-700" },
+              BoletoModificado:  { label: "Boleto aéreo",      dot: "bg-sky-400",     chip: "bg-sky-50 border-sky-200 text-sky-700" },
+              TrasladoAsignado:  { label: "Traslado",          dot: "bg-zinc-500",    chip: "bg-zinc-100 border-zinc-200 text-zinc-600" },
+            };
+
+            return (
+              <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-100 pb-2 flex items-center gap-1.5 text-zinc-600">
+                  <History className="w-4 h-4 text-zinc-500" /> Historial de Cambios
+                </h4>
+
+                {eventos.length === 0 ? (
+                  <p className="text-xs text-zinc-500 font-semibold py-4 text-center">
+                    Aún no hay cambios registrados para este expediente.
+                  </p>
+                ) : (
+                  <div className="relative pl-5 border-l-2 border-zinc-100 ml-1.5 space-y-4 py-1 text-left">
+                    {eventos.map((ev, idx) => {
+                      const m = meta[ev.tipo] ?? { label: ev.tipo, dot: "bg-zinc-400", chip: "bg-zinc-100 border-zinc-200 text-zinc-600" };
+                      return (
+                        <div key={ev.id || idx} className="relative">
+                          {/* Dot marker */}
+                          <span className={`absolute -left-[26px] top-1.5 w-3.5 h-3.5 rounded-full border-2 border-white shadow-xs ${m.dot}`} />
+
+                          <div className="space-y-0.5 text-xs">
+                            <div className="flex justify-between items-center gap-2">
+                              <span className={`px-1.5 py-0.25 rounded text-[8px] font-black uppercase tracking-wider border ${m.chip}`}>
+                                {m.label}
+                              </span>
+                              <span className="font-mono text-[9px] text-zinc-400 font-semibold whitespace-nowrap">
+                                {new Date(ev.createdAt).toLocaleString("es-ES")}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-zinc-800 leading-tight font-bold mt-1">{ev.detalle}</p>
+                            <div className="flex items-center gap-1 text-[10px] text-zinc-500 mt-1 font-semibold">
+                              <User className="w-3 h-3 text-zinc-400" />
+                              <span>{ev.usuarioNombre}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {activeExpedienteTab === "administracion" && !activeRes && (
             <div className="bg-white border border-zinc-200 rounded-lg p-8 text-center text-zinc-500 text-xs font-semibold flex flex-col items-center gap-2">
@@ -6778,7 +6853,7 @@ export default function ReservasView({
                 <AlertCircle className="w-5 h-5 text-amber-500" />
                 <div>
                   <h4 className="font-extrabold text-sm uppercase tracking-wider">Modificación con Impacto Financiero</h4>
-                  <p className="text-[10px] text-zinc-400 font-medium">Reconciliación y Conciliación de Saldos en Tiempo Real</p>
+                  <p className="text-[10px] text-zinc-400 font-medium">Revisa el impacto de estos cambios antes de confirmar</p>
                 </div>
               </div>
               <button
@@ -6795,85 +6870,137 @@ export default function ReservasView({
 
             {/* Content */}
             <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto text-left">
-              <p className="text-[11px] text-zinc-600 leading-relaxed font-semibold">
-                Hemos recalculado los costos de esta modificación. A continuación se desglosa el impacto contable para el cliente y proveedores:
-              </p>
+              {(() => {
+                const fip = financialImpactPreview;
+                const oldRes = reservations.find(r => r.id === pendingSaveReservation.id);
+                const sale = resolveSaleClient(pendingSaveReservation, clients, directClients);
+                const cli: any = sale.client;
+                const clienteNombre = cli?.nombre ?? pendingSaveReservation.agenciaName ?? "el cliente";
+                const isCredito = cli?.tipo === "A Crédito" || pendingSaveReservation.facturacionTipo === "Crédito";
 
-              {/* Auditoria de cambios */}
-              <div className="bg-zinc-50 border border-zinc-100 rounded-md p-4 space-y-2">
-                <span className="text-[9px] uppercase font-bold text-zinc-400 block">Detalles del Ajuste</span>
-                <ul className="space-y-1.5 text-xs text-zinc-700 font-medium">
-                  {financialImpactPreview.log.map((logItem: string, i: number) => (
-                    <li key={i} className="flex gap-2 items-start leading-normal">
-                      <span className="text-amber-500 mt-0.5">•</span>
-                      <span>{logItem}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                // El impacto real al cliente vive en las variaciones (no en walletTransactions,
+                // que el reconciliador solo usa para pagos automáticos con saldo a favor).
+                const creditoTotal = (fip.newVariations || [])
+                  .filter((v: any) => v.type === "Credito")
+                  .reduce((s: number, v: any) => s + Math.abs(v.amountSale), 0);
+                const suplementoTotal = (fip.newVariations || [])
+                  .filter((v: any) => v.type === "Suplemento")
+                  .reduce((s: number, v: any) => s + v.amountSale, 0);
 
-              {/* Variaciones y Saldos */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-emerald-50/50 border border-emerald-150 p-3 rounded text-left">
-                  <span className="text-[8.5px] uppercase font-bold text-emerald-800 tracking-wider block">Crédito / A Favor</span>
-                  <p className="font-bold text-emerald-700 text-sm mt-1 font-mono">
-                    {(() => {
-                      const client = clients.find(c => c.nombre.toLowerCase() === pendingSaveReservation.agenciaName?.toLowerCase());
-                      const isCreditAgent = client?.limiteCredito && client.limiteCredito > 0;
-                      
-                      const creditTotal = financialImpactPreview.newWalletTransactions
-                        .filter((tx: any) => tx.type === "Abono" || tx.type === "Reembolso")
-                        .reduce((sum: number, tx: any) => sum + tx.amount, 0);
+                const nuevoTotal = fip.updatedRes?.totalPrice ?? pendingSaveReservation.totalPrice ?? 0;
+                const totalAnterior = oldRes?.totalPrice ?? nuevoTotal;
+                const deltaTotal = nuevoTotal - totalAnterior;
 
-                      if (isCreditAgent) {
-                        return "Se reduce deuda directamente";
-                      }
-                      return creditTotal > 0 ? `+$${creditTotal.toFixed(2)} USD` : "$0.00 USD";
-                    })()}
-                  </p>
-                  <span className="text-[9px] text-emerald-600 font-medium block leading-normal mt-0.5">
-                    {(() => {
-                      const client = clients.find(c => c.nombre.toLowerCase() === pendingSaveReservation.agenciaName?.toLowerCase());
-                      const isCreditAgent = client?.limiteCredito && client.limiteCredito > 0;
-                      return isCreditAgent 
-                        ? "Las agencias a crédito ven reflejada la devolución en su saldo deudor acumulado."
-                        : "El saldo restante del servicio cancelado se abonará a la Billetera Virtual B2B.";
-                    })()}
-                  </span>
-                </div>
+                const frozen = (fip.updatedPayableObligations || []).filter((o: any) => o.isFrozen);
+                const adjusted = (fip.updatedPayableObligations || []).filter((o: any) => {
+                  const prev = payableObligations.find(p => p.id === o.id);
+                  return prev && !o.isFrozen && prev.netCost !== o.netCost;
+                });
 
-                <div className="bg-red-50/50 border border-red-150 p-3 rounded text-left">
-                  <span className="text-[8.5px] uppercase font-bold text-red-800 tracking-wider block">Penalidades</span>
-                  <p className="font-bold text-red-700 text-sm mt-1 font-mono">
-                    {(() => {
-                      const penaltyTotal = financialImpactPreview.newWalletTransactions
-                        .filter((tx: any) => tx.type === "Penalidad" || tx.type === "Cargo")
-                        .reduce((sum: number, tx: any) => sum + tx.amount, 0);
-                      return penaltyTotal > 0 ? `$${penaltyTotal.toFixed(2)} USD` : "$0.00 USD";
-                    })()}
-                  </p>
-                  <span className="text-[9px] text-red-500 font-medium block leading-normal mt-0.5">
-                    Las penalidades y multas de cancelación se retendrán como costo administrativo no reembolsable.
-                  </span>
-                </div>
-              </div>
+                const fmt = (n: number) => "$" + Number(n || 0).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " USD";
 
-              {/* Proveedores bloqueados */}
-              {financialImpactPreview.updatedPayableObligations.some((o: any) => o.isFrozen) && (
-                <div className="bg-amber-50 border border-amber-250 rounded p-3 text-left">
-                  <span className="text-[9px] uppercase font-bold text-amber-800 block">⚠️ Pagos a Proveedores Bloqueados</span>
-                  <p className="text-[10px] text-amber-700 mt-1 leading-relaxed font-semibold">
-                    Se han congelado preventivamente las obligaciones de pago de los servicios cancelados a los proveedores:
-                  </p>
-                  <ul className="list-disc list-inside text-[10px] text-amber-800 font-bold mt-1 space-y-0.5">
-                    {financialImpactPreview.updatedPayableObligations
-                      .filter((o: any) => o.isFrozen)
-                      .map((o: any, idx: number) => (
-                        <li key={idx}>{o.providerName} (Ref: {o.locatorId}) - ${o.netCost.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</li>
-                      ))}
-                  </ul>
-                </div>
-              )}
+                return (
+                  <>
+                    <p className="text-xs text-zinc-600 leading-relaxed font-semibold">
+                      Al guardar se aplicarán estos cambios al expediente. Revísalos antes de confirmar.
+                    </p>
+
+                    {/* Nuevo total del expediente */}
+                    <div className="bg-zinc-950 text-white rounded-lg p-4 flex items-center justify-between gap-4">
+                      <div>
+                        <span className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider block">Nuevo total del expediente</span>
+                        <p className="font-black text-lg font-mono mt-0.5">{fmt(nuevoTotal)}</p>
+                      </div>
+                      {deltaTotal !== 0 && (
+                        <div className="text-right">
+                          <span className="text-[9px] uppercase font-bold text-zinc-500 tracking-wider block">Antes: <span className="line-through">{fmt(totalAnterior)}</span></span>
+                          <span className={`text-sm font-black font-mono ${deltaTotal < 0 ? "text-emerald-400" : "text-amber-400"}`}>
+                            {deltaTotal < 0 ? "▼ " : "▲ "}{fmt(Math.abs(deltaTotal))}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Impacto sobre el cliente */}
+                    {(creditoTotal > 0 || suplementoTotal > 0) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {creditoTotal > 0 && (
+                          <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-lg">
+                            <span className="text-[9px] uppercase font-bold text-emerald-800 tracking-wider block">Crédito a favor del cliente</span>
+                            <p className="font-black text-emerald-700 text-base mt-1 font-mono">{fmt(creditoTotal)}</p>
+                            <span className="text-[10px] text-emerald-700/80 font-medium block leading-snug mt-1">
+                              {isCredito
+                                ? `Reduce la deuda pendiente de ${clienteNombre} al aprobarse en Facturación.`
+                                : `Se abona como saldo a favor de ${clienteNombre} al aprobarse en Facturación.`}
+                            </span>
+                          </div>
+                        )}
+                        {suplementoTotal > 0 && (
+                          <div className="bg-amber-50 border border-amber-250 p-3.5 rounded-lg">
+                            <span className="text-[9px] uppercase font-bold text-amber-800 tracking-wider block">Cargo adicional (suplemento)</span>
+                            <p className="font-black text-amber-700 text-base mt-1 font-mono">{fmt(suplementoTotal)}</p>
+                            <span className="text-[10px] text-amber-700/80 font-medium block leading-snug mt-1">
+                              Se cobra a {clienteNombre} cuando se envíe el suplemento a Facturación.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Sin impacto directo en el cliente */}
+                    {creditoTotal === 0 && suplementoTotal === 0 && (
+                      <div className="bg-zinc-50 border border-zinc-200 p-3 rounded-lg text-[11px] text-zinc-500 font-semibold">
+                        Esta modificación no genera crédito ni cargo adicional para {clienteNombre}.
+                      </div>
+                    )}
+
+                    {/* Impacto en proveedores */}
+                    {(frozen.length > 0 || adjusted.length > 0) && (
+                      <div className="bg-amber-50 border border-amber-250 rounded-lg p-3.5 text-left space-y-2">
+                        <span className="text-[10px] uppercase font-bold text-amber-800 flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5" /> Impacto en pagos a proveedores
+                        </span>
+                        {frozen.length > 0 && (
+                          <div>
+                            <p className="text-[10px] text-amber-700 font-semibold leading-snug">
+                              Se congelaron estas obligaciones. Verifica la penalidad del proveedor antes de pagar:
+                            </p>
+                            <ul className="list-disc list-inside text-[10px] text-amber-800 font-bold mt-1 space-y-0.5">
+                              {frozen.map((o: any, idx: number) => (
+                                <li key={idx}>{o.providerName} · Ref {o.locatorId} — {fmt(o.netCost)}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {adjusted.length > 0 && (
+                          <div>
+                            <p className="text-[10px] text-amber-700 font-semibold leading-snug">Se ajustó el monto a pagar de:</p>
+                            <ul className="list-disc list-inside text-[10px] text-amber-800 font-bold mt-1 space-y-0.5">
+                              {adjusted.map((o: any, idx: number) => {
+                                const prev = payableObligations.find(p => p.id === o.id);
+                                return <li key={idx}>{o.providerName} · Ref {o.locatorId} — {fmt(prev?.netCost ?? 0)} → {fmt(o.netCost)}</li>;
+                              })}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Detalle técnico de la reconciliación (secundario) */}
+                    <details className="bg-zinc-50 border border-zinc-100 rounded-lg p-3.5">
+                      <summary className="text-[10px] uppercase font-bold text-zinc-500 cursor-pointer select-none">Ver detalle de la reconciliación</summary>
+                      <ul className="space-y-1.5 text-[11px] text-zinc-600 font-medium mt-2">
+                        {fip.log.map((logItem: string, i: number) => (
+                          <li key={i} className="flex gap-2 items-start leading-normal">
+                            <span className="text-zinc-400 mt-0.5">•</span>
+                            <span>{logItem}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Footer */}

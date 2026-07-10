@@ -381,6 +381,31 @@ export default function App() {
     }
   };
 
+  // Registra un evento en el HISTORIAL de un expediente de reserva. Centraliza autoría
+  // (usuario logueado) y el vínculo entidadTipo="Reserva"/entidadId=localizador, de modo
+  // que todo cambio de la vida de una reserva —en cualquier departamento— quede atado a su
+  // expediente y sea visible en la pestaña "Historial" (ReservasView). Si no hay expediente
+  // al que atarlo (entidadId vacío), no registra.
+  const logReserva = (
+    entidadId: string | undefined | null,
+    tipo: RegistroAuditoria["tipo"],
+    detalle: string,
+  ) => {
+    if (!entidadId) return;
+    handleAddRegistroAuditoria({
+      tipo,
+      detalle,
+      entidadTipo: "Reserva",
+      entidadId,
+      usuarioId: usuario?.id ?? "sistema",
+      usuarioNombre: usuario?.nombre ?? "Sistema",
+    });
+  };
+
+  // Formato de importes para los detalles del historial (sin símbolo: el ERP es multimoneda)
+  const fmtMonto = (n: any) =>
+    Number(n ?? 0).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const handleAddReglaAutorizacion = async (regla: ReglaAutorizacion) => {
     setReglasAutorizacion(prev => [...prev, regla]);
     try {
@@ -444,6 +469,11 @@ export default function App() {
       console.error("Failed to update obligation", e);
       alert(`Error al actualizar la cuenta por pagar: ${(e as any)?.message || e}`);
     }
+    logReserva(
+      updated.locatorId,
+      "PagoProveedor",
+      `Cuenta por pagar ${updated.id} · ${updated.providerName ?? "proveedor"} → ${updated.status}${updated.paidAmount != null ? ` (pagado ${fmtMonto(updated.paidAmount)})` : ""}`,
+    );
   };
 
   const handleAddPayableObligation = async (newObligation: any) => {
@@ -471,6 +501,11 @@ export default function App() {
       console.error("Failed to insert obligation", e);
       alert(`Error al guardar la cuenta por pagar al proveedor: ${(e as any)?.message || e}. La obligación no quedó registrada, por favor reintente.`);
     }
+    logReserva(
+      newObligation.locatorId,
+      "ObligacionCreada",
+      `Cuenta por pagar a ${newObligation.providerName ?? "proveedor"} por ${fmtMonto(newObligation.netCost)}`,
+    );
   };
 
   const handleAddStatement = async (newDoc: any) => {
@@ -512,65 +547,104 @@ export default function App() {
     // `authenticated` pase a true (justo después del login), gracias a estar en las deps.
     if (!authenticated) return;
     async function loadData() {
+      // Cada recurso se carga AISLADO: un fallo transitorio de un endpoint (p.ej. un 500
+      // esporádico de Data Connect/Cloud SQL) no debe abortar la carga del resto. Antes,
+      // un solo await que lanzara saltaba al catch general y dejaba sin cargar todo lo que
+      // venía después — incluida la auditoría, por lo que el historial del expediente
+      // "desaparecía" al recargar cada vez que un endpoint previo fallaba.
+      const safe = async (label: string, fn: () => Promise<void>) => {
+        try { await fn(); }
+        catch (e) { console.error(`Failed to load ${label}`, e); }
+      };
       try {
-        const res = await listReservations(dataConnect);
-        if (res.data.reservations.length > 0) setReservations(res.data.reservations);
-        const cli = await listClients(dataConnect);
-        if (cli.data.b2BClients.length > 0) setClients(cli.data.b2BClients);
-        // Aislado en su propio try: un fallo aquí (p.ej. backend sin reiniciar tras agregar
-        // el módulo direct-clients) no debe abortar la carga del resto de los datos.
-        try {
+        await safe("reservations", async () => {
+          const res = await listReservations(dataConnect);
+          if (res.data.reservations.length > 0) setReservations(res.data.reservations);
+        });
+        await safe("clients", async () => {
+          const cli = await listClients(dataConnect);
+          if (cli.data.b2BClients.length > 0) setClients(cli.data.b2BClients);
+        });
+        await safe("direct-clients", async () => {
           const dcli = await listDirectClients(dataConnect);
           if (dcli.data.directClients.length > 0) setDirectClients(dcli.data.directClients);
-        } catch (e) {
-          console.error("Failed to load direct clients", e);
-        }
-        const inv = await listInvoices(dataConnect);
-        if (inv.data.financialInvoices.length > 0) setInvoices(inv.data.financialInvoices);
-        const props = await listDetailedProperties(dataConnect);
-        if (props.data.detailedProperties.length > 0) setDetailedProperties(props.data.detailedProperties);
-        const rooms = await listRoomTypes(dataConnect);
-        if (rooms.data.roomTypes.length > 0) {
-          setRoomTypes(rooms.data.roomTypes.map((r: any) => ({
-            ...r,
-            property_id: r.propertyId
-          })));
-        }
-        const rates = await listRatePlans(dataConnect);
-        if (rates.data.ratePlans.length > 0) {
-          setRatePlans(rates.data.ratePlans.map((rp: any) => ({
-            ...rp,
-            property_id: rp.propertyId,
-            roomType_id: rp.roomTypeId
-          })));
-        }
-        const stops = await listStopSales(dataConnect);
-        if (stops.data.stopSales.length > 0) {
-          setStopSales(stops.data.stopSales.map((s: any) => ({
-            ...s,
-            property_id: s.propertyId
-          })));
-        }
-        const tickets = await listFlightTickets(dataConnect);
-        if (tickets.data.flightTickets.length > 0) setBoletos(tickets.data.flightTickets);
-        const trans = await listTransferServices(dataConnect);
-        if (trans.data.transferServices.length > 0) setTransfers(trans.data.transferServices);
-        const veh = await listFleetVehicles(dataConnect);
-        if (veh.data.fleetVehicles.length > 0) setFleetVehicles(veh.data.fleetVehicles);
-        const dri = await listFleetDrivers(dataConnect);
-        if (dri.data.fleetDrivers.length > 0) setFleetDrivers(dri.data.fleetDrivers);
-        const vou = await listPaymentVouchers(dataConnect);
-        if (vou.data.paymentVouchers.length > 0) setVouchers(vou.data.paymentVouchers);
-        const ext = await listExtraServices(dataConnect);
-        if (ext.data.extraServices.length > 0) setExtraServices(ext.data.extraServices);
-        const srv = await listServiceRates(dataConnect);
-        if (srv.data.serviceRates.length > 0) setServiceRates(srv.data.serviceRates);
-        const obs = await listPayableObligations(dataConnect);
-        if (obs.data.payableObligations.length > 0) setPayableObligations(obs.data.payableObligations);
-        const stm = await listProviderStatements(dataConnect);
-        if (stm.data.providerStatements.length > 0) setProviderStatements(stm.data.providerStatements);
-        const provs = await listProveedores(dataConnect);
-        if (provs.data.proveedores.length > 0) setProveedores(provs.data.proveedores);
+        });
+        await safe("invoices", async () => {
+          const inv = await listInvoices(dataConnect);
+          if (inv.data.financialInvoices.length > 0) setInvoices(inv.data.financialInvoices);
+        });
+        await safe("detailed-properties", async () => {
+          const props = await listDetailedProperties(dataConnect);
+          if (props.data.detailedProperties.length > 0) setDetailedProperties(props.data.detailedProperties);
+        });
+        await safe("room-types", async () => {
+          const rooms = await listRoomTypes(dataConnect);
+          if (rooms.data.roomTypes.length > 0) {
+            setRoomTypes(rooms.data.roomTypes.map((r: any) => ({
+              ...r,
+              property_id: r.propertyId
+            })));
+          }
+        });
+        await safe("rate-plans", async () => {
+          const rates = await listRatePlans(dataConnect);
+          if (rates.data.ratePlans.length > 0) {
+            setRatePlans(rates.data.ratePlans.map((rp: any) => ({
+              ...rp,
+              property_id: rp.propertyId,
+              roomType_id: rp.roomTypeId
+            })));
+          }
+        });
+        await safe("stop-sales", async () => {
+          const stops = await listStopSales(dataConnect);
+          if (stops.data.stopSales.length > 0) {
+            setStopSales(stops.data.stopSales.map((s: any) => ({
+              ...s,
+              property_id: s.propertyId
+            })));
+          }
+        });
+        await safe("flight-tickets", async () => {
+          const tickets = await listFlightTickets(dataConnect);
+          if (tickets.data.flightTickets.length > 0) setBoletos(tickets.data.flightTickets);
+        });
+        await safe("transfers", async () => {
+          const trans = await listTransferServices(dataConnect);
+          if (trans.data.transferServices.length > 0) setTransfers(trans.data.transferServices);
+        });
+        await safe("fleet-vehicles", async () => {
+          const veh = await listFleetVehicles(dataConnect);
+          if (veh.data.fleetVehicles.length > 0) setFleetVehicles(veh.data.fleetVehicles);
+        });
+        await safe("fleet-drivers", async () => {
+          const dri = await listFleetDrivers(dataConnect);
+          if (dri.data.fleetDrivers.length > 0) setFleetDrivers(dri.data.fleetDrivers);
+        });
+        await safe("vouchers", async () => {
+          const vou = await listPaymentVouchers(dataConnect);
+          if (vou.data.paymentVouchers.length > 0) setVouchers(vou.data.paymentVouchers);
+        });
+        await safe("extra-services", async () => {
+          const ext = await listExtraServices(dataConnect);
+          if (ext.data.extraServices.length > 0) setExtraServices(ext.data.extraServices);
+        });
+        await safe("service-rates", async () => {
+          const srv = await listServiceRates(dataConnect);
+          if (srv.data.serviceRates.length > 0) setServiceRates(srv.data.serviceRates);
+        });
+        await safe("payable-obligations", async () => {
+          const obs = await listPayableObligations(dataConnect);
+          if (obs.data.payableObligations.length > 0) setPayableObligations(obs.data.payableObligations);
+        });
+        await safe("provider-statements", async () => {
+          const stm = await listProviderStatements(dataConnect);
+          if (stm.data.providerStatements.length > 0) setProviderStatements(stm.data.providerStatements);
+        });
+        await safe("proveedores", async () => {
+          const provs = await listProveedores(dataConnect);
+          if (provs.data.proveedores.length > 0) setProveedores(provs.data.proveedores);
+        });
         // Fiscal data — each in its own try so DB failures don't block localStorage state
         try {
           const jur = await listTaxJurisdictions();
@@ -717,6 +791,7 @@ export default function App() {
     try {
       setReservations(prev => prev.filter(r => r.id !== id));
       await deleteReservation(dataConnect, { id });
+      logReserva(id, "ReservaEliminada", "Expediente eliminado");
     } catch (e) {
       console.error("Error in handleDeleteReservation:", e);
     }
@@ -762,6 +837,12 @@ export default function App() {
       console.error("[DB] Failed to insert reservation:", e);
       alert(`Error al guardar expediente: ${(e as any)?.message || e}`);
     }
+
+    logReserva(
+      newRes.id,
+      "ReservaCreada",
+      `Expediente creado — ${newRes.holder ?? ""}${newRes.hotelName ? ` · ${newRes.hotelName}` : ""}`,
+    );
 
     // Only run side-effects for Real Bookings (tipo is NOT "Cotización")
     if (newRes.tipo !== "Cotización") {
@@ -1022,6 +1103,29 @@ export default function App() {
       alert(`Error al guardar expediente: ${(e as any)?.message || e}`);
     }
 
+    // Historial del expediente: registrar solo cambios materiales hechos por el usuario.
+    // Las actualizaciones internas "billing-only" (adjuntar invoiceId a una variación) no
+    // son cambios visibles del expediente → se omiten para no ensuciar el historial.
+    if (oldRes && !isBillingOnlyUpdate) {
+      const cambios: string[] = [];
+      if (oldRes.status !== finalRes.status) cambios.push(`Estado: ${oldRes.status} → ${finalRes.status}`);
+      if (oldRes.totalPrice !== finalRes.totalPrice) cambios.push(`Precio venta: ${fmtMonto(oldRes.totalPrice)} → ${fmtMonto(finalRes.totalPrice)}`);
+      if (oldRes.netPrice !== finalRes.netPrice) cambios.push(`Precio neto: ${fmtMonto(oldRes.netPrice)} → ${fmtMonto(finalRes.netPrice)}`);
+      if (oldRes.checkIn !== finalRes.checkIn) cambios.push(`Check-in: ${oldRes.checkIn} → ${finalRes.checkIn}`);
+      if (oldRes.checkOut !== finalRes.checkOut) cambios.push(`Check-out: ${oldRes.checkOut} → ${finalRes.checkOut}`);
+      if (oldRes.hotelName !== finalRes.hotelName) cambios.push(`Hotel: ${oldRes.hotelName} → ${finalRes.hotelName}`);
+      if (oldRes.holder !== finalRes.holder) cambios.push(`Titular: ${oldRes.holder} → ${finalRes.holder}`);
+      if ((oldRes.pax ?? 0) !== (finalRes.pax ?? 0)) cambios.push(`Pax: ${oldRes.pax} → ${finalRes.pax}`);
+      const oldServ = (oldRes.servicios || []).length;
+      const newServ = (finalRes.servicios || []).length;
+      if (oldServ !== newServ) cambios.push(`Servicios: ${oldServ} → ${newServ}`);
+
+      if (cambios.length > 0) {
+        const esCancelacion = finalRes.status === "Cancelada" && oldRes.status !== "Cancelada";
+        logReserva(finalRes.id, esCancelacion ? "ReservaCancelada" : "ReservaModificada", cambios.join(" · "));
+      }
+    }
+
     // Propagar cambios a Traslados asociados
     setTransfers(prev => prev.map(t => {
       const oldResVal = reservations.find(r => r.id === finalRes.id);
@@ -1068,6 +1172,7 @@ export default function App() {
       setTransfers(prev => [...prev, ts]);
       try { await insertTransferService(dataConnect, { ...ts }); } catch (e) { console.error("Failed to insert transfer service", ts.id, e); }
     }
+    logReserva((ts as any).reservationId, "TrasladoAsignado", `Traslado ${updated.id} actualizado (operaciones)`);
   };
 
   const handleUpdateVehicle = async (updated: any) => {
@@ -1166,6 +1271,8 @@ export default function App() {
     } catch (e) {
       console.error("Failed to update invoice", e);
     }
+    const invResUpd = reservations.find(r => updated.clientName?.includes(r.id));
+    logReserva(invResUpd?.id, "FacturaModificada", `Factura ${updated.id} → ${updated.status}`);
   };
 
   const handleAddInvoice = async (newInv: any) => {
@@ -1186,6 +1293,15 @@ export default function App() {
     } catch (e) {
       console.error("Failed to insert invoice", e);
     }
+    const invResNew = reservations.find(r => newInv.clientName?.includes(r.id));
+    const docTipo = newInv.id?.startsWith("NC")
+      ? "Nota de crédito"
+      : newInv.id?.startsWith("SUP")
+      ? "Suplemento facturado"
+      : newInv.id?.startsWith("ABO")
+      ? "Abono"
+      : "Factura";
+    logReserva(invResNew?.id, "FacturaEmitida", `${docTipo} ${newInv.id} emitida por ${fmtMonto(newInv.amount)}`);
   };
 
   const handleUpdateClient = async (updated: any) => {
@@ -1277,12 +1393,18 @@ export default function App() {
       const finalBol = { ...newBol, id: nextSequentialId("BOL", boletos.map(b => b.id)) };
       setBoletos(prev => [...prev, finalBol]);
       await insertFlightTicket(dataConnect, { ...finalBol });
+      logReserva(
+        (finalBol as any).expedienteId,
+        "BoletoEmitido",
+        `Boleto aéreo ${finalBol.id} emitido${(finalBol as any).agenteNombre ? ` (agente ${(finalBol as any).agenteNombre})` : ""}`,
+      );
     } catch (e) {}
   };
   const handleUpdateBoleto = async (updated: FlightTicket) => {
     try {
       setBoletos(prev => prev.map(b => b.id === updated.id ? updated : b));
       await updateFlightTicket(dataConnect, { ...updated });
+      logReserva((updated as any).expedienteId, "BoletoModificado", `Boleto aéreo ${updated.id} actualizado`);
     } catch (e) {
       console.error("Failed to update flight ticket", e);
       alert(`Error al guardar el boleto aéreo: ${(e as any)?.message || e}. Por favor reintente.`);
@@ -1303,6 +1425,11 @@ export default function App() {
     } catch (e) {
       console.error("Failed to insert payment voucher", e);
     }
+    logReserva(
+      (newVoucher as any).locatorId,
+      "CobroRegistrado",
+      `Cobro de ${fmtMonto(newVoucher.amount)}${(newVoucher as any).method ? ` (${(newVoucher as any).method})` : ""} registrado${(newVoucher as any).invoiceId ? ` sobre ${(newVoucher as any).invoiceId}` : ""}`,
+    );
   };
   const handleUpdateVoucher = async (updated: PaymentVoucher) => {
     setVouchers(prev => prev.map(v => v.id === updated.id ? updated : v));
@@ -1311,6 +1438,7 @@ export default function App() {
     } catch (e) {
       console.error("Failed to update payment voucher", e);
     }
+    logReserva((updated as any).locatorId, "CobroModificado", `Cobro ${updated.id} → ${updated.status}`);
   };
 
   // --- EXTRA SERVICES & RATES ---
@@ -1832,6 +1960,7 @@ onDeleteStopSale={handleDeleteStopSale}
                       onCreateSolicitudAutorizacion={handleCreateSolicitudAutorizacion}
                       onAddRegistroAuditoria={handleAddRegistroAuditoria}
                       onDeleteReservation={handleDeleteReservation}
+                      registrosAuditoria={registrosAuditoria}
                     />
                   )}
                   {currentSection === ProjectView.FACTURACION && (

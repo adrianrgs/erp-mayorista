@@ -480,6 +480,8 @@ query ListRegistrosAuditoria @auth(level: PUBLIC) {
     usuarioId
     usuarioNombre
     detalle
+    entidadTipo
+    entidadId
     createdAt
   }
 }

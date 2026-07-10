@@ -13,9 +13,12 @@
 import https from "https";
 import http from "http";
 
-const BASE_URL = "http://localhost:3001/api";
-const USERNAME  = "admin";
-const PASSWORD  = "foratour2026";
+const BASE_URL = process.env.RESET_API_URL  || "http://localhost:3001/api";
+const USERNAME = process.env.RESET_USERNAME || "admin";
+// La contraseña NO se hardcodea (se cambia desde la app). Pásala por entorno:
+//   RESET_PASSWORD=tuClave node scripts/reset-data.mjs
+// El default es solo la contraseña de seed inicial, por si nunca se cambió.
+const PASSWORD = process.env.RESET_PASSWORD || "foratour2026";
 const DRY_RUN   = process.argv.includes("--dry-run");
 
 // ── HTTP helper ────────────────────────────────────────────────────────────────

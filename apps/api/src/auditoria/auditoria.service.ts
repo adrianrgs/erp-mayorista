@@ -10,8 +10,25 @@ export class AuditoriaService {
     return data.registroAuditorias || [];
   }
 
-  async create(dto: { id: string; tipo: string; usuarioId: string; usuarioNombre: string; detalle?: string }) {
-    await this.dc.executeMutation('InsertRegistroAuditoria', { ...dto, createdAt: new Date().toISOString() });
+  async create(dto: {
+    id: string;
+    tipo: string;
+    usuarioId: string;
+    usuarioNombre: string;
+    detalle?: string;
+    entidadTipo?: string;
+    entidadId?: string;
+  }) {
+    await this.dc.executeMutation('InsertRegistroAuditoria', {
+      id: dto.id,
+      tipo: dto.tipo,
+      usuarioId: dto.usuarioId,
+      usuarioNombre: dto.usuarioNombre,
+      detalle: dto.detalle ?? null,
+      entidadTipo: dto.entidadTipo ?? null,
+      entidadId: dto.entidadId ?? null,
+      createdAt: new Date().toISOString(),
+    });
     return { success: true, id: dto.id };
   }
 }
