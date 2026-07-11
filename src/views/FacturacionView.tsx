@@ -538,7 +538,11 @@ export default function FacturacionView({
         totalPrice: b.precioVenta || 0,
         netPrice: b.costoNeto || 0,
         status: "Confirmada",
-        agenciaName: exp.clienteB2BNombre,
+        // Cliente del aéreo: puede ser agencia B2B (agenciaName) o cliente directo
+        // (canalVenta "Directo" + clienteDirectoId) para que resolveSaleClient lo resuelva.
+        agenciaName: exp.clienteDirectoId ? undefined : exp.clienteB2BNombre,
+        canalVenta: exp.clienteDirectoId ? "Directo" : undefined,
+        clienteDirectoId: exp.clienteDirectoId,
         comprobanteMonto: exp.comprobanteMonto,
         hotelName: "Boleto Aéreo GDS",
         facturacionTipo: exp.facturacionTipo,

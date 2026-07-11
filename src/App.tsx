@@ -8,7 +8,7 @@ import {
   listReservations, insertReservation, updateReservation, deleteReservation,
   listClients, insertClient, deleteClient,
   listDirectClients, insertDirectClient, updateDirectClient, deleteDirectClient,
-  listInvoices, insertInvoice,
+  listInvoices, insertInvoice, deleteInvoice,
   listDetailedProperties, insertDetailedProperty, updateDetailedProperty, deleteDetailedProperty,
   listRoomTypes, insertRoomType, updateRoomType, deleteRoomType,
   listRatePlans, insertRatePlan, updateRatePlan, deleteRatePlan,
@@ -17,7 +17,7 @@ import {
   listTransferServices, insertTransferService, updateTransferService, deleteTransferService,
   listFleetVehicles, insertFleetVehicle, updateFleetVehicle, deleteFleetVehicle,
   listFleetDrivers, insertFleetDriver, updateFleetDriver, deleteFleetDriver,
-  listPaymentVouchers, insertPaymentVoucher, updatePaymentVoucher,
+  listPaymentVouchers, insertPaymentVoucher, updatePaymentVoucher, deletePaymentVoucher,
   listExtraServices, insertExtraService, updateExtraService, deleteExtraService,
   listServiceRates, insertServiceRate, updateServiceRate, deleteServiceRate,
   updateInvoice, updateClient,
@@ -789,18 +789,43 @@ export default function App() {
 
   const handleDeleteReservation = async (id: string) => {
     try {
+      // ── CASCADA DE BORRADO ────────────────────────────────────────────────────
+      // Los IDs de reserva son secuenciales y se REUTILIZAN (p.ej. tras borrar la última o
+      // tras un wipe). Si no limpiamos los registros ligados al expediente, una futura reserva
+      // con el mismo ID los heredaría (facturas, obligaciones, cobros, traslados). Se borran
+      // todos aquí. Los boletos aéreos son billetes reales → se DESVINCULAN, no se borran.
+      const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      // Match del localizador en clientName con límite para no confundir RES-1 con RES-11, etc.
+      const locatorRe = new RegExp(`Localizador ${escapeRegex(id)}(?!\\d)`);
+      const relInvoices = invoices.filter(inv => (inv as any).reservationId === id || (inv.clientName ? locatorRe.test(inv.clientName) : false));
+      const relObligations = payableObligations.filter(o => o.locatorId === id);
+      const relVouchers = vouchers.filter(v => v.locatorId === id);
+      const relTransfers = transfers.filter(t => t.reservationId === id);
+      const relBoletos = boletos.filter(b => (b as any).expedienteId === id);
+
+      // 1. Estado local (optimista).
       setReservations(prev => prev.filter(r => r.id !== id));
+      setInvoices(prev => prev.filter(inv => !relInvoices.some(x => x.id === inv.id)));
+      setPayableObligations(prev => prev.filter(o => o.locatorId !== id));
+      setVouchers(prev => prev.filter(v => v.locatorId !== id));
+      setTransfers(prev => prev.filter(t => t.reservationId !== id));
+      setBoletos(prev => prev.map(b => (b as any).expedienteId === id ? ({ ...b, vinculadoAExpediente: false, expedienteId: "", facturarConjunto: false } as any) : b));
+
+      // 2. Persistir borrados / desvinculaciones en la BD (cada uno aislado para no abortar el resto).
       await deleteReservation(dataConnect, { id });
-      // Los IDs de reserva son secuenciales y se reutilizan (p.ej. tras borrar la última o
-      // tras un wipe de datos). Si no limpiamos su auditoría, una futura reserva con el mismo
-      // ID heredaría este historial. Por eso borramos el historial atado al expediente y
-      // registramos la eliminación en la bitácora GLOBAL (sin entidadId → no aparece en ningún
-      // expediente, pero sí en Configuración → Historial de Auditoría: quién borró qué).
+      for (const inv of relInvoices) { try { await deleteInvoice(dataConnect, { id: inv.id }); } catch (e) { console.error("cascade delete invoice", e); } }
+      for (const o of relObligations) { try { await deletePayableObligation(dataConnect, { id: o.id }); } catch (e) { console.error("cascade delete obligation", e); } }
+      for (const v of relVouchers) { try { await deletePaymentVoucher(dataConnect, { id: v.id }); } catch (e) { console.error("cascade delete voucher", e); } }
+      for (const t of relTransfers) { try { await deleteTransferService(dataConnect, { id: t.id }); } catch (e) { console.error("cascade delete transfer", e); } }
+      for (const b of relBoletos) { try { await updateFlightTicket(dataConnect, { ...b, vinculadoAExpediente: false, expedienteId: "", facturarConjunto: false }); } catch (e) { console.error("cascade unlink boleto", e); } }
+
+      // 3. Auditoría del expediente (cascada) + log GLOBAL de la eliminación (sin entidadId → no
+      //    aparece en ningún expediente, pero sí en Configuración → Historial de Auditoría).
       await deleteRegistrosAuditoriaByEntidad(dataConnect, { entidadTipo: "Reserva", entidadId: id });
       setRegistrosAuditoria(prev => prev.filter(r => !(r.entidadTipo === "Reserva" && r.entidadId === id)));
       handleAddRegistroAuditoria({
         tipo: "ReservaEliminada",
-        detalle: `Expediente ${id} eliminado`,
+        detalle: `Expediente ${id} eliminado — ${relInvoices.length} factura(s), ${relObligations.length} obligación(es), ${relVouchers.length} cobro(s), ${relTransfers.length} traslado(s) borrados; ${relBoletos.length} boleto(s) desvinculado(s).`,
         usuarioId: usuario?.id ?? "sistema",
         usuarioNombre: usuario?.nombre ?? "Sistema",
       });
@@ -1400,17 +1425,18 @@ export default function App() {
   };
 
   // --- FLIGHT TICKETS (Boletos) ---
-  const handleAddBoleto = async (newBol: FlightTicket) => {
+  const handleAddBoleto = async (newBol: FlightTicket): Promise<FlightTicket> => {
+    const finalBol = { ...newBol, id: nextSequentialId("BOL", boletos.map(b => b.id)) };
+    setBoletos(prev => [...prev, finalBol]);
     try {
-      const finalBol = { ...newBol, id: nextSequentialId("BOL", boletos.map(b => b.id)) };
-      setBoletos(prev => [...prev, finalBol]);
       await insertFlightTicket(dataConnect, { ...finalBol });
       logReserva(
         (finalBol as any).expedienteId,
         "BoletoEmitido",
         `Boleto aéreo ${finalBol.id} emitido${(finalBol as any).agenteNombre ? ` (agente ${(finalBol as any).agenteNombre})` : ""}`,
       );
-    } catch (e) {}
+    } catch (e) { console.error("Failed to insert flight ticket", e); }
+    return finalBol;
   };
   const handleUpdateBoleto = async (updated: FlightTicket) => {
     try {
@@ -2013,6 +2039,7 @@ onDeleteStopSale={handleDeleteStopSale}
                     onUpdateBoleto={handleUpdateBoleto}
                     onDeleteBoleto={handleDeleteBoleto}
                     clients={clients}
+                    directClients={directClients}
                     companyConfig={companyConfig}
                     jurisdiction={jurisdiction}
                     currentExchangeRate={todayExchangeRate}

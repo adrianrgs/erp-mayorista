@@ -167,6 +167,10 @@ export interface AereoExpediente {
   clienteB2BNombre?: string;
   /** ID de la agencia B2B asociada */
   clienteB2BId?: string;
+  /** ID del cliente directo asociado (si aplica; excluyente con clienteB2BId) */
+  clienteDirectoId?: string;
+  /** Nombre del cliente directo asociado */
+  clienteDirectoNombre?: string;
   /** Tipo de facturación del cliente */
   facturacionTipo?: "Crédito" | "Pago Contado";
   /** Referencia del comprobante de pago del cliente */

@@ -992,7 +992,8 @@ export default function CobranzasB2BPanel({
                         .map(r => r.id);
 
                       const unpaidInvoices = invoices.filter(inv => {
-                        const matchesClient = inv.clientName.toLowerCase().includes(activeClient.nombre.toLowerCase()) || 
+                        const matchesClient = inv.clientId === activeClient.id ||
+                                              inv.clientName.toLowerCase().includes(activeClient.nombre.toLowerCase()) ||
                                               activeResIds.some(rid => inv.clientName.includes(rid));
                         const isUnpaid = inv.status === "Facturado" || inv.status === "Vencido";
                         const isCollection = inv.type === "Cobro";

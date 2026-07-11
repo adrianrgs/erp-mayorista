@@ -159,6 +159,11 @@ export const updateInvoice = async (_dc: any, vars: any) => {
   return { data: {} };
 };
 
+export const deleteInvoice = async (_dc: any, vars: { id: string }) => {
+  await api.delete(`/finances/invoices/${vars.id}`);
+  return { data: {} };
+};
+
 // ─── MUTATIONS: PROPERTIES ────────────────────────────────────────────────────
 
 export const insertDetailedProperty = async (_dc: any, vars: any) => {
@@ -313,6 +318,11 @@ export const insertPaymentVoucher = async (_dc: any, vars: any) => {
 export const updatePaymentVoucher = async (_dc: any, vars: any) => {
   const { id, ...rest } = vars;
   await api.patch(`/finances/vouchers/${id}`, rest);
+  return { data: {} };
+};
+
+export const deletePaymentVoucher = async (_dc: any, vars: { id: string }) => {
+  await api.delete(`/finances/vouchers/${vars.id}`);
   return { data: {} };
 };
 

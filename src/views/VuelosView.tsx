@@ -29,7 +29,7 @@ import {
   Printer,
   XCircle
 } from "lucide-react";
-import type { FlightLeg, B2BClient, CompanyConfig } from "../types";
+import type { FlightLeg, B2BClient, DirectClient, CompanyConfig } from "../types";
 import { ProjectView } from "../types";
 import type { FlightTicket, Passenger, FlightSegment } from "../types/aereos";
 import { AccionPermiso } from "../types/usuarios";
@@ -83,10 +83,11 @@ function getAirlineName(code: string): string {
 interface VuelosViewProps {
   flights: FlightLeg[]; // prop legacy del App.tsx
   boletos: FlightTicket[];
-  onAddBoleto: (boleto: FlightTicket) => void;
+  onAddBoleto: (boleto: FlightTicket) => Promise<FlightTicket | void> | void;
   onUpdateBoleto: (boleto: FlightTicket) => void;
   onDeleteBoleto: (id: string) => void;
   clients?: B2BClient[];
+  directClients?: DirectClient[];
   companyConfig: CompanyConfig;
   jurisdiction?: TaxJurisdiction;
   currentExchangeRate?: number;
@@ -119,7 +120,7 @@ function Badge({
 
 // ─── VISTA PRINCIPAL ──────────────────────────────────────────────────────────
 
-export default function VuelosView({ flights: _flights, boletos, onAddBoleto, onUpdateBoleto, onDeleteBoleto, clients = [], companyConfig, jurisdiction, currentExchangeRate }: VuelosViewProps) {
+export default function VuelosView({ flights: _flights, boletos, onAddBoleto, onUpdateBoleto, onDeleteBoleto, clients = [], directClients = [], companyConfig, jurisdiction, currentExchangeRate }: VuelosViewProps) {
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const [subView, setSubView] = useState<SubView>("listado");
   const [search, setSearch] = useState("");
@@ -156,16 +157,23 @@ export default function VuelosView({ flights: _flights, boletos, onAddBoleto, on
         />
       ) : subView === "nuevo" ? (
         <NuevoBoletoView
-          onGuardar={(boleto) => {
-            onAddBoleto(boleto);
-            setSubView("listado");
+          onGuardar={async (boleto) => {
+            // Tras guardar, abrir el expediente aéreo recién creado (no volver al listado).
+            const created = await onAddBoleto(boleto);
+            if (created && created.id) {
+              setSelectedBoletoId(created.id);
+              setSubView("expediente");
+            } else {
+              setSubView("listado");
+            }
           }}
           onCancelar={() => setSubView("listado")}
         />
-      ) : (
+      ) : boletos.find((b) => b.id === selectedBoletoId) ? (
         <ExpedienteAereoView
           boleto={boletos.find((b) => b.id === selectedBoletoId)!}
           clients={clients}
+          directClients={directClients}
           onBack={() => setSubView("listado")}
           onUpdateBoleto={(updated) => {
             onUpdateBoleto(updated);
@@ -174,6 +182,10 @@ export default function VuelosView({ flights: _flights, boletos, onAddBoleto, on
           jurisdiction={jur}
           currentExchangeRate={currentExchangeRate}
         />
+      ) : (
+        <div className="p-8 text-center text-zinc-400 text-sm font-semibold">
+          Boleto no encontrado. <button className="underline text-zinc-700" onClick={() => setSubView("listado")}>Volver al listado</button>
+        </div>
       )}
 
       {/* MODAL DE VOUCHER DE VUELO */}
@@ -1363,6 +1375,7 @@ function NuevoBoletoView({
 function ExpedienteAereoView({
   boleto,
   clients,
+  directClients,
   onBack,
   onUpdateBoleto,
   onShowVoucher,
@@ -1371,6 +1384,7 @@ function ExpedienteAereoView({
 }: {
   boleto: FlightTicket;
   clients: B2BClient[];
+  directClients: DirectClient[];
   onBack: () => void;
   onUpdateBoleto: (boleto: FlightTicket) => void;
   onShowVoucher: (boleto: FlightTicket) => void;
@@ -1389,12 +1403,20 @@ function ExpedienteAereoView({
     }
   );
 
-  const agenciasActivas = clients; // Quitamos el filtro "Activo" para mostrar todas las agencias de prueba
+  // Lista unificada de clientes facturables: agencias B2B + clientes directos.
+  type ClienteFacturable = { id: string; nombre: string; doc: string; email: string; tipoLabel: string; isCredit: boolean; kind: "B2B" | "Directo" };
+  const clientesFacturables = React.useMemo<ClienteFacturable[]>(() => [
+    ...clients.map(c => ({ id: c.id, nombre: c.nombre, doc: c.rif, email: c.email || "", tipoLabel: `B2B · ${c.tipo}`, isCredit: c.tipo === "A Crédito", kind: "B2B" as const })),
+    ...directClients.map(c => ({ id: c.id, nombre: c.nombre, doc: c.cedula || "—", email: c.email || "", tipoLabel: c.tipo === "A Crédito" ? "Directo · Crédito" : "Directo · Contado", isCredit: c.tipo === "A Crédito", kind: "Directo" as const })),
+  ], [clients, directClients]);
+
   const primerSeg = boleto.segmentos[0];
   const ultimoSeg = boleto.segmentos[boleto.segmentos.length - 1];
 
-  const [agencySearch, setAgencySearch] = useState(expediente.clienteB2BNombre || "");
+  const [agencySearch, setAgencySearch] = useState(expediente.clienteB2BNombre || expediente.clienteDirectoNombre || "");
   const [showAgencyDropdown, setShowAgencyDropdown] = useState(false);
+
+  const clienteSeleccionadoId = expediente.clienteB2BId || expediente.clienteDirectoId;
 
   const handleSave = () => {
     onUpdateBoleto({ ...boleto, expedienteAereo: expediente });
@@ -1407,11 +1429,29 @@ function ExpedienteAereoView({
     showAlert({ title: "Éxito", message: "Expediente enviado a facturación exitosamente.", type: "success" });
   };
 
+  // Elegir/limpiar el cliente facturable (B2B o Directo), fijando el tipo de facturación.
+  const seleccionarCliente = (c: ClienteFacturable) => {
+    setAgencySearch(c.nombre);
+    setExpediente(prev => ({
+      ...prev,
+      clienteB2BId: c.kind === "B2B" ? c.id : undefined,
+      clienteB2BNombre: c.kind === "B2B" ? c.nombre : undefined,
+      clienteDirectoId: c.kind === "Directo" ? c.id : undefined,
+      clienteDirectoNombre: c.kind === "Directo" ? c.nombre : undefined,
+      facturacionTipo: c.isCredit ? "Crédito" : "Pago Contado",
+    }));
+    setShowAgencyDropdown(false);
+  };
+
+  const limpiarCliente = () => {
+    setAgencySearch("");
+    setExpediente(prev => ({ ...prev, clienteB2BId: undefined, clienteB2BNombre: undefined, clienteDirectoId: undefined, clienteDirectoNombre: undefined, facturacionTipo: "Pago Contado" }));
+  };
+
   const isCreditAgency = React.useMemo(() => {
-    if (!expediente.clienteB2BId) return false;
-    const agency = agenciasActivas.find(a => a.id === expediente.clienteB2BId);
-    return agency?.tipo === "A Crédito";
-  }, [expediente.clienteB2BId, agenciasActivas]);
+    if (!clienteSeleccionadoId) return false;
+    return clientesFacturables.find(c => c.id === clienteSeleccionadoId)?.isCredit ?? false;
+  }, [clienteSeleccionadoId, clientesFacturables]);
 
   return (
     <div className="space-y-6">
@@ -1624,8 +1664,8 @@ function ExpedienteAereoView({
 
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block flex items-center justify-between">
-                  <span>Agencia B2B (Opcional)</span>
-                  {expediente.clienteB2BId && (
+                  <span>Cliente (Agencia B2B o Directo) — Opcional</span>
+                  {clienteSeleccionadoId && (
                     <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase border ${
                       isCreditAgency ? "bg-purple-50 border-purple-200 text-purple-700" : "bg-amber-50 border-amber-200 text-amber-700"
                     }`}>
@@ -1636,98 +1676,77 @@ function ExpedienteAereoView({
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Buscar agencia B2B por nombre..."
+                    placeholder="Buscar cliente (agencia B2B o directo)..."
                     className="w-full p-2.5 pl-8 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-500"
                     value={agencySearch}
                     onChange={(e) => {
                       const val = e.target.value;
                       setAgencySearch(val);
                       setShowAgencyDropdown(true);
-                      if (!val) {
-                        setExpediente({ ...expediente, clienteB2BId: undefined, clienteB2BNombre: undefined, facturacionTipo: "Pago Contado" });
-                      }
+                      if (!val) limpiarCliente();
                     }}
                     onFocus={() => setShowAgencyDropdown(true)}
                     disabled={expediente.status !== "Borrador"}
                   />
                   <Building className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                  
+
                   {agencySearch && expediente.status === "Borrador" && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setAgencySearch("");
-                        setExpediente({ ...expediente, clienteB2BId: undefined, clienteB2BNombre: undefined, facturacionTipo: "Pago Contado" });
-                      }}
+                      onClick={limpiarCliente}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 hover:bg-zinc-100 rounded text-zinc-400 cursor-pointer"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
-                  
-                  {showAgencyDropdown && expediente.status === "Borrador" && (
-                    <>
-                      <div 
-                        className="fixed inset-0 z-40" 
-                        onClick={() => setShowAgencyDropdown(false)}
-                      />
-                      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-100">
-                        {agenciasActivas.filter(c => {
-                          const query = agencySearch.toLowerCase();
-                          return (
-                            c.nombre.toLowerCase().includes(query) ||
-                            c.rif.toLowerCase().includes(query) ||
-                            c.id.toLowerCase().includes(query) ||
-                            (c.email || "").toLowerCase().includes(query)
-                          );
-                        }).length === 0 ? (
-                          <div className="p-3 text-xs text-zinc-400 italic">
-                            Ninguna agencia coincide con "{agencySearch}".
-                          </div>
-                        ) : (
-                          agenciasActivas.filter(c => {
-                            const query = agencySearch.toLowerCase();
-                            return (
-                              c.nombre.toLowerCase().includes(query) ||
-                              c.rif.toLowerCase().includes(query) ||
-                              c.id.toLowerCase().includes(query) ||
-                              (c.email || "").toLowerCase().includes(query)
-                            );
-                          }).map(c => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => {
-                                setAgencySearch(c.nombre);
-                                setExpediente({
-                                  ...expediente,
-                                  clienteB2BId: c.id,
-                                  clienteB2BNombre: c.nombre,
-                                  facturacionTipo: c.tipo === "A Crédito" ? "Crédito" : "Pago Contado"
-                                });
-                                setShowAgencyDropdown(false);
-                              }}
-                              className="w-full text-left p-3 hover:bg-zinc-50 flex items-center justify-between text-xs transition-colors cursor-pointer border-none font-sans"
-                            >
-                              <div className="space-y-0.5">
-                                <span className="font-bold text-zinc-900 block">{c.nombre}</span>
-                                <span className="text-[10px] text-zinc-400 font-mono block">
-                                  Cod: {c.id} | RIF: {c.rif}
+
+                  {showAgencyDropdown && expediente.status === "Borrador" && (() => {
+                    const query = agencySearch.toLowerCase();
+                    const matches = clientesFacturables.filter(c =>
+                      c.nombre.toLowerCase().includes(query) ||
+                      c.doc.toLowerCase().includes(query) ||
+                      c.id.toLowerCase().includes(query) ||
+                      c.email.toLowerCase().includes(query)
+                    );
+                    return (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setShowAgencyDropdown(false)}
+                        />
+                        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-100">
+                          {matches.length === 0 ? (
+                            <div className="p-3 text-xs text-zinc-400 italic">
+                              Ningún cliente coincide con "{agencySearch}".
+                            </div>
+                          ) : (
+                            matches.map(c => (
+                              <button
+                                key={`${c.kind}-${c.id}`}
+                                type="button"
+                                onClick={() => seleccionarCliente(c)}
+                                className="w-full text-left p-3 hover:bg-zinc-50 flex items-center justify-between text-xs transition-colors cursor-pointer border-none font-sans"
+                              >
+                                <div className="space-y-0.5">
+                                  <span className="font-bold text-zinc-900 block">{c.nombre}</span>
+                                  <span className="text-[10px] text-zinc-400 font-mono block">
+                                    Cod: {c.id} | {c.kind === "B2B" ? "RIF" : "CI"}: {c.doc}
+                                  </span>
+                                </div>
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider whitespace-nowrap ${
+                                  c.isCredit ? "bg-purple-50 text-purple-700" :
+                                  c.kind === "Directo" ? "bg-blue-50 text-blue-700" :
+                                  "bg-zinc-100 text-zinc-600"
+                                }`}>
+                                  {c.tipoLabel}
                                 </span>
-                              </div>
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
-                                c.tipo === "A Crédito" ? "bg-purple-50 text-purple-700" :
-                                c.tipo === "Satélite" ? "bg-blue-50 text-blue-700" :
-                                "bg-zinc-100 text-zinc-600"
-                              }`}>
-                                {c.tipo}
-                              </span>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </>
-                  )}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
