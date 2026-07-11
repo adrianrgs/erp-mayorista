@@ -539,3 +539,8 @@ export const insertRegistroAuditoria = async (_dc: any, vars: any) => {
   await api.post("/auditoria", vars);
   return { data: {} };
 };
+
+export const deleteRegistrosAuditoriaByEntidad = async (_dc: any, vars: { entidadTipo: string; entidadId: string }) => {
+  await api.delete(`/auditoria/entidad/${encodeURIComponent(vars.entidadTipo)}/${encodeURIComponent(vars.entidadId)}`);
+  return { data: {} };
+};

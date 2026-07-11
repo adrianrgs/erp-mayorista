@@ -1234,3 +1234,25 @@ mutation InsertRegistroAuditoria(
     createdAt: $createdAt
   })
 }
+
+# Borra el historial de auditoría atado a una entidad concreta (p.ej. un expediente).
+# Se invoca al eliminar la reserva para que un ID reutilizado no herede su historial.
+mutation DeleteRegistrosAuditoriaByEntidad(
+  $entidadTipo: String!
+  $entidadId: String!
+) @auth(level: PUBLIC) {
+  registroAuditoria_deleteMany(where: {
+    entidadTipo: { eq: $entidadTipo }
+    entidadId: { eq: $entidadId }
+  })
+}
+
+# Borra todo el historial de un tipo de entidad (p.ej. todas las "Reserva").
+# Lo usa el script de reset para dejar un historial limpio tras el wipe.
+mutation DeleteRegistrosAuditoriaByTipo(
+  $entidadTipo: String!
+) @auth(level: PUBLIC) {
+  registroAuditoria_deleteMany(where: {
+    entidadTipo: { eq: $entidadTipo }
+  })
+}

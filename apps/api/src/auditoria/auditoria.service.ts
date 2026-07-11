@@ -31,4 +31,17 @@ export class AuditoriaService {
     });
     return { success: true, id: dto.id };
   }
+
+  async removeByEntidad(entidadTipo: string, entidadId: string) {
+    await this.dc.executeMutation('DeleteRegistrosAuditoriaByEntidad', {
+      entidadTipo,
+      entidadId,
+    });
+    return { success: true };
+  }
+
+  async removeByTipo(entidadTipo: string) {
+    await this.dc.executeMutation('DeleteRegistrosAuditoriaByTipo', { entidadTipo });
+    return { success: true };
+  }
 }

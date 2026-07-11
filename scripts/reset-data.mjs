@@ -199,6 +199,20 @@ async function main() {
   await deleteAll(token, "Estados de Cuenta",      "/finances/statements",           "/finances/statements");
   await deleteAll(token, "Retenciones (IVA/ISLR)", "/finances/withholding-certificates", "/finances/withholding-certificates");
 
+  // Historial de auditoría de reservas — se limpia junto con los datos transaccionales para que
+  // un ID de reserva reutilizado (secuencial, reinicia a RES-1 tras el wipe) no herede el
+  // historial del expediente anterior con el mismo ID.
+  if (DRY_RUN) {
+    console.log("  ~ Historial de Auditoría (Reservas): se limpiaría");
+  } else {
+    try {
+      await request("DELETE", "/auditoria/tipo/Reserva", null, token);
+      console.log("  ✓ Historial de Auditoría (Reservas): limpiado");
+    } catch (e) {
+      console.warn(`  ⚠ No se pudo limpiar el historial de auditoría: ${e.message}`);
+    }
+  }
+
   console.log("\n── Datos de clientes ─────────────────────────────────");
   await resetClientBalances(token);
   await resetDirectClientBalances(token);

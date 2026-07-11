@@ -3185,6 +3185,7 @@ export default function ReservasView({
                 <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest border-b border-zinc-100 pb-2 flex items-center gap-1.5 text-zinc-600">
                   🛡️ Estado de Caja y Saldos
                 </h4>
+                <p className="text-[10px] text-zinc-500 font-medium leading-snug">Seguimiento del cobro al cliente de lo ya facturado en este expediente.</p>
                 {(() => {
                   const resInvoices = invoices.filter(inv => inv.clientName.includes(`Localizador ${activeRes.id}`) && inv.type === "Cobro");
                   // FAC- (regular invoices) and SUP- (suplementos facturados vía "Facturar Suplemento")
@@ -3227,10 +3228,19 @@ export default function ReservasView({
                     .reduce((sum, v) => sum + v.amountSale, 0);
                   const originalPrice = billedTotal - adjustments;
                   const pctCobrado = billedTotal > 0 ? Math.min(100, Math.round((totalCobrado / billedTotal) * 100)) : 0;
+                  const pendiente = Math.max(0, billedTotal - totalCobrado);
+                  // Cobro REAL = suma de comprobantes verificados de este expediente. Sirve para
+                  // detectar SOBREPAGO: si el cliente pagó más que lo facturado, el excedente se
+                  // convierte en saldo a favor (billetera) del cliente — antes quedaba oculto ($0 / 100%).
+                  const cobrableInvoiceIds = resInvoices.filter(isCollectibleInvoice).map(i => i.id);
+                  const totalRecaudado = (vouchers || [])
+                    .filter(v => v.status === "Verificado" && ((v.invoiceId && cobrableInvoiceIds.includes(v.invoiceId)) || (!v.invoiceId && v.locatorId === activeRes.id)))
+                    .reduce((sum, v) => sum + v.amount, 0);
+                  const sobrepago = Math.max(0, totalRecaudado - billedTotal);
 
                   return (
                     <div className="space-y-3.5">
-                      {/* KPIs */}
+                      {/* Composición del total a cobrar */}
                       <div className="grid grid-cols-2 gap-3 text-xs">
                         <div className="bg-zinc-50 border border-zinc-100 rounded p-2.5 text-left">
                           <span className="text-[9px] uppercase font-bold text-zinc-400 block">Precio Original</span>
@@ -3238,35 +3248,58 @@ export default function ReservasView({
                         </div>
                         <div className="bg-zinc-50 border border-zinc-100 rounded p-2.5 text-left">
                           <span className="text-[9px] uppercase font-bold text-zinc-400 block">Ajustes (Modif.)</span>
-                          <span className={`font-mono font-bold block mt-0.5 ${adjustments >= 0 ? "text-amber-600" : "text-emerald-700"}`}>
+                          <span className={`font-mono font-bold block mt-0.5 ${adjustments > 0 ? "text-amber-600" : adjustments < 0 ? "text-emerald-700" : "text-zinc-400"}`}>
                             {adjustments >= 0 ? "+" : ""}${adjustments.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
                           </span>
                         </div>
                       </div>
 
-                      {/* Bar indicator */}
+                      {/* Total a cobrar = Precio Original + Ajustes */}
+                      <div className="flex justify-between items-center border-t border-dashed border-zinc-200 pt-2.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Total a Cobrar</span>
+                        <span className="font-mono font-black text-sm text-zinc-900">${billedTotal.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                      </div>
+
+                      {/* Progreso de cobro */}
                       <div className="space-y-1">
                         <div className="flex justify-between items-center text-[10px] font-bold text-zinc-600">
-                          <span>Total Cobrado (${totalCobrado.toFixed(2)})</span>
+                          <span>Cobrado: ${totalCobrado.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
                           <span>{pctCobrado}%</span>
                         </div>
                         <div className="w-full bg-zinc-100 h-2.5 rounded-full overflow-hidden border border-zinc-200">
-                          <div 
-                            className={`h-full rounded-full transition-all duration-500 ${
-                              pctCobrado === 100 ? "bg-emerald-600" : "bg-amber-500"
-                            }`}
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${pctCobrado === 100 ? "bg-emerald-600" : "bg-amber-500"}`}
                             style={{ width: `${pctCobrado}%` }}
                           />
                         </div>
                       </div>
 
-                      {/* Pending to collect */}
-                      <div className="flex justify-between items-center bg-zinc-50 border border-zinc-100 rounded p-2.5">
-                        <span className="text-[10px] font-bold text-zinc-500">Saldo Pendiente de Cobro:</span>
-                        <span className={`font-mono font-black text-sm ${pctCobrado === 100 ? "text-emerald-700" : "text-red-600 animate-pulse"}`}>
-                          ${Math.max(0, billedTotal - totalCobrado).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
-                        </span>
-                      </div>
+                      {/* Estado final: sin facturar / pendiente / completo / saldo a favor */}
+                      {billedTotal <= 0.01 ? (
+                        <div className="flex justify-between items-center bg-zinc-50 border border-zinc-100 rounded p-2.5">
+                          <span className="text-[10px] font-bold text-zinc-500">Sin facturación registrada aún</span>
+                        </div>
+                      ) : pendiente > 0.01 ? (
+                        <div className="flex justify-between items-center bg-red-50 border border-red-200 rounded p-2.5">
+                          <span className="text-[10px] font-bold text-red-700">Saldo Pendiente de Cobro</span>
+                          <span className="font-mono font-black text-sm text-red-600">${pendiente.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                        </div>
+                      ) : sobrepago > 0.01 ? (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded p-2.5 space-y-0.5">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-bold text-emerald-800">Saldo a Favor Generado</span>
+                            <span className="font-mono font-black text-sm text-emerald-700">+${sobrepago.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                          </div>
+                          <span className="text-[9px] text-emerald-700/80 font-medium block leading-snug">
+                            El cliente pagó más de lo facturado. El excedente queda como saldo a favor (billetera) del cliente para aplicar a futuros cobros.
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between items-center bg-emerald-50 border border-emerald-200 rounded p-2.5">
+                          <span className="text-[10px] font-bold text-emerald-800">Cobro Completo</span>
+                          <span className="font-mono font-black text-sm text-emerald-700">$0.00 USD</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}

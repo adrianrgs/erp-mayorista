@@ -31,7 +31,7 @@ import {
   listRoles, insertRol, updateRol, deleteRol,
   listReglasAutorizacion, insertReglaAutorizacion, updateReglaAutorizacion,
   listSolicitudesAutorizacion, insertSolicitudAutorizacion, resolveSolicitudAutorizacion,
-  listRegistrosAuditoria, insertRegistroAuditoria,
+  listRegistrosAuditoria, insertRegistroAuditoria, deleteRegistrosAuditoriaByEntidad,
 } from "./lib/dataconnect-shim";
 import { isAuthenticated } from "./lib/api";
 import LoginScreen from "./components/LoginScreen";
@@ -791,7 +791,19 @@ export default function App() {
     try {
       setReservations(prev => prev.filter(r => r.id !== id));
       await deleteReservation(dataConnect, { id });
-      logReserva(id, "ReservaEliminada", "Expediente eliminado");
+      // Los IDs de reserva son secuenciales y se reutilizan (p.ej. tras borrar la última o
+      // tras un wipe de datos). Si no limpiamos su auditoría, una futura reserva con el mismo
+      // ID heredaría este historial. Por eso borramos el historial atado al expediente y
+      // registramos la eliminación en la bitácora GLOBAL (sin entidadId → no aparece en ningún
+      // expediente, pero sí en Configuración → Historial de Auditoría: quién borró qué).
+      await deleteRegistrosAuditoriaByEntidad(dataConnect, { entidadTipo: "Reserva", entidadId: id });
+      setRegistrosAuditoria(prev => prev.filter(r => !(r.entidadTipo === "Reserva" && r.entidadId === id)));
+      handleAddRegistroAuditoria({
+        tipo: "ReservaEliminada",
+        detalle: `Expediente ${id} eliminado`,
+        usuarioId: usuario?.id ?? "sistema",
+        usuarioNombre: usuario?.nombre ?? "Sistema",
+      });
     } catch (e) {
       console.error("Error in handleDeleteReservation:", e);
     }
