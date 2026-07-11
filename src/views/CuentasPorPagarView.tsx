@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { PayableObligation, ProviderStatement } from "../types";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
 import { nextSequentialId } from "../lib/idGenerator";
+import { parseAttachment, packAttachment, readFileAsDataURL, downloadAttachment, hasDownloadableFile, MAX_ATTACHMENT_BYTES } from "../lib/attachments";
 import {
   TrendingDown,
   Clock,
@@ -18,7 +19,9 @@ import {
   AlertTriangle,
   UploadCloud,
   Check,
-  Plus
+  Plus,
+  Download,
+  Eye
 } from "lucide-react";
 import { useDialog } from "../components/ui/DialogProvider";
 
@@ -54,6 +57,31 @@ export default function CuentasPorPagarView({
   const [selectedProvider, setSelectedProvider] = useState<string>(
     statements[0]?.providerName || "Hesperia World Wholesalers S.A."
   );
+
+  // Estados de Cuenta: buscadores + selección para pago consolidado
+  const [providerSearch, setProviderSearch] = useState("");   // buscador del catálogo de proveedores
+  const [payableSearch, setPayableSearch] = useState("");      // buscador de facturas por pagar
+  const [statementSearch, setStatementSearch] = useState("");  // buscador del libro mayor (historial)
+  const [selectedPayableIds, setSelectedPayableIds] = useState<string[]>([]);
+  const [showConsolidatedPay, setShowConsolidatedPay] = useState(false);
+  const [consolidatedForm, setConsolidatedForm] = useState({
+    method: "Transferencia Bancaria",
+    reference: "",
+    date: new Date().toISOString().slice(0, 10),
+    notes: "",
+    attachedFile: "",
+  });
+
+  // Detalle de un pago (para ver qué se pagó y descargar el comprobante)
+  const [paymentDetail, setPaymentDetail] = useState<null | {
+    providerName: string;
+    date: string;
+    method: string;
+    reference: string;
+    total: number;
+    obligations: PayableObligation[];
+    attachedFile?: string;
+  }>(null);
 
   // Drawer (Side-panel) State
   const [activeObligationForPayment, setActiveObligationForPayment] = useState<PayableObligation | null>(null);
@@ -234,14 +262,51 @@ export default function CuentasPorPagarView({
   const normalizeProviderName = (name: string) =>
     name.replace(/\s*\(Hab\s*\d+:.*$/i, '').trim();
 
+  // Catálogo de proveedores = los que tienen movimientos en el libro mayor Y los que tienen
+  // obligaciones (aunque aún no tengan statement), para poder pagarles desde aquí.
   const uniqueProviders = useMemo(() => {
-    const normalized = statements.map(s => normalizeProviderName(s.providerName));
-    return Array.from(new Set(normalized)).sort();
-  }, [statements]);
+    const fromStatements = statements.map(s => normalizeProviderName(s.providerName));
+    const fromObligations = obligations.map(o => normalizeProviderName(o.providerName));
+    return Array.from(new Set([...fromStatements, ...fromObligations])).filter(Boolean).sort();
+  }, [statements, obligations]);
+
+  const filteredProviders = useMemo(() => {
+    const q = providerSearch.trim().toLowerCase();
+    if (!q) return uniqueProviders;
+    return uniqueProviders.filter(p => p.toLowerCase().includes(q));
+  }, [uniqueProviders, providerSearch]);
 
   const activeProviderStatements = useMemo(() => {
     return statements.filter(s => normalizeProviderName(s.providerName) === selectedProvider);
   }, [statements, selectedProvider]);
+
+  // Expedientes (RES-) cubiertos por un pago: se derivan de las obligaciones enlazadas por
+  // referencia. El número de expediente es la clave para comunicar entre departamentos.
+  const paymentCoveredLocators = (stm: ProviderStatement): string[] => {
+    const locs = obligations
+      .filter(o =>
+        o.reference && stm.reference && o.reference === stm.reference &&
+        normalizeProviderName(o.providerName) === normalizeProviderName(stm.providerName)
+      )
+      .map(o => o.locatorId)
+      .filter(Boolean);
+    return Array.from(new Set(locs));
+  };
+
+  // El registro detallado muestra SOLO los pagos emitidos (egresos). Se puede buscar por id,
+  // referencia, monto y número de expediente (RES-) de las facturas que el pago cubre.
+  const filteredStatements = useMemo(() => {
+    const payments = activeProviderStatements.filter(s => s.type === "Pago Emitido");
+    const q = statementSearch.trim().toLowerCase();
+    if (!q) return payments;
+    return payments.filter(s =>
+      s.id.toLowerCase().includes(q) ||
+      (s.reference || "").toLowerCase().includes(q) ||
+      s.amount.toFixed(2).includes(q) ||
+      paymentCoveredLocators(s).some(l => l.toLowerCase().includes(q))
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProviderStatements, statementSearch, obligations]);
 
   const providerBalance = useMemo(() => {
     const received = activeProviderStatements
@@ -256,6 +321,136 @@ export default function CuentasPorPagarView({
   // ─── HANDLERS ──────────────────────────────────────────────────────────────
   const calcTotalToPay = (ob: PayableObligation) =>
     ob.netCost + (ob.vatAmount ?? 0) - (ob.vatWithheld ?? 0);
+
+  const remainingOf = (ob: PayableObligation) =>
+    Math.max(0, calcTotalToPay(ob) - ob.paidAmount);
+
+  // Facturas por pagar del proveedor seleccionado: obligaciones con saldo pendiente y NO
+  // congeladas (las congeladas se resuelven aparte). Base para el pago consolidado.
+  const providerPayables = useMemo(() => {
+    return obligations.filter(o =>
+      normalizeProviderName(o.providerName) === selectedProvider &&
+      !o.isFrozen && o.status !== "Congelado" && o.status !== "Pagado Total"
+    );
+  }, [obligations, selectedProvider]);
+
+  const filteredPayables = useMemo(() => {
+    const q = payableSearch.trim().toLowerCase();
+    if (!q) return providerPayables;
+    return providerPayables.filter(o =>
+      o.id.toLowerCase().includes(q) ||
+      (o.locatorId || "").toLowerCase().includes(q) ||
+      (o.serviceDetail || "").toLowerCase().includes(q) ||
+      (o.reference || "").toLowerCase().includes(q) ||
+      remainingOf(o).toFixed(2).includes(q)
+    );
+  }, [providerPayables, payableSearch]);
+
+  const selectedPayables = useMemo(
+    () => providerPayables.filter(o => selectedPayableIds.includes(o.id)),
+    [providerPayables, selectedPayableIds]
+  );
+  const consolidatedTotal = selectedPayables.reduce((sum, o) => sum + remainingOf(o), 0);
+
+  // Al cambiar de proveedor, limpiar la selección y el buscador de facturas.
+  useEffect(() => {
+    setSelectedPayableIds([]);
+    setPayableSearch("");
+  }, [selectedProvider]);
+
+  const togglePayable = (id: string) =>
+    setSelectedPayableIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const toggleAllPayables = () =>
+    setSelectedPayableIds(prev =>
+      prev.length === filteredPayables.length ? [] : filteredPayables.map(o => o.id)
+    );
+
+  const openConsolidatedPay = () => {
+    if (selectedPayables.length === 0) return;
+    setConsolidatedForm({
+      method: "Transferencia Bancaria",
+      reference: "",
+      date: new Date().toISOString().slice(0, 10),
+      notes: "",
+      attachedFile: "",
+    });
+    setShowConsolidatedPay(true);
+  };
+
+  const handleConsolidatedPaymentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const toPay = selectedPayables.filter(o => remainingOf(o) > 0);
+    if (toPay.length === 0) {
+      showAlert({ title: "Sin facturas", message: "Selecciona al menos una factura con saldo pendiente.", type: "warning" });
+      return;
+    }
+    const reference = consolidatedForm.reference.trim() || `REF-PAG-${Math.floor(100000 + Math.random() * 900000)}`;
+    const fecha = consolidatedForm.date || new Date().toISOString().split("T")[0];
+
+    // 1. Saldar cada obligación seleccionada (pago total del saldo pendiente).
+    let total = 0;
+    toPay.forEach(o => {
+      const totalToPay = calcTotalToPay(o);
+      total += remainingOf(o);
+      onUpdateObligation({
+        ...o,
+        paidAmount: Number(totalToPay.toFixed(2)),
+        status: "Pagado Total",
+        paymentMethod: consolidatedForm.method,
+        reference,
+        notes: consolidatedForm.notes.trim() || o.notes,
+        attachedFile: consolidatedForm.attachedFile || o.attachedFile,
+      });
+    });
+
+    // 2. Un único "Pago Emitido" consolidado en el Libro Mayor por el total.
+    onAddStatement({
+      id: nextSequentialId("DOC-PAG", statements.map(s => s.id)),
+      providerName: selectedProvider,
+      date: fecha,
+      type: "Pago Emitido",
+      amount: Number(total.toFixed(2)),
+      reference,
+      status: "Aplicado",
+    });
+
+    setShowConsolidatedPay(false);
+    setSelectedPayableIds([]);
+    triggerNotification(`✓ Pago consolidado de ${toPay.length} factura(s) por ${formatCurrency(Number(total.toFixed(2)), "USD")} registrado a ${selectedProvider}.`);
+  };
+
+  // Abrir el detalle de un pago desde el Libro Mayor (statement "Pago Emitido").
+  // Las facturas cubiertas se enlazan por referencia (una o varias en un pago consolidado).
+  const openPaymentDetailFromStatement = (stm: ProviderStatement) => {
+    const covered = obligations.filter(o =>
+      o.reference && stm.reference && o.reference === stm.reference &&
+      normalizeProviderName(o.providerName) === normalizeProviderName(stm.providerName)
+    );
+    const withFile = covered.find(o => hasDownloadableFile(o.attachedFile));
+    setPaymentDetail({
+      providerName: normalizeProviderName(stm.providerName),
+      date: stm.date,
+      method: covered[0]?.paymentMethod || "—",
+      reference: stm.reference,
+      total: stm.amount,
+      obligations: covered,
+      attachedFile: (withFile || covered[0])?.attachedFile,
+    });
+  };
+
+  // Abrir el detalle desde una obligación pagada (pestaña "Pagadas").
+  const openPaymentDetailFromObligation = (o: PayableObligation) => {
+    setPaymentDetail({
+      providerName: normalizeProviderName(o.providerName),
+      date: o.date || o.dueDate,
+      method: o.paymentMethod || "—",
+      reference: o.reference || "—",
+      total: o.paidAmount,
+      obligations: [o],
+      attachedFile: o.attachedFile,
+    });
+  };
 
   const handleOpenPaymentDrawer = (obligation: PayableObligation) => {
     setActiveObligationForPayment(obligation);
@@ -618,9 +813,12 @@ export default function CuentasPorPagarView({
                                 Pagar
                               </button>
                             ) : (
-                              <span className="text-[9px] text-zinc-400 font-bold uppercase flex items-center justify-end gap-1.5 pr-2">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Conciliado
-                              </span>
+                              <button
+                                onClick={() => openPaymentDetailFromObligation(ob)}
+                                className="px-3 py-1.5 border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer inline-flex items-center gap-1.5"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-emerald-600" /> Ver detalle
+                              </button>
                             )}
                           </td>
                         </tr>
@@ -642,11 +840,26 @@ export default function CuentasPorPagarView({
           <div className="lg:col-span-4 bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-3xs">
             <div>
               <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-widest">Catálogo de Proveedores</h4>
-              <p className="text-[10px] text-zinc-400 mt-1">Seleccione un proveedor para auditar su Libro Mayor de costos</p>
+              <p className="text-[10px] text-zinc-400 mt-1">Seleccione un proveedor para ver sus facturas y registrar pagos</p>
+            </div>
+
+            {/* Buscador de proveedores */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={providerSearch}
+                onChange={(e) => setProviderSearch(e.target.value)}
+                placeholder="Buscar proveedor..."
+                className="w-full pl-8 pr-3 py-2 border border-zinc-200 bg-white rounded-md text-xs font-semibold text-zinc-800 focus:outline-none focus:border-zinc-400"
+              />
             </div>
 
             <div className="divide-y divide-zinc-100 max-h-[50vh] overflow-y-auto pr-1">
-              {uniqueProviders.map((provider) => {
+              {filteredProviders.length === 0 && (
+                <p className="p-3 text-[11px] text-zinc-400 italic text-center">Sin proveedores que coincidan.</p>
+              )}
+              {filteredProviders.map((provider) => {
                 const isSelected = provider === selectedProvider;
                 return (
                   <div
@@ -725,50 +938,165 @@ export default function CuentasPorPagarView({
               </div>
             </div>
 
+            {/* Facturas por pagar (selección para pago consolidado) */}
+            <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-3xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <DollarSign className="w-4 h-4 text-zinc-700" /> Facturas por Pagar
+                  {providerPayables.length > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded bg-red-50 border border-red-200 text-red-700 text-[9px] font-black">{providerPayables.length}</span>
+                  )}
+                </h4>
+                <div className="relative sm:w-60">
+                  <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={payableSearch}
+                    onChange={(e) => setPayableSearch(e.target.value)}
+                    placeholder="Buscar factura, expediente, monto..."
+                    className="w-full pl-8 pr-3 py-2 border border-zinc-200 bg-white rounded-md text-xs font-semibold text-zinc-800 focus:outline-none focus:border-zinc-400"
+                  />
+                </div>
+              </div>
+
+              {providerPayables.length === 0 ? (
+                <p className="p-6 text-center text-[11px] text-zinc-400 italic bg-zinc-50/40 rounded">Este proveedor no tiene facturas pendientes de pago.</p>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="text-zinc-500 font-bold bg-zinc-50 uppercase tracking-wider text-[9px] border-b border-zinc-200">
+                          <th className="p-3 w-9 text-center">
+                            <input
+                              type="checkbox"
+                              aria-label="Seleccionar todas"
+                              className="w-4 h-4 rounded border-zinc-300 accent-zinc-900 cursor-pointer align-middle"
+                              checked={filteredPayables.length > 0 && filteredPayables.every(o => selectedPayableIds.includes(o.id))}
+                              ref={el => { if (el) el.indeterminate = selectedPayableIds.length > 0 && !filteredPayables.every(o => selectedPayableIds.includes(o.id)); }}
+                              onChange={toggleAllPayables}
+                            />
+                          </th>
+                          <th className="p-3">Obligación</th>
+                          <th className="p-3">Expediente</th>
+                          <th className="p-3">Concepto</th>
+                          <th className="p-3">Vence</th>
+                          <th className="p-3 text-right">Pendiente</th>
+                          <th className="p-3 text-center">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
+                        {filteredPayables.length === 0 ? (
+                          <tr><td colSpan={7} className="p-5 text-center text-zinc-400 italic">Ninguna factura coincide con la búsqueda.</td></tr>
+                        ) : filteredPayables.map(o => {
+                          const checked = selectedPayableIds.includes(o.id);
+                          return (
+                            <tr key={o.id} onClick={() => togglePayable(o.id)} className={`cursor-pointer transition-colors ${checked ? "bg-zinc-900/[0.04]" : "hover:bg-zinc-50/60"}`}>
+                              <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                <input type="checkbox" checked={checked} onChange={() => togglePayable(o.id)} className="w-4 h-4 rounded border-zinc-300 accent-zinc-900 cursor-pointer align-middle" />
+                              </td>
+                              <td className="p-3 font-mono font-bold text-zinc-600">{o.id}</td>
+                              <td className="p-3 font-mono text-zinc-500">{o.locatorId}</td>
+                              <td className="p-3 text-zinc-700 max-w-[220px] truncate" title={o.serviceDetail}>{o.serviceDetail}</td>
+                              <td className="p-3 font-mono text-zinc-500">{formatDate(o.dueDate)}</td>
+                              <td className="p-3 text-right font-mono font-black text-red-650">{formatCurrency(remainingOf(o), o.currency || "USD")}</td>
+                              <td className="p-3 text-center">
+                                <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${o.status === "Pagado Parcial" ? "bg-blue-50 text-blue-700 border-blue-200" : o.status === "Vencido" ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-250"}`}>{o.status}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Barra de acción: pago consolidado */}
+                  <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border p-3.5 transition-all ${selectedPayables.length > 0 ? "bg-zinc-950 border-zinc-950" : "bg-zinc-50 border-zinc-200"}`}>
+                    <div className={selectedPayables.length > 0 ? "text-white" : "text-zinc-500"}>
+                      <span className="text-[10px] uppercase font-bold tracking-wider block">{selectedPayables.length} factura(s) seleccionada(s) · total a pagar</span>
+                      <span className="text-lg font-black font-mono">{formatCurrency(Number(consolidatedTotal.toFixed(2)), "USD")}</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={selectedPayables.length === 0}
+                      onClick={openConsolidatedPay}
+                      className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded text-xs font-bold uppercase tracking-wider transition-all ${selectedPayables.length > 0 ? "bg-emerald-500 hover:bg-emerald-400 text-white cursor-pointer shadow-md" : "bg-zinc-200 text-zinc-400 cursor-not-allowed"}`}
+                    >
+                      <DollarSign className="w-4 h-4" /> Pagar seleccionadas
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* General Ledger Table */}
             <div className="bg-white border border-zinc-200 rounded-lg p-5 shadow-3xs space-y-4">
-              <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-100 pb-3">
-                <FileText className="w-4 h-4 text-zinc-700" /> Registro Detallado de Facturas y Egresos
-              </h4>
-              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3">
+                <h4 className="font-extrabold text-zinc-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-zinc-700" /> Registro de Pagos Emitidos
+                </h4>
+                <div className="relative sm:w-60">
+                  <Search className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={statementSearch}
+                    onChange={(e) => setStatementSearch(e.target.value)}
+                    placeholder="Buscar por RES-, referencia o monto..."
+                    className="w-full pl-8 pr-3 py-2 border border-zinc-200 bg-white rounded-md text-xs font-semibold text-zinc-800 focus:outline-none focus:border-zinc-400"
+                  />
+                </div>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs divide-y divide-zinc-200">
                   <thead>
                     <tr className="text-zinc-500 font-bold bg-zinc-50 uppercase tracking-wider text-[9px] border-b border-zinc-200">
                       <th className="p-3">ID Interno</th>
                       <th className="p-3">Fecha</th>
-                      <th className="p-3">Tipo Transacción</th>
+                      <th className="p-3">Expediente(s)</th>
                       <th className="p-3">Ref. Documento</th>
                       <th className="p-3 text-right">Importe</th>
                       <th className="p-3 text-center">Estado</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
-                    {activeProviderStatements.length === 0 ? (
+                    {filteredStatements.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="p-6 text-center text-zinc-400 italic bg-zinc-50/10">
-                          No se registran movimientos en el libro mayor de este proveedor.
+                          {activeProviderStatements.some(s => s.type === "Pago Emitido") ? "Ningún pago coincide con la búsqueda." : "Aún no se registran pagos emitidos a este proveedor."}
                         </td>
                       </tr>
                     ) : (
-                      activeProviderStatements.map((stm) => {
-                        const isInvoice = stm.type === "Factura Recibida";
+                      filteredStatements.map((stm) => {
+                        const locators = paymentCoveredLocators(stm);
                         return (
-                          <tr key={stm.id} className="hover:bg-zinc-50/50 transition-colors">
-                            <td className="p-3 font-mono font-bold text-zinc-500">{stm.id}</td>
-                            <td className="p-3 text-zinc-500 font-mono">{formatDate(stm.date)}</td>
-                            <td className="p-3">
-                              <span className={`px-2.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider border ${
-                                isInvoice 
-                                  ? "bg-red-50 border-red-200 text-red-750" 
-                                  : "bg-emerald-50 border-emerald-255 text-emerald-700"
-                              }`}>
-                                {isInvoice ? "Factura Recibida" : "Pago Emitido"}
+                          <tr
+                            key={stm.id}
+                            onClick={() => openPaymentDetailFromStatement(stm)}
+                            title="Ver detalle del pago y comprobante"
+                            className="transition-colors hover:bg-emerald-50/50 cursor-pointer"
+                          >
+                            <td className="p-3 font-mono font-bold text-zinc-600">
+                              <span className="inline-flex items-center gap-1.5">
+                                <Eye className="w-3.5 h-3.5 text-emerald-600" /> {stm.id}
                               </span>
                             </td>
+                            <td className="p-3 text-zinc-500 font-mono">{formatDate(stm.date)}</td>
+                            <td className="p-3">
+                              {locators.length === 0 ? (
+                                <span className="text-zinc-300">—</span>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  {locators.slice(0, 3).map(l => (
+                                    <span key={l} className="px-1.5 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-[9px] font-mono font-bold text-zinc-700">{l}</span>
+                                  ))}
+                                  {locators.length > 3 && <span className="text-[9px] text-zinc-400 font-bold self-center">+{locators.length - 3}</span>}
+                                </div>
+                              )}
+                            </td>
                             <td className="p-3 font-mono text-zinc-900 font-semibold">{stm.reference}</td>
-                            <td className={`p-3 text-right font-black font-mono text-xs ${isInvoice ? "text-red-650" : "text-emerald-700"}`}>
-                              {isInvoice ? "+" : "-"}${stm.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                            <td className="p-3 text-right font-black font-mono text-xs text-emerald-700">
+                              -${stm.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
                             </td>
                             <td className="p-3 text-center">
                               <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${
@@ -1053,27 +1381,31 @@ export default function CuentasPorPagarView({
                 />
               </div>
 
-              {/* Upload Comprobante Mock */}
+              {/* Upload Comprobante */}
               <div className="space-y-1.5 text-left">
                 <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Adjuntar Soporte de Egreso (PDF / JPG)</label>
                 <div className="border border-dashed border-zinc-300 bg-zinc-50 rounded p-4 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-zinc-100/60 transition-colors relative">
                   <input
                     type="file"
                     className="absolute inset-0 opacity-0 cursor-pointer"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
-                      if (file) {
-                        setPaymentForm(prev => ({ ...prev, attachedFile: file.name }));
+                      if (!file) return;
+                      if (file.size > MAX_ATTACHMENT_BYTES) {
+                        showAlert({ title: "Archivo muy grande", message: "El comprobante supera los 4 MB. Sube una versión más liviana (PDF/JPG comprimido).", type: "warning" });
+                        return;
                       }
+                      const dataUrl = await readFileAsDataURL(file);
+                      setPaymentForm(prev => ({ ...prev, attachedFile: packAttachment(file.name, dataUrl) }));
                     }}
                   />
                   <UploadCloud className="w-6 h-6 text-zinc-400 mb-1" />
                   {paymentForm.attachedFile ? (
-                    <p className="text-[10.5px] font-bold text-zinc-800">✓ Soporte: {paymentForm.attachedFile}</p>
+                    <p className="text-[10.5px] font-bold text-zinc-800">✓ Soporte: {parseAttachment(paymentForm.attachedFile).name}</p>
                   ) : (
                     <>
                       <p className="text-[10.5px] font-bold text-zinc-700">Arrastre aquí o haga clic para subir recibo</p>
-                      <p className="text-[9px] text-zinc-400">Archivos PDF, JPG, PNG hasta 10MB</p>
+                      <p className="text-[9px] text-zinc-400">Archivos PDF, JPG, PNG hasta 4MB</p>
                     </>
                   )}
                 </div>
@@ -1099,6 +1431,219 @@ export default function CuentasPorPagarView({
           </div>
         </div>
       )}
+
+      {/* --- MODAL: PAGO CONSOLIDADO A PROVEEDOR --- */}
+      {showConsolidatedPay && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in font-sans p-4">
+          <div className="bg-white rounded-lg w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="bg-zinc-950 text-white p-5 flex items-center justify-between flex-shrink-0">
+              <div>
+                <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400">Pago consolidado</span>
+                <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2 mt-0.5">
+                  <DollarSign className="w-4.5 h-4.5 text-emerald-400" /> Pagar a {selectedProvider}
+                </h4>
+              </div>
+              <button onClick={() => setShowConsolidatedPay(false)} className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded transition-colors cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConsolidatedPaymentSubmit} className="flex-1 overflow-y-auto p-5 space-y-4 text-left">
+              {/* Resumen de facturas seleccionadas */}
+              <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3.5 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">{selectedPayables.length} factura(s) a pagar</span>
+                  <span className="text-[9px] uppercase font-bold text-zinc-400 tracking-wider">Pendiente</span>
+                </div>
+                <ul className="divide-y divide-zinc-200 max-h-40 overflow-y-auto">
+                  {selectedPayables.map(o => (
+                    <li key={o.id} className="flex justify-between items-center gap-2 py-1.5 text-[11px]">
+                      <span className="font-mono font-bold text-zinc-600 shrink-0">{o.id}</span>
+                      <span className="text-zinc-500 truncate flex-1" title={o.serviceDetail}>{o.serviceDetail}</span>
+                      <span className="font-mono font-bold text-zinc-900 shrink-0">{formatCurrency(remainingOf(o), o.currency || "USD")}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex justify-between items-center border-t border-zinc-300 pt-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-zinc-700">Total a pagar</span>
+                  <span className="text-lg font-black font-mono text-emerald-700">{formatCurrency(Number(consolidatedTotal.toFixed(2)), "USD")}</span>
+                </div>
+              </div>
+
+              {/* Método + Fecha */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Método de Egreso</label>
+                  <select className="w-full p-2 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
+                    value={consolidatedForm.method}
+                    onChange={(e) => setConsolidatedForm(prev => ({ ...prev, method: e.target.value }))}>
+                    <option value="Transferencia Bancaria">Transferencia Bancaria</option>
+                    <option value="Tarjeta de Crédito">Tarjeta de Crédito</option>
+                    <option value="Efectivo USD">Efectivo USD</option>
+                    <option value="Cheque Corporativo">Cheque Corporativo</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Fecha del Pago</label>
+                  <input type="date" className="w-full p-2 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
+                    value={consolidatedForm.date}
+                    onChange={(e) => setConsolidatedForm(prev => ({ ...prev, date: e.target.value }))} />
+                </div>
+              </div>
+
+              {/* Referencia */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Referencia Bancaria / Operación</label>
+                <input type="text" placeholder="Ej: TR-882710293 (se genera una si se deja vacío)"
+                  className="w-full p-2 border border-zinc-200 bg-white rounded text-xs font-mono font-semibold text-zinc-800 focus:outline-none"
+                  value={consolidatedForm.reference}
+                  onChange={(e) => setConsolidatedForm(prev => ({ ...prev, reference: e.target.value }))} />
+              </div>
+
+              {/* Observaciones */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Observaciones Internas</label>
+                <textarea rows={2} placeholder="Notas administrativas..."
+                  className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs text-zinc-700 font-semibold focus:outline-none"
+                  value={consolidatedForm.notes}
+                  onChange={(e) => setConsolidatedForm(prev => ({ ...prev, notes: e.target.value }))} />
+              </div>
+
+              {/* Soporte */}
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Adjuntar Soporte de Egreso (PDF / JPG)</label>
+                <div className="border border-dashed border-zinc-300 bg-zinc-50 rounded p-4 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-zinc-100/60 transition-colors relative">
+                  <input type="file" className="absolute inset-0 opacity-0 cursor-pointer"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      if (f.size > MAX_ATTACHMENT_BYTES) {
+                        showAlert({ title: "Archivo muy grande", message: "El comprobante supera los 4 MB. Sube una versión más liviana (PDF/JPG comprimido).", type: "warning" });
+                        return;
+                      }
+                      const dataUrl = await readFileAsDataURL(f);
+                      setConsolidatedForm(prev => ({ ...prev, attachedFile: packAttachment(f.name, dataUrl) }));
+                    }} />
+                  <UploadCloud className="w-6 h-6 text-zinc-400 mb-1" />
+                  {consolidatedForm.attachedFile ? (
+                    <p className="text-[10.5px] font-bold text-zinc-800">✓ Soporte: {parseAttachment(consolidatedForm.attachedFile).name}</p>
+                  ) : (
+                    <p className="text-[10.5px] font-bold text-zinc-700">Arrastre aquí o haga clic para subir recibo</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Botones */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-zinc-100">
+                <button type="button" onClick={() => setShowConsolidatedPay(false)}
+                  className="w-1/2 py-2.5 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer">
+                  Cancelar
+                </button>
+                <button type="submit"
+                  className="w-1/2 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md flex items-center justify-center gap-2">
+                  <Check className="w-4 h-4" /> Confirmar pago
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: DETALLE DE PAGO + COMPROBANTE --- */}
+      {paymentDetail && (() => {
+        const att = parseAttachment(paymentDetail.attachedFile);
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in font-sans p-4">
+            <div className="bg-white rounded-lg w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+              <div className="bg-zinc-950 text-white p-5 flex items-center justify-between flex-shrink-0">
+                <div>
+                  <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400">Detalle del pago</span>
+                  <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2 mt-0.5">
+                    <DollarSign className="w-4.5 h-4.5 text-emerald-400" /> {paymentDetail.providerName}
+                  </h4>
+                </div>
+                <button onClick={() => setPaymentDetail(null)} className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded transition-colors cursor-pointer">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 text-left">
+                {/* Datos del egreso */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-zinc-50 border border-zinc-200 rounded p-2.5">
+                    <span className="text-[9px] uppercase font-bold text-zinc-400 block">Total pagado</span>
+                    <span className="font-mono font-black text-emerald-700 text-base">{formatCurrency(paymentDetail.total, "USD")}</span>
+                  </div>
+                  <div className="bg-zinc-50 border border-zinc-200 rounded p-2.5">
+                    <span className="text-[9px] uppercase font-bold text-zinc-400 block">Fecha</span>
+                    <span className="font-mono font-bold text-zinc-800 text-sm">{formatDate(paymentDetail.date)}</span>
+                  </div>
+                  <div className="bg-zinc-50 border border-zinc-200 rounded p-2.5">
+                    <span className="text-[9px] uppercase font-bold text-zinc-400 block">Método</span>
+                    <span className="font-bold text-zinc-800 text-[11px]">{paymentDetail.method}</span>
+                  </div>
+                  <div className="bg-zinc-50 border border-zinc-200 rounded p-2.5">
+                    <span className="text-[9px] uppercase font-bold text-zinc-400 block">Referencia</span>
+                    <span className="font-mono font-bold text-zinc-800 text-[11px] select-all break-all">{paymentDetail.reference}</span>
+                  </div>
+                </div>
+
+                {/* Facturas cubiertas */}
+                <div>
+                  <span className="text-[9px] uppercase font-bold text-zinc-400 block mb-1.5">Facturas cubiertas ({paymentDetail.obligations.length})</span>
+                  {paymentDetail.obligations.length === 0 ? (
+                    <p className="text-[11px] text-zinc-400 italic bg-zinc-50 border border-zinc-200 rounded p-3">No se encontraron facturas asociadas a esta referencia.</p>
+                  ) : (
+                    <ul className="border border-zinc-200 rounded divide-y divide-zinc-100">
+                      {paymentDetail.obligations.map(o => (
+                        <li key={o.id} className="flex items-center justify-between gap-2 p-2.5 text-[11px]">
+                          <div className="min-w-0">
+                            <span className="font-mono font-bold text-zinc-600">{o.id}</span>
+                            <span className="text-zinc-500 block truncate" title={o.serviceDetail}>{o.serviceDetail}</span>
+                            <span className="text-[9px] text-zinc-400 font-mono">Exp. {o.locatorId}</span>
+                          </div>
+                          <span className="font-mono font-bold text-zinc-900 shrink-0">{formatCurrency(o.paidAmount, o.currency || "USD")}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Comprobante */}
+                <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3.5">
+                  <span className="text-[9px] uppercase font-bold text-zinc-400 block mb-2">Comprobante de pago</span>
+                  {att.dataUrl ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="w-4 h-4 text-zinc-500 shrink-0" />
+                        <span className="text-xs font-bold text-zinc-800 truncate">{att.name || "comprobante"}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => downloadAttachment(att)}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-zinc-950 hover:bg-zinc-800 text-white rounded text-[11px] font-bold uppercase tracking-wider cursor-pointer shrink-0"
+                      >
+                        <Download className="w-3.5 h-3.5" /> Descargar
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-zinc-500 font-semibold leading-snug">
+                      {att.name
+                        ? <>Se registró el nombre <b>“{att.name}”</b>, pero el archivo no está disponible para descargar (se subió antes de habilitar el guardado de comprobantes).</>
+                        : "No se adjuntó comprobante para este pago."}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-t border-zinc-100 p-4 flex justify-end flex-shrink-0">
+                <button type="button" onClick={() => setPaymentDetail(null)} className="px-5 py-2.5 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer">Cerrar</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* RESOLVE FROZEN OBLIGATION MODAL */}
       {resolveObligation && (() => {

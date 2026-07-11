@@ -56,6 +56,7 @@ import ProveedorPicker from "../components/ui/ProveedorPicker";
 import { reconcileDossierUpdate } from "../lib/financialReconciler";
 import { resolveSaleClient, isCreditEligible } from "../lib/clientResolver";
 import { nextSequentialId } from "../lib/idGenerator";
+import { parseAttachment, downloadAttachment } from "../lib/attachments";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
 import { getStatusBadge, formatDate } from "../components/reservas/reservasFormat";
 import Button from "../components/ui/Button";
@@ -6704,8 +6705,10 @@ export default function ReservasView({
                   <div className="flex items-center gap-2">
                     <FileText className="w-5 h-5 text-zinc-400" />
                     <div>
-                      <span className="font-bold text-zinc-800 block text-[11px]">{selectedObligationForReceipt.attachedFile || "soporte_pago.pdf"}</span>
-                      <span className="text-[9.5px] text-zinc-400 block">Tamaño: 1.2 MB | Formato: PDF</span>
+                      <span className="font-bold text-zinc-800 block text-[11px]">{parseAttachment(selectedObligationForReceipt.attachedFile).name || "Sin comprobante adjunto"}</span>
+                      <span className="text-[9.5px] text-zinc-400 block">
+                        {parseAttachment(selectedObligationForReceipt.attachedFile).dataUrl ? "Archivo disponible para descargar" : "Sin archivo descargable"}
+                      </span>
                     </div>
                   </div>
                   <Badge variant="success">
@@ -6733,7 +6736,12 @@ export default function ReservasView({
                 <Button
                   type="button"
                   onClick={() => {
-                    showAlert({ title: "Descarga de soporte", message: `Simulando descarga de soporte: ${selectedObligationForReceipt.attachedFile || "soporte_pago.pdf"}`, type: "info" });
+                    const att = parseAttachment(selectedObligationForReceipt.attachedFile);
+                    if (att.dataUrl) {
+                      downloadAttachment(att);
+                    } else {
+                      showAlert({ title: "Sin archivo", message: att.name ? `Solo se registró el nombre “${att.name}”; el archivo no está disponible para descargar (se subió antes de habilitar el guardado de comprobantes).` : "Este pago no tiene comprobante adjunto.", type: "info" });
+                    }
                   }}
                   variant="secondary"
                   className="uppercase shadow-3xs"
@@ -6945,6 +6953,11 @@ export default function ReservasView({
                   const prev = payableObligations.find(p => p.id === o.id);
                   return prev && !o.isFrozen && prev.netCost !== o.netCost;
                 });
+                // Obligaciones NUEVAS creadas por la reconciliación (p.ej. un servicio que se
+                // facturó con costo neto 0 y ahora tiene costo real → se genera su cuenta por pagar).
+                const created = (fip.updatedPayableObligations || []).filter((o: any) =>
+                  !o.isFrozen && !payableObligations.find(p => p.id === o.id)
+                );
 
                 const fmt = (n: number) => "$" + Number(n || 0).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " USD";
 
@@ -7023,18 +7036,28 @@ export default function ReservasView({
                     )}
 
                     {/* Sin impacto directo en el cliente */}
-                    {creditoTotal === 0 && suplementoTotal === 0 && addedServices.length === 0 && (
+                    {creditoTotal === 0 && suplementoTotal === 0 && addedServices.length === 0 && created.length === 0 && frozen.length === 0 && adjusted.length === 0 && (
                       <div className="bg-zinc-50 border border-zinc-200 p-3 rounded-lg text-[11px] text-zinc-500 font-semibold">
                         Esta modificación no genera crédito ni cargo adicional para {clienteNombre}.
                       </div>
                     )}
 
                     {/* Impacto en proveedores */}
-                    {(frozen.length > 0 || adjusted.length > 0) && (
+                    {(frozen.length > 0 || adjusted.length > 0 || created.length > 0) && (
                       <div className="bg-amber-50 border border-amber-250 rounded-lg p-3.5 text-left space-y-2">
                         <span className="text-[10px] uppercase font-bold text-amber-800 flex items-center gap-1">
                           <AlertTriangle className="w-3.5 h-3.5" /> Impacto en pagos a proveedores
                         </span>
+                        {created.length > 0 && (
+                          <div>
+                            <p className="text-[10px] text-amber-700 font-semibold leading-snug">Se generará(n) esta(s) cuenta(s) por pagar al proveedor:</p>
+                            <ul className="list-disc list-inside text-[10px] text-amber-800 font-bold mt-1 space-y-0.5">
+                              {created.map((o: any, idx: number) => (
+                                <li key={idx}>{o.providerName} · Ref {o.locatorId} — {fmt(o.netCost)}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                         {frozen.length > 0 && (
                           <div>
                             <p className="text-[10px] text-amber-700 font-semibold leading-snug">

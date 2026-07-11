@@ -224,49 +224,79 @@ export function reconcileDossierUpdate(
         if ((deltaSale !== 0 || deltaNet !== 0) && sOld.statusFacturacion === "Facturado") {
           log.push(`[Modificación Tarifa] Servicio "${sNew.descripcion}" varió de precio. Delta venta: $${deltaSale.toFixed(2)}, Delta neto: $${deltaNet.toFixed(2)}`);
 
-          const varType = deltaSale > 0 ? "Suplemento" as const : "Credito" as const;
+          // ── Impacto al CLIENTE: SOLO si cambió el PRECIO DE VENTA ──
+          // Si únicamente cambió el costo neto (p.ej. se ajustó la comisión), el cliente paga
+          // exactamente lo mismo → NO se genera suplemento ni crédito. (Antes, con deltaSale = 0,
+          // se creaba una variación "Crédito" de $0 que terminaba emitiendo una nota de crédito de $0.)
+          if (deltaSale !== 0) {
+            const varType = deltaSale > 0 ? "Suplemento" as const : "Credito" as const;
 
-          const variation: FinancialVariation = {
-            id: genId("VAR-MOD"),
-            reservationId: newRes.id,
-            serviceItemId: sNew.id,
-            type: varType,
-            amountNet: deltaNet,
-            amountSale: deltaSale,
-            reason: `Modificación tarifa: ${sNew.descripcion}`,
-            date: new Date().toISOString().split("T")[0],
-            // Tanto suplementos como créditos por modificación de tarifa quedan en "Borrador" —
-            // invisibles para Facturación (y sin impacto en el saldo del cliente) hasta que el
-            // operador de Reservas los envíe explícitamente con "Enviar a Facturación".
-            status: "Borrador"
-          };
-          newVariations.push(variation);
-          currentVariations.push(variation);
+            const variation: FinancialVariation = {
+              id: genId("VAR-MOD"),
+              reservationId: newRes.id,
+              serviceItemId: sNew.id,
+              type: varType,
+              amountNet: deltaNet,
+              amountSale: deltaSale,
+              reason: `Modificación tarifa: ${sNew.descripcion}`,
+              date: new Date().toISOString().split("T")[0],
+              // Tanto suplementos como créditos por modificación de tarifa quedan en "Borrador" —
+              // invisibles para Facturación (y sin impacto en el saldo del cliente) hasta que el
+              // operador de Reservas los envíe explícitamente con "Enviar a Facturación".
+              status: "Borrador"
+            };
+            newVariations.push(variation);
+            currentVariations.push(variation);
 
-          if (deltaSale > 0) {
-            // Supplement: balance update deferred to FacturacionView when user approves billing
-            log.push(`[Suplemento Pendiente] $${deltaSale.toFixed(2)} sobre "${sNew.descripcion}" — pendiente de enviar a Facturación.`);
-          } else {
-            applyCreditToClient(Math.abs(deltaSale), `Crédito por rebaja tarifa: ${sNew.descripcion}`);
+            if (deltaSale > 0) {
+              // Supplement: balance update deferred to FacturacionView when user approves billing
+              log.push(`[Suplemento Pendiente] $${deltaSale.toFixed(2)} sobre "${sNew.descripcion}" — pendiente de enviar a Facturación.`);
+            } else {
+              applyCreditToClient(Math.abs(deltaSale), `Crédito por rebaja tarifa: ${sNew.descripcion}`);
+            }
           }
 
-          // Reconcile Accounts Payable for this service item
-          updatedPayableObligations = updatedPayableObligations.map(obl => {
-            if (
-              obl.locatorId === oldRes.id &&
-              (obl.serviceDetail.toLowerCase().includes(sNew.descripcion.toLowerCase()) ||
-               obl.providerName.toLowerCase().includes((sNew.proveedor || "").toLowerCase()))
-            ) {
-              const newNet = Math.max(0, obl.netCost + deltaNet);
-              log.push(`[Cuentas por Pagar] Obligación ${obl.id} ajustada neto de $${obl.netCost.toFixed(2)} a $${newNet.toFixed(2)}`);
-              return {
-                ...obl,
-                netCost: newNet,
-                status: obl.paidAmount >= newNet ? ("Pagado Total" as const) : obl.paidAmount > 0 ? ("Pagado Parcial" as const) : ("Pendiente" as const)
+          // ── Impacto al PROVEEDOR: si cambió el COSTO NETO ──
+          if (deltaNet !== 0) {
+            // Ajusta la obligación existente del servicio, si la hay.
+            let matchedObligation = false;
+            updatedPayableObligations = updatedPayableObligations.map(obl => {
+              if (
+                obl.locatorId === oldRes.id &&
+                (obl.serviceDetail.toLowerCase().includes(sNew.descripcion.toLowerCase()) ||
+                 obl.providerName.toLowerCase().includes((sNew.proveedor || "").toLowerCase()))
+              ) {
+                matchedObligation = true;
+                const newNet = Math.max(0, obl.netCost + deltaNet);
+                log.push(`[Cuentas por Pagar] Obligación ${obl.id} ajustada neto de $${obl.netCost.toFixed(2)} a $${newNet.toFixed(2)}`);
+                return {
+                  ...obl,
+                  netCost: newNet,
+                  status: obl.paidAmount >= newNet ? ("Pagado Total" as const) : obl.paidAmount > 0 ? ("Pagado Parcial" as const) : ("Pendiente" as const)
+                };
+              }
+              return obl;
+            });
+
+            // Si el servicio se facturó SIN costo neto (p.ej. 100% de comisión → neto $0, sin
+            // obligación) y ahora sí tiene costo real, se CREA la cuenta por pagar que faltaba.
+            if (!matchedObligation && sNew.precioNeto > 0.01 && sOld.precioNeto < 0.01 && (sNew.proveedor || "").trim()) {
+              const newObl: PayableObligation = {
+                id: nextSequentialId("PAY", updatedPayableObligations.map(o => o.id)),
+                dueDate: newRes.checkIn || new Date().toISOString().split("T")[0],
+                providerName: (sNew.proveedor || "").trim(),
+                serviceDetail: sNew.descripcion,
+                locatorId: newRes.id,
+                netCost: sNew.precioNeto,
+                paidAmount: 0,
+                status: "Pendiente",
+                date: new Date().toISOString().split("T")[0],
+                currency: "USD",
               };
+              updatedPayableObligations = [...updatedPayableObligations, newObl];
+              log.push(`[Cuentas por Pagar] Nueva obligación ${newObl.id} creada para "${sNew.descripcion}" (${newObl.providerName}) por $${newObl.netCost.toFixed(2)} — el servicio pasó de costo neto 0 a costo real.`);
             }
-            return obl;
-          });
+          }
         }
       } else {
         // New service detected — financial effects (obligation, client debit) are handled
