@@ -1781,8 +1781,9 @@ export default function ReservasView({
       const oldRes = reservations.find(r => r.id === isEditingReservationId);
       if (oldRes) {
         const result = reconcileDossierUpdate(oldRes, updatedRes, clients, directClients, payableObligations);
-        const hasImpact = result.newVariations.length > 0 || 
-                          result.newWalletTransactions.length > 0 || 
+        const hasImpact = result.newVariations.length > 0 ||
+                          result.newWalletTransactions.length > 0 ||
+                          result.addedServices.length > 0 ||
                           result.updatedPayableObligations.some(o => {
                             const prev = payableObligations.find(po => po.id === o.id);
                             return !prev || prev.status !== o.status || prev.netCost !== o.netCost;
@@ -3237,6 +3238,11 @@ export default function ReservasView({
                     .filter(v => v.status === "Verificado" && ((v.invoiceId && cobrableInvoiceIds.includes(v.invoiceId)) || (!v.invoiceId && v.locatorId === activeRes.id)))
                     .reduce((sum, v) => sum + v.amount, 0);
                   const sobrepago = Math.max(0, totalRecaudado - billedTotal);
+                  // Servicios agregados a la reserva aún NO facturados (Borrador/Solicitado): no
+                  // entran en "Total a Cobrar" hasta facturarse; se muestran como línea aparte.
+                  const pendientesFacturar = (activeRes.servicios || [])
+                    .filter(s => s.status !== "Cancelado" && s.statusFacturacion !== "Facturado")
+                    .reduce((sum, s) => sum + s.precioVenta, 0);
 
                   return (
                     <div className="space-y-3.5">
@@ -3259,6 +3265,16 @@ export default function ReservasView({
                         <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Total a Cobrar</span>
                         <span className="font-mono font-black text-sm text-zinc-900">${billedTotal.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
                       </div>
+
+                      {/* Servicios nuevos por facturar (aún no incluidos en el Total a Cobrar) */}
+                      {pendientesFacturar > 0.01 && (
+                        <div className="flex justify-between items-start gap-2 bg-indigo-50 border border-indigo-200 rounded p-2.5">
+                          <span className="text-[10px] font-bold text-indigo-700 leading-snug">Servicios nuevos por facturar
+                            <span className="block text-[9px] font-medium text-indigo-600/80">Aún no incluidos en el Total a Cobrar; se agregan al facturarse.</span>
+                          </span>
+                          <span className="font-mono font-black text-sm text-indigo-700 shrink-0">+${pendientesFacturar.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                        </div>
+                      )}
 
                       {/* Progreso de cobro */}
                       <div className="space-y-1">
@@ -6932,6 +6948,11 @@ export default function ReservasView({
 
                 const fmt = (n: number) => "$" + Number(n || 0).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " USD";
 
+                // Servicios nuevos agregados a esta reserva ya facturada: se facturarán aparte
+                // (factura FAC- nueva) y generarán una cuenta por pagar al enviarse a Facturación.
+                const addedServices = fip.addedServices || [];
+                const addedTotal = addedServices.reduce((s: number, sv: any) => s + (sv.precioVenta || 0), 0);
+
                 return (
                   <>
                     <p className="text-xs text-zinc-600 leading-relaxed font-semibold">
@@ -6980,8 +7001,29 @@ export default function ReservasView({
                       </div>
                     )}
 
+                    {/* Servicios nuevos agregados (se facturarán aparte) */}
+                    {addedServices.length > 0 && (
+                      <div className="bg-indigo-50 border border-indigo-200 p-3.5 rounded-lg space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] uppercase font-bold text-indigo-800 tracking-wider block">Servicios nuevos a facturar</span>
+                          <span className="font-black text-indigo-700 text-base font-mono">+{fmt(addedTotal)}</span>
+                        </div>
+                        <ul className="text-[10px] text-indigo-900/90 font-semibold space-y-0.5">
+                          {addedServices.map((sv: any, idx: number) => (
+                            <li key={idx} className="flex justify-between gap-2">
+                              <span className="truncate">{sv.descripcion}</span>
+                              <span className="font-mono shrink-0">{fmt(sv.precioVenta || 0)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        <span className="text-[9px] text-indigo-700/80 font-medium block leading-snug">
+                          Se facturarán como servicio nuevo (factura FAC- aparte) y generarán una cuenta por pagar al proveedor al enviarse a Facturación.
+                        </span>
+                      </div>
+                    )}
+
                     {/* Sin impacto directo en el cliente */}
-                    {creditoTotal === 0 && suplementoTotal === 0 && (
+                    {creditoTotal === 0 && suplementoTotal === 0 && addedServices.length === 0 && (
                       <div className="bg-zinc-50 border border-zinc-200 p-3 rounded-lg text-[11px] text-zinc-500 font-semibold">
                         Esta modificación no genera crédito ni cargo adicional para {clienteNombre}.
                       </div>

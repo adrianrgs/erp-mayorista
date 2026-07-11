@@ -11,6 +11,10 @@ export interface ReconciliationResult {
   updatedPayableObligations: PayableObligation[];
   newWalletTransactions: B2BWalletTransaction[];
   newVariations: FinancialVariation[];
+  // Servicios agregados a una reserva YA facturada. No generan efecto financiero aquí (se
+  // difieren a Facturación para no cobrar doble); se reportan solo para dar visibilidad
+  // (disparar el modal de impacto y mostrarse en el widget de la reserva).
+  addedServices: ServiceItem[];
   log: string[];
 }
 
@@ -27,6 +31,7 @@ export function reconcileDossierUpdate(
   const log: string[] = [];
   const newVariations: FinancialVariation[] = [];
   const newWalletTransactions: B2BWalletTransaction[] = [];
+  const addedServices: ServiceItem[] = [];
   let updatedPayableObligations = [...payableObligations];
 
   // Find the client (B2B or Directo) associated with the reservation
@@ -155,6 +160,7 @@ export function reconcileDossierUpdate(
       updatedPayableObligations,
       newWalletTransactions,
       newVariations,
+      addedServices,
       log
     };
   }
@@ -266,6 +272,8 @@ export function reconcileDossierUpdate(
         // New service detected — financial effects (obligation, client debit) are handled
         // exclusively by FacturacionView when the service is billed. Processing them here
         // would cause double-charging since FacturacionView always runs for billing approval.
+        // Se reporta (sin efecto financiero) para dar visibilidad en el modal de impacto y el widget.
+        addedServices.push(sNew);
         log.push(`[Nuevo Servicio] "${sNew.descripcion}" (${sNew.statusFacturacion}) detectado. Pendiente de aprobación en Facturación.`);
       }
     });
@@ -287,6 +295,7 @@ export function reconcileDossierUpdate(
     updatedPayableObligations,
     newWalletTransactions,
     newVariations,
+    addedServices,
     log
   };
 }
