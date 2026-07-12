@@ -956,13 +956,16 @@ function NuevoBoletoView({
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-zinc-900 font-mono">
                           {p.nombre}
+                          {p.ticketNumero && (
+                            <span className="block text-[9px] font-semibold text-zinc-400 mt-0.5">E-ticket: {p.ticketNumero}</span>
+                          )}
                         </span>
                         <div className="flex items-center gap-2">
                           <Badge
                             variant={
                               p.tipo === "CHD" || p.tipo === "INF"
                                 ? "info"
-                                : p.tipo === "MRS" || p.tipo === "MS"
+                                : p.tipo === "SRC"
                                 ? "warning"
                                 : "default"
                             }
@@ -2710,6 +2713,11 @@ function FlightVoucherModal({
                     <span className="text-[10px] font-bold text-zinc-500">
                       Doc. Identidad: <span className="text-zinc-800">{p.documento || "No especificado"}</span>
                     </span>
+                    {p.ticketNumero && (
+                      <span className="text-[10px] font-bold text-zinc-500">
+                        E-ticket: <span className="text-zinc-800 font-mono">{p.ticketNumero}</span>
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2925,7 +2933,7 @@ function FlightLiquidacionModal({
                       <tr key={`pax-${i}`}>
                         <td className="py-2 text-zinc-700 font-semibold">
                           {p.nombre}
-                          <span className="text-[8.5px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded ml-1.5 uppercase font-bold">{p.paxType || p.tipo}</span>
+                          <span className="text-[8.5px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded ml-1.5 uppercase font-bold">{p.tipo || p.paxType}</span>
                           <span className="block text-[9px] text-zinc-400 font-normal font-sans">Boleto {boleto.pnr} — {ruta}</span>
                         </td>
                         <td className="py-2 text-right font-mono font-bold text-zinc-900 align-top">{fmt(p.precioVenta ?? p.costoNeto ?? 0)}</td>

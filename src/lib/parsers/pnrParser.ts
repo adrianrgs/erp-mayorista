@@ -29,18 +29,22 @@ const TITULOS = new Set(["MR", "MRS", "MS", "MSTR", "MISS", "DR", "PROF", "CAPT"
 
 /** Estrategia 1: Header Amadeus "RP/MIGDL2101/MIGDL2101  LA/GS 21JUN26/2000Z XKQT7F" */
 const PNR_AMADEUS_HEADER_REGEX = /^RP\/\S+\/\S+\s+\S+\s+\S+\s+([A-Z0-9]{6})\s*$/im;
-/** Estrategia 2: Prefijos explícitos "RECORD LOCATOR:", "PNR:", "LOC/", "LOCATOR:" */
-const PNR_LABELED_REGEX = /(?:RECORD\s+LOCATOR|PNR|LOCATOR?)[:/\s]+([A-Z0-9]{6})\b/i;
+/** Estrategia 2: Prefijos explícitos "RECORD LOCATOR:", "PNR:", "LOCATOR:", "REC:" (KIU), "RLOC:" */
+const PNR_LABELED_REGEX = /\b(?:RECORD\s+LOCATOR|RLOC|LOCATOR|REC|PNR)[:/\s]+([A-Z0-9]{6})\b/i;
 /** Estrategia 3: Código suelto al final de línea (6 chars con al menos 1 letra y 1 dígito). */
 const PNR_TRAILING_REGEX = /(?::\s*|^)([A-Z][A-Z0-9]{2}[A-Z0-9]{2}[A-Z0-9])\s*$/im;
 
 // ─── REGEX: PASAJEROS ─────────────────────────────────────────────────────────
 //
-// Reconoce "N.N APELLIDO/NOMBRE [TÍTULO]" con o sin espacios, con TÍTULO OPCIONAL,
-// y permite guiones/apóstrofes en apellido y nombre. Captura el índice de pax
-// (grupos 1 y 2) para deduplicar por referencia y NO colapsar homónimos.
+// Reconoce ambos dialectos de numeración de pasajero:
+//   · Sabre/Galileo:  "1.1APELLIDO/NOMBRE MR"   (índice.subíndice)
+//   · Amadeus:        "1.APELLIDO/NOMBRE MR"     (índice simple + punto)
+// Con TÍTULO OPCIONAL (MR/MRS/CHD/INF…) y SUFIJO OPCIONAL entre paréntesis que
+// indica el tipo tarifario: "(CHD/08)" niño con edad, "(SRC)" tercera edad,
+// "(INF)" infante. Permite guiones/apóstrofes en apellido y nombre. Captura el
+// índice (grupos 1 y 2) para deduplicar por referencia y NO colapsar homónimos.
 const PASSENGER_REGEX =
-  /(\d+)\.(\d+)\s*([A-Z][A-Z'\-]{1,28})\/([A-Z][A-Z'\- ]{0,28}?)(?:\s+(MR|MRS|MS|MSTR|MISS|DR|PROF|CAPT|SR|SRA|CHD|INF|CNN|INS))?(?=\s+\d+\.\d+|\s*$)/gim;
+  /(\d+)\.(\d+)?\s*([A-Z][A-Z'\-]{1,28})\/([A-Z][A-Z'\- ]{0,28}?)(?:\s+(MR|MRS|MS|MSTR|MISS|DR|PROF|CAPT|SR|SRA|CHD|INF|CNN|INS))?\s*(\([A-Z0-9 ./\-]*\))?(?=\s+\d+\.|\s*$)/gim;
 
 // ─── REGEX: SEGMENTOS DE VUELO ────────────────────────────────────────────────
 //
@@ -69,7 +73,10 @@ const SEGMENT_LIKE_LINE = /^\s*\d{1,2}\s+[A-Z0-9]{2}\s+\d{1,4}[A-Z]?\s+[A-Z]\s+\
 const TAW_REGEX = /TAW\s*(\d{1,2}[A-Z]{3})\s*[\/\s]?\s*(\d{3,4})?/i;
 /** Nº de e-ticket: hiphenado "045-2345678901" o etiquetado. */
 const ETICKET_REGEX = /\b(\d{3})-(\d{10})\b/;
-const ETICKET_LABELED_REGEX = /(?:E-?TKT|ETKT|TICKET|FA\s*PAX)[^0-9]{0,12}(\d{3})[- ]?(\d{10})\b/i;
+/** Etiquetado: "E-TKT/ETKT/TICKET/FA" (KIU usa "FA 775 2400123456") con guion o espacio. */
+const ETICKET_LABELED_REGEX = /(?:E-?TKT|ETKT|TICKET|\bFA\b)[^0-9]{0,12}(\d{3})[- ]?(\d{10})\b/i;
+/** e-ticket por pasajero: KIU emite una línea "FA 775 2400123456 /P1/S1-2/…" por pax. */
+const ETICKET_PER_PAX_REGEX = /\bFA\b[^0-9\n]{0,12}(\d{3})[- ]?(\d{10})\b[^\n]*?\/P(\d+)\b/gi;
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -131,7 +138,8 @@ function extractPassengers(text: string, warnings: string[]): Passenger[] {
   PASSENGER_REGEX.lastIndex = 0;
   let match: RegExpExecArray | null;
   while ((match = PASSENGER_REGEX.exec(text)) !== null) {
-    const ref = `${match[1]}.${match[2]}`;
+    // Subíndice opcional: "1.1" (Sabre) → ref "1.1"; "1." (Amadeus) → ref "1".
+    const ref = `${match[1]}.${match[2] ?? ""}`;
     if (seenRef.has(ref)) continue;
     const ap = match[3].trim().toUpperCase();
     const nm = match[4].trim().toUpperCase();
@@ -139,15 +147,17 @@ function extractPassengers(text: string, warnings: string[]): Passenger[] {
     seenRef.add(ref);
 
     const rawTitle = (match[5] || "").toUpperCase();
-    const esInfante = rawTitle === "INF" || rawTitle === "INS";
-    const esNino = rawTitle === "CHD" || rawTitle === "CNN";
+    const suffix = (match[6] || "").toUpperCase(); // "(CHD/08)", "(SRC)", "(INF)"…
+    const esInfante = rawTitle === "INF" || rawTitle === "INS" || suffix.includes("INF");
+    const esNino = rawTitle === "CHD" || rawTitle === "CNN" || suffix.includes("CHD");
+    const esSenior = suffix.includes("SRC") || suffix.includes("SENIOR");
     const paxType: "ADT" | "CHD" | "INF" = esInfante ? "INF" : esNino ? "CHD" : "ADT";
     const titulo = TITULOS.has(rawTitle) ? rawTitle : undefined;
 
     passengers.push({
       nombre: `${ap}/${nm}`,
-      // Retrocompat: `tipo` conserva el título/tipo tal como aparece (o "ADT").
-      tipo: rawTitle || "ADT",
+      // `tipo` = etiqueta descriptiva para mostrar (CHD/INF/SRC/título/ADT).
+      tipo: esNino ? "CHD" : esInfante ? "INF" : esSenior ? "SRC" : rawTitle || "ADT",
       paxType,
       titulo,
     });
@@ -155,7 +165,7 @@ function extractPassengers(text: string, warnings: string[]): Passenger[] {
 
   if (passengers.length === 0) {
     warnings.push(
-      "⚠️ No se encontraron pasajeros. Formato esperado: '1.1APELLIDO/NOMBRE MR' o '1.1 APELLIDO/NOMBRE'."
+      "⚠️ No se encontraron pasajeros. Formato esperado: '1.1APELLIDO/NOMBRE MR' (Sabre) o '1.APELLIDO/NOMBRE MR' (Amadeus)."
     );
   }
   return passengers;
@@ -246,6 +256,22 @@ function extractTicketNumber(text: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Asigna a cada pasajero su e-ticket cuando el PNR trae una línea FA por pax
+ * con referencia "/P{n}" (KIU). Muta el arreglo de pasajeros en su lugar.
+ */
+function assignPassengerTickets(text: string, passengers: Passenger[]): void {
+  if (passengers.length === 0) return;
+  ETICKET_PER_PAX_REGEX.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = ETICKET_PER_PAX_REGEX.exec(text)) !== null) {
+    const paxIdx = parseInt(m[3], 10) - 1; // "/P1" → pasajero 0
+    if (paxIdx >= 0 && paxIdx < passengers.length && !passengers[paxIdx].ticketNumero) {
+      passengers[paxIdx].ticketNumero = `${m[1]}-${m[2]}`;
+    }
+  }
+}
+
 /** Extrae tarifa base + impuestos si el texto los incluye (best-effort). */
 function extractFare(text: string): { tarifaBase?: number; impuestos?: { codigo: string; monto: number }[] } {
   const num = (s: string) => parseFloat(s.replace(/,/g, ""));
@@ -286,6 +312,7 @@ export function parseGDS(rawText: string): ParseResult {
 
   const pnr = extractPNR(normalizedText);
   const pasajeros = extractPassengers(normalizedText, warnings);
+  assignPassengerTickets(normalizedText, pasajeros);
   const segmentos = extractSegments(normalizedText, warnings);
   const timeLimit = extractTimeLimit(normalizedText);
   const ticketNumero = extractTicketNumber(normalizedText);

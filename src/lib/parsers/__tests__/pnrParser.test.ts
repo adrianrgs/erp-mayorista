@@ -164,6 +164,63 @@ assert(rRobust.data.pasajeros?.[0].nombre === "PEREZ/ANA", `[0] pax sin título 
 assert(rRobust.data.pasajeros?.[1].nombre === "O'BRIEN/SEAN-PAUL", `[1] apellido/nombre con apóstrofe y guion`, rRobust.data.pasajeros?.[1].nombre);
 assert(buildRoute(rRobust.data.segmentos!) === "BOG ⇄ MIA", `ida-vuelta directa → "BOG ⇄ MIA"`, buildRoute(rRobust.data.segmentos!));
 
+section("ROBUSTEZ — Amadeus índice simple (1.NOMBRE) + sufijos (SRC)/(CHD/08)");
+const rAma = parseGDS(`RP/BOGK22100/BOGK22100            AMX        12JUL26/0840Z   XJ9K2A
+  1.GOMEZ/CARLOS MR
+  2.GOMEZ/MARIA MRS (SRC)
+  3.GOMEZ/MATEO MSTR (CHD/08)
+  4 XX 124 Y 15OCT BOGLIM HK3  0800 1100   O E
+  5 XX 125 Y 25OCT LIMBOG HK3  1500 1800   O E
+  7 TK TAW 15AUG/1200
+ 10 SSR DOCS XX HK1 P1/CO/12345678/CO/15MAR80/M/15OCT28/GOMEZ/CARLOS`);
+assert(rAma.data.pnr === "XJ9K2A", `PNR Amadeus = "XJ9K2A"`, rAma.data.pnr);
+assert(rAma.data.pasajeros?.length === 3, `3 pax con índice simple "1." (antes 0)`, rAma.data.pasajeros?.length);
+assert(rAma.data.pasajeros?.[0].nombre === "GOMEZ/CARLOS", `[0] GOMEZ/CARLOS`, rAma.data.pasajeros?.[0].nombre);
+assert(rAma.data.pasajeros?.[1].tipo === "SRC", `[1] tercera edad → tipo "SRC"`, rAma.data.pasajeros?.[1].tipo);
+assert(rAma.data.pasajeros?.[1].titulo === "MRS", `[1] título de cortesía "MRS" preservado`, rAma.data.pasajeros?.[1].titulo);
+assert(rAma.data.pasajeros?.[2].tipo === "CHD", `[2] niño (CHD/08) → tipo "CHD"`, rAma.data.pasajeros?.[2].tipo);
+assert(rAma.data.pasajeros?.[2].paxType === "CHD", `[2] paxType tarifario "CHD"`, rAma.data.pasajeros?.[2].paxType);
+assert(rAma.data.segmentos?.length === 2, `2 segmentos (línea SSR DOCS no confunde)`, rAma.data.segmentos?.length);
+
+section("KIU — localizador REC:, segmentos /E, e-ticket línea FA");
+const rKiu = parseGDS(`KIU SYSTEM - PNR DISPLAY
+REC: ZM8R3P  ST: ACTIVE  GDS: KIU  12JUL26/1415Z
+1.1RODRIGUEZ/ANTONIO MR
+1  QL 902 Y 18SEP CCSPMV HK1  1130 1215 /E
+2  QL 905 Y 25SEP PMVCCS HK1  1300 1345 /E
+3 AP CCS +58 212 999 8888 AGY-A
+4 TK OK 12JUL/QL*A3B2C5
+7 SSR DOCS QL HK1 P1/V/VE/12345678/VE/05MAY95/M/18SEP30/RODRIGUEZ/ANTONIO
+8 FA 775 2400123456 /P1/S1-2/12JUL26`);
+assert(rKiu.data.pnr === "ZM8R3P", `PNR KIU "REC:" = "ZM8R3P"`, rKiu.data.pnr);
+assert(rKiu.data.pasajeros?.length === 1, `1 pax`, rKiu.data.pasajeros?.length);
+assert(rKiu.data.pasajeros?.[0].nombre === "RODRIGUEZ/ANTONIO", `pax RODRIGUEZ/ANTONIO`, rKiu.data.pasajeros?.[0].nombre);
+assert(rKiu.data.segmentos?.length === 2, `2 segmentos (sufijo "/E" no estorba)`, rKiu.data.segmentos?.length);
+assert(rKiu.data.segmentos?.[0].origen === "CCS" && rKiu.data.segmentos?.[0].destino === "PMV", `SEG1 CCS→PMV`, rKiu.data.segmentos?.[0]);
+assert(rKiu.data.ticketNumero === "775-2400123456", `e-ticket línea FA = "775-2400123456"`, rKiu.data.ticketNumero);
+assert(buildRoute(rKiu.data.segmentos!) === "CCS ⇄ PMV", `ida-vuelta → "CCS ⇄ PMV"`, buildRoute(rKiu.data.segmentos!));
+assert((rKiu.warnings ?? []).length === 0, `sin advertencias`, rKiu.warnings);
+
+section("KIU multi-pax — SRC/CHD pegados al título + e-ticket por pasajero (FA /Pn)");
+const rKiu3 = parseGDS(`KIU SYSTEM - PNR DISPLAY
+REC: M9K2XP  ST: ACTIVE  GDS: KIU  12JUL26/1630Z
+1.1GOMEZ/CARLOS MR
+2.1GOMEZ/MARIA MRS(SRC)
+3.1GOMEZ/MATEO MSTR(CHD/08)
+1  QL 902 Y 18OCT CCSPMV HK3  1130 1215 /E
+2  QL 905 Y 25OCT PMVCCS HK3  1300 1345 /E
+9 SSR DOCS QL HK1 P1/V/VE/12345678/VE/15MAR80/M/18OCT30/GOMEZ/CARLOS
+12 FA 775 2400123456 /P1/S1-2/12JUL26
+13 FA 775 2400123457 /P2/S1-2/12JUL26
+14 FA 775 2400123458 /P3/S1-2/12JUL26`);
+assert(rKiu3.data.pasajeros?.length === 3, `3 pax`, rKiu3.data.pasajeros?.length);
+assert(rKiu3.data.pasajeros?.[1].tipo === "SRC", `[1] "MRS(SRC)" sin espacio → tipo "SRC"`, rKiu3.data.pasajeros?.[1].tipo);
+assert(rKiu3.data.pasajeros?.[2].tipo === "CHD", `[2] "MSTR(CHD/08)" sin espacio → tipo "CHD"`, rKiu3.data.pasajeros?.[2].tipo);
+assert(rKiu3.data.pasajeros?.[0].ticketNumero === "775-2400123456", `[0] e-ticket P1`, rKiu3.data.pasajeros?.[0].ticketNumero);
+assert(rKiu3.data.pasajeros?.[1].ticketNumero === "775-2400123457", `[1] e-ticket P2`, rKiu3.data.pasajeros?.[1].ticketNumero);
+assert(rKiu3.data.pasajeros?.[2].ticketNumero === "775-2400123458", `[2] e-ticket P3`, rKiu3.data.pasajeros?.[2].ticketNumero);
+assert(rKiu3.data.ticketNumero === "775-2400123456", `e-ticket boleto = P1`, rKiu3.data.ticketNumero);
+
 section("HELPERS — Entrada inválida");
 const rEmpty = parseGDS("");
 assert(rEmpty.status === "error", `Texto vacío → status "error"`, rEmpty.status);
