@@ -522,7 +522,11 @@ export default function FacturacionView({
   };
 
   const aereoReservations: Reservation[] = boletos
-    .filter(b => b.expedienteAereo && b.expedienteAereo.status !== "Borrador" && !b.facturarConjunto)
+    .filter(b => b.expedienteAereo
+      && b.expedienteAereo.status !== "Borrador"
+      && b.expedienteAereo.status !== "Anulado"
+      && b.expedienteAereo.status !== "Reembolsado"
+      && !b.facturarConjunto)
     .map(b => {
       const exp = b.expedienteAereo!;
       const checkIn = b.segmentos?.[0]?.fecha;

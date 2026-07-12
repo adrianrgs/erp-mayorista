@@ -199,6 +199,9 @@ pnr
     createdAt
     ticketNumero
     aerolineaValidadora
+    timeLimit
+    tarifaBase
+    impuestos
     notas
     expedienteAereo
   }

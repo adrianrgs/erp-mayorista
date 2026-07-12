@@ -272,6 +272,7 @@ mutation InsertFlightTicket(
   $comisionB2B: Float, $comisionMayorista: Float, $tipoComision: String, $fee: Float, $vinculadoAExpediente: Boolean!,
   $facturarConjunto: Boolean, $expedienteId: String, $agenteNombre: String,
   $createdAt: String, $ticketNumero: String, $aerolineaValidadora: String,
+  $timeLimit: String, $tarifaBase: Float, $impuestos: Any,
   $notas: String, $expedienteAereo: Any
 , $updatedAt: String) @auth(level: PUBLIC) {
   flightTicket_insert(data: {
@@ -283,6 +284,7 @@ mutation InsertFlightTicket(
     vinculadoAExpediente: $vinculadoAExpediente, facturarConjunto: $facturarConjunto,
     expedienteId: $expedienteId, agenteNombre: $agenteNombre,
     createdAt: $createdAt, ticketNumero: $ticketNumero, aerolineaValidadora: $aerolineaValidadora,
+    timeLimit: $timeLimit, tarifaBase: $tarifaBase, impuestos: $impuestos,
     notas: $notas, expedienteAereo: $expedienteAereo
   })
 }
@@ -293,6 +295,7 @@ mutation UpdateFlightTicket(
   $comisionB2B: Float, $comisionMayorista: Float, $tipoComision: String, $fee: Float, $vinculadoAExpediente: Boolean,
   $facturarConjunto: Boolean, $expedienteId: String, $agenteNombre: String,
   $createdAt: String, $ticketNumero: String, $aerolineaValidadora: String,
+  $timeLimit: String, $tarifaBase: Float, $impuestos: Any,
   $notas: String, $expedienteAereo: Any
 , $updatedAt: String) @auth(level: PUBLIC) {
   flightTicket_update(id: $id,
@@ -305,6 +308,7 @@ mutation UpdateFlightTicket(
     vinculadoAExpediente: $vinculadoAExpediente, facturarConjunto: $facturarConjunto,
     expedienteId: $expedienteId, agenteNombre: $agenteNombre,
     createdAt: $createdAt, ticketNumero: $ticketNumero, aerolineaValidadora: $aerolineaValidadora,
+    timeLimit: $timeLimit, tarifaBase: $tarifaBase, impuestos: $impuestos,
     notas: $notas, expedienteAereo: $expedienteAereo
   })
 }

@@ -474,6 +474,17 @@ export default function App() {
       "PagoProveedor",
       `Cuenta por pagar ${updated.id} · ${updated.providerName ?? "proveedor"} → ${updated.status}${updated.paidAmount != null ? ` (pagado ${fmtMonto(updated.paidAmount)})` : ""}`,
     );
+
+    // Si la obligación saldada corresponde a un BOLETO aéreo (locatorId = BOL-x), cerrar su
+    // ciclo pasando el expediente a "PagadoAerolinea" (antes era un estado muerto/inalcanzable).
+    if (updated.status === "Pagado Total") {
+      const boleto = boletos.find(b => b.id === updated.locatorId && b.expedienteAereo);
+      if (boleto?.expedienteAereo && boleto.expedienteAereo.status !== "PagadoAerolinea") {
+        const nb: FlightTicket = { ...boleto, expedienteAereo: { ...boleto.expedienteAereo, status: "PagadoAerolinea" } };
+        setBoletos(prev => prev.map(b => b.id === nb.id ? nb : b));
+        try { await updateFlightTicket(dataConnect, { ...nb }); } catch (e) { console.error("Failed to close aereo cycle", e); }
+      }
+    }
   };
 
   const handleAddPayableObligation = async (newObligation: any) => {
@@ -1450,9 +1461,14 @@ export default function App() {
   };
   const handleDeleteBoleto = async (id: string) => {
     try {
+      // Cascada: borrar también la cuenta por pagar a la aerolínea (locatorId = id del boleto),
+      // porque los ids de boleto son secuenciales y se reutilizan (evita obligaciones huérfanas).
+      const relObl = payableObligations.filter(o => o.locatorId === id);
       setBoletos(prev => prev.filter(b => b.id !== id));
+      setPayableObligations(prev => prev.filter(o => o.locatorId !== id));
       await deleteFlightTicket(dataConnect, { id });
-    } catch (e) {}
+      for (const o of relObl) { try { await deletePayableObligation(dataConnect, { id: o.id }); } catch (e) { console.error("cascade delete aereo obligation", e); } }
+    } catch (e) { console.error("Error in handleDeleteBoleto:", e); }
   };
 
   // --- PAYMENT VOUCHERS ---
@@ -2040,6 +2056,13 @@ onDeleteStopSale={handleDeleteStopSale}
                     onDeleteBoleto={handleDeleteBoleto}
                     clients={clients}
                     directClients={directClients}
+                    payableObligations={payableObligations}
+                    onAddObligation={handleAddPayableObligation}
+                    onUpdateObligation={handleUpdateObligation}
+                    invoices={invoices}
+                    onAddInvoice={handleAddInvoice}
+                    onUpdateClient={handleUpdateClient}
+                    onUpdateDirectClient={handleUpdateDirectClient}
                     companyConfig={companyConfig}
                     jurisdiction={jurisdiction}
                     currentExchangeRate={todayExchangeRate}

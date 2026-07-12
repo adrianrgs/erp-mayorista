@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   Plane,
   Search,
@@ -27,9 +28,11 @@ import {
   Download,
   Info,
   Printer,
-  XCircle
+  XCircle,
+  RefreshCw
 } from "lucide-react";
-import type { FlightLeg, B2BClient, DirectClient, CompanyConfig } from "../types";
+import type { FlightLeg, B2BClient, DirectClient, CompanyConfig, PayableObligation, FinancialInvoice } from "../types";
+import { nextSequentialId } from "../lib/idGenerator";
 import { ProjectView } from "../types";
 import type { FlightTicket, Passenger, FlightSegment } from "../types/aereos";
 import { AccionPermiso } from "../types/usuarios";
@@ -88,12 +91,38 @@ interface VuelosViewProps {
   onDeleteBoleto: (id: string) => void;
   clients?: B2BClient[];
   directClients?: DirectClient[];
+  payableObligations?: PayableObligation[];
+  onAddObligation?: (o: PayableObligation) => void;
+  onUpdateObligation?: (o: PayableObligation) => void;
+  invoices?: FinancialInvoice[];
+  onAddInvoice?: (inv: FinancialInvoice) => void;
+  onUpdateClient?: (c: B2BClient) => void;
+  onUpdateDirectClient?: (c: DirectClient) => void;
   companyConfig: CompanyConfig;
   jurisdiction?: TaxJurisdiction;
   currentExchangeRate?: number;
 }
 
 type SubView = "listado" | "nuevo" | "expediente";
+
+// Parsea el time limit ("dd/mm/yyyy hh:mm" o "dd/mm/yyyy") a Date, o null.
+function parseTimeLimitDate(tl?: string): Date | null {
+  if (!tl) return null;
+  const m = tl.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (!m) return null;
+  const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(m[4] ?? "23"), Number(m[5] ?? "59"));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Nivel de alerta del time limit de emisión: "vencido" | "proximo" (<48h) | null.
+function timeLimitLevel(tl?: string): "vencido" | "proximo" | null {
+  const d = parseTimeLimitDate(tl);
+  if (!d) return null;
+  const hrs = (d.getTime() - Date.now()) / 3600000;
+  if (hrs < 0) return "vencido";
+  if (hrs < 48) return "proximo";
+  return null;
+}
 
 // ─── HELPERS UI ───────────────────────────────────────────────────────────────
 
@@ -120,7 +149,7 @@ function Badge({
 
 // ─── VISTA PRINCIPAL ──────────────────────────────────────────────────────────
 
-export default function VuelosView({ flights: _flights, boletos, onAddBoleto, onUpdateBoleto, onDeleteBoleto, clients = [], directClients = [], companyConfig, jurisdiction, currentExchangeRate }: VuelosViewProps) {
+export default function VuelosView({ flights: _flights, boletos, onAddBoleto, onUpdateBoleto, onDeleteBoleto, clients = [], directClients = [], payableObligations = [], onAddObligation, onUpdateObligation, invoices = [], onAddInvoice, onUpdateClient, onUpdateDirectClient, companyConfig, jurisdiction, currentExchangeRate }: VuelosViewProps) {
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const [subView, setSubView] = useState<SubView>("listado");
   const [search, setSearch] = useState("");
@@ -174,11 +203,19 @@ export default function VuelosView({ flights: _flights, boletos, onAddBoleto, on
           boleto={boletos.find((b) => b.id === selectedBoletoId)!}
           clients={clients}
           directClients={directClients}
+          payableObligations={payableObligations}
+          onAddObligation={onAddObligation}
+          onUpdateObligation={onUpdateObligation}
+          invoices={invoices}
+          onAddInvoice={onAddInvoice}
+          onUpdateClient={onUpdateClient}
+          onUpdateDirectClient={onUpdateDirectClient}
           onBack={() => setSubView("listado")}
           onUpdateBoleto={(updated) => {
             onUpdateBoleto(updated);
           }}
           onShowVoucher={handleOpenVoucher}
+          companyConfig={companyConfig}
           jurisdiction={jur}
           currentExchangeRate={currentExchangeRate}
         />
@@ -409,18 +446,30 @@ function ListadoView({
                         </Badge>
                       </div>
                     )}
+                    {/* Alerta de time limit de emisión (solo si aún no se facturó) */}
+                    {(!boleto.expedienteAereo || boleto.expedienteAereo.status === "Borrador" || boleto.expedienteAereo.status === "Solicitado") && (() => {
+                      const lvl = timeLimitLevel(boleto.timeLimit);
+                      if (!lvl) return null;
+                      return (
+                        <div className="block">
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider border ${lvl === "vencido" ? "bg-red-50 border-red-200 text-red-700 animate-pulse" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+                            {lvl === "vencido" ? "⏱ TL vencido" : `⏱ Emitir: ${boleto.timeLimit}`}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
                 {/* Acciones */}
                 <div className="col-span-1 flex items-center justify-end gap-1 flex-wrap">
-                  {(boleto.expedienteAereo?.status === "Facturado" || boleto.expedienteAereo?.status === "PagadoAerolinea") && (
+                  {(boleto.expedienteAereo?.status === "Facturado" || boleto.expedienteAereo?.status === "PagadoAerolinea" || boleto.expedienteAereo?.status === "Reembolsado") && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onShowVoucher(boleto);
                       }}
-                      title="Descargar Voucher de Vuelo"
+                      title="Descargar Voucher / Constancia"
                       className="p-1.5 rounded text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors cursor-pointer"
                     >
                       <Download className="w-3.5 h-3.5" />
@@ -500,6 +549,14 @@ function NuevoBoletoView({
   const [notas, setNotas] = useState("");
   const [guardando, setGuardando] = useState(false);
 
+  // ─ Datos de emisión (Fase 2) ───────────────────────────────────────────────
+  const [timeLimit, setTimeLimit] = useState("");
+  const [ticketNumero, setTicketNumero] = useState("");
+  const [aerolineaValidadora, setAerolineaValidadora] = useState("");
+  const [tarifaBase, setTarifaBase] = useState<number | undefined>(undefined);
+  const [impuestos, setImpuestos] = useState<{ codigo: string; monto: number }[] | undefined>(undefined);
+  const [preciosPorPax, setPreciosPorPax] = useState(false);
+
   // ─ Modo de entrada ───────────────────────────────────────────────────────────
   const [inputMode, setInputMode] = useState<'parser' | 'manual'>('parser');
   const [manualPaxNombre, setManualPaxNombre] = useState("");
@@ -523,6 +580,16 @@ function NuevoBoletoView({
       setPasajeros(result.data.pasajeros ?? []);
       setSegmentos(result.data.segmentos ?? []);
       setParseWarnings(result.warnings);
+      // Campos comerciales detectados en el PNR
+      if (result.data.timeLimit) setTimeLimit(result.data.timeLimit);
+      if (result.data.ticketNumero) setTicketNumero(result.data.ticketNumero);
+      if (result.data.tarifaBase != null) setTarifaBase(result.data.tarifaBase);
+      if (result.data.impuestos) setImpuestos(result.data.impuestos);
+      // Prefill del costo neto = tarifa base + impuestos, si se detectaron.
+      if (result.data.tarifaBase != null) {
+        const tot = result.data.tarifaBase + (result.data.impuestos || []).reduce((s, i) => s + i.monto, 0);
+        if (tot > 0) { setCostoNetoInput(tot.toFixed(2)); setBaseCalculo("NETO"); }
+      }
       setIsParsing(false);
     }, 400);
   }, [rawText]);
@@ -535,6 +602,11 @@ function NuevoBoletoView({
     setPasajeros([]);
     setSegmentos([]);
     setParseWarnings([]);
+    setTimeLimit("");
+    setTicketNumero("");
+    setAerolineaValidadora("");
+    setTarifaBase(undefined);
+    setImpuestos(undefined);
   };
 
   // Manejadores bidireccionales
@@ -621,8 +693,12 @@ function NuevoBoletoView({
     });
   };
 
-  const pvpFinal = parseFloat(precioPvp) || 0;
-  const costoNetoFinal = parseFloat(costoNetoInput) || 0;
+  // Desglose por pasajero (ADT/CHD/INF): cuando está activo, el neto y el PVP totales
+  // se derivan de la suma de cada pasajero.
+  const sumaNetoPax = pasajeros.reduce((s, p) => s + (p.costoNeto || 0), 0);
+  const sumaVentaPax = pasajeros.reduce((s, p) => s + (p.precioVenta || 0), 0);
+  const pvpFinal = preciosPorPax ? sumaVentaPax : (parseFloat(precioPvp) || 0);
+  const costoNetoFinal = preciosPorPax ? sumaNetoPax : (parseFloat(costoNetoInput) || 0);
   
   let gananciaAgencia = 0;
   let gananciaForatour = 0;
@@ -661,6 +737,11 @@ function NuevoBoletoView({
         precioVenta: netoB2B, // Lo que paga la agencia B2B
         vinculadoAExpediente: false,
         notas,
+        ticketNumero: ticketNumero.trim() || undefined,
+        aerolineaValidadora: aerolineaValidadora.trim() || undefined,
+        timeLimit: timeLimit.trim() || undefined,
+        tarifaBase,
+        impuestos,
         createdAt: new Date().toISOString(),
       };
       onGuardar(nuevoBoleto);
@@ -910,6 +991,22 @@ function NuevoBoletoView({
                         }}
                         className="w-full px-2.5 py-1.5 border border-zinc-200 rounded text-xs focus:outline-none focus:border-zinc-500 font-mono uppercase text-zinc-700"
                       />
+                      {preciosPorPax && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[9px] font-bold text-zinc-400 uppercase block mb-0.5">Neto pax</label>
+                            <input type="number" step="0.01" placeholder="0.00" value={p.costoNeto ?? ""}
+                              onChange={(e) => { const v = parseFloat(e.target.value); setPasajeros(prev => { const arr = [...prev]; arr[i] = { ...arr[i], costoNeto: isNaN(v) ? undefined : v }; return arr; }); }}
+                              className="w-full px-2 py-1 border border-zinc-200 rounded text-xs font-mono text-right focus:outline-none focus:border-zinc-500" />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold text-zinc-400 uppercase block mb-0.5">Venta pax (PVP)</label>
+                            <input type="number" step="0.01" placeholder="0.00" value={p.precioVenta ?? ""}
+                              onChange={(e) => { const v = parseFloat(e.target.value); setPasajeros(prev => { const arr = [...prev]; arr[i] = { ...arr[i], precioVenta: isNaN(v) ? undefined : v }; return arr; }); }}
+                              className="w-full px-2 py-1 border border-zinc-200 rounded text-xs font-mono text-right focus:outline-none focus:border-zinc-500" />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1115,6 +1212,50 @@ function NuevoBoletoView({
             </div>
           </div>
 
+          {/* Datos de emisión — time limit (TAW), e-ticket, aerolínea validadora */}
+          <div className="bg-white border border-zinc-200 rounded overflow-hidden">
+            <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-100">
+              <span className="text-xs font-bold text-zinc-700 uppercase tracking-wider flex items-center gap-2">
+                <Ticket className="w-3.5 h-3.5 text-zinc-400" /> Datos de Emisión
+                <span className="text-[9px] text-zinc-400 normal-case tracking-normal font-medium">(se autocompletan del PNR si aparecen)</span>
+              </span>
+            </div>
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Time limit de emisión (TAW)</label>
+                <input type="text" value={timeLimit} onChange={e => setTimeLimit(e.target.value)}
+                  placeholder="Ej: 12/11/2026 18:00"
+                  className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Nº de e-ticket</label>
+                <input type="text" value={ticketNumero} onChange={e => setTicketNumero(e.target.value)}
+                  placeholder="Ej: 045-2345678901"
+                  className="w-full p-2 border border-zinc-200 rounded text-xs font-mono font-semibold text-zinc-900 focus:outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">Aerolínea validadora</label>
+                <input type="text" value={aerolineaValidadora} onChange={e => setAerolineaValidadora(e.target.value)}
+                  placeholder="Ej: COPA AIRLINES"
+                  className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
+              </div>
+            </div>
+            {(tarifaBase != null || (impuestos && impuestos.length > 0)) && (
+              <div className="px-4 pb-4">
+                <div className="bg-zinc-50 border border-zinc-100 rounded p-3 text-[11px] font-mono space-y-1">
+                  <div className="flex justify-between text-zinc-600"><span>Tarifa base</span><span>${(tarifaBase ?? 0).toFixed(2)}</span></div>
+                  {(impuestos || []).map((imp, i) => (
+                    <div key={i} className="flex justify-between text-zinc-500"><span>Impuesto {imp.codigo}</span><span>+${imp.monto.toFixed(2)}</span></div>
+                  ))}
+                  <div className="flex justify-between font-bold text-zinc-800 border-t border-zinc-200 pt-1">
+                    <span>Neto (tarifa + impuestos)</span>
+                    <span>${((tarifaBase ?? 0) + (impuestos || []).reduce((s, i) => s + i.monto, 0)).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Datos financieros — OBLIGATORIOS (ingreso manual del agente) */}
           <div className="bg-white border border-zinc-200 rounded overflow-hidden">
             <div className="px-4 py-3 bg-zinc-50 border-b border-zinc-100 flex items-center justify-between flex-wrap gap-3">
@@ -1141,9 +1282,22 @@ function NuevoBoletoView({
                     Fee Fijo ($)
                   </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setPreciosPorPax(v => !v)}
+                  title="Cobrar tarifas distintas por ADT/CHD/INF (el neto y PVP totales se suman del desglose por pasajero)"
+                  className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider border transition-all ${preciosPorPax ? "bg-zinc-900 text-white border-zinc-900" : "bg-white text-zinc-500 border-zinc-200 hover:text-zinc-700"}`}
+                >
+                  Precio por pasajero
+                </button>
               </div>
             </div>
             <div className="p-4 space-y-3">
+              {preciosPorPax && (
+                <div className="bg-blue-50 border border-blue-200 rounded p-2.5 text-[10.5px] text-blue-800 font-semibold">
+                  Modo desglose por pasajero activo: el neto y el PVP totales se calculan sumando lo ingresado en cada pasajero (columna izquierda).
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
@@ -1158,10 +1312,11 @@ function NuevoBoletoView({
                       type="number"
                       min="0"
                       step="0.01"
-                      value={costoNetoInput}
+                      value={preciosPorPax ? sumaNetoPax.toFixed(2) : costoNetoInput}
                       onChange={(e) => handleCostoNetoChange(e.target.value)}
+                      disabled={preciosPorPax}
                       placeholder="0.00"
-                      className="w-full pl-6 pr-3 py-2 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white"
+                      className={`w-full pl-6 pr-3 py-2 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500 ${preciosPorPax ? "bg-zinc-100 text-zinc-500" : "bg-white"}`}
                     />
                   </div>
                 </div>
@@ -1178,10 +1333,11 @@ function NuevoBoletoView({
                       type="number"
                       min="0"
                       step="0.01"
-                      value={precioPvp}
+                      value={preciosPorPax ? sumaVentaPax.toFixed(2) : precioPvp}
                       onChange={(e) => handlePvpChange(e.target.value)}
+                      disabled={preciosPorPax}
                       placeholder="0.00"
-                      className="w-full pl-6 pr-3 py-2 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500 bg-white"
+                      className={`w-full pl-6 pr-3 py-2 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none focus:border-zinc-500 ${preciosPorPax ? "bg-zinc-100 text-zinc-500" : "bg-white"}`}
                     />
                   </div>
                 </div>
@@ -1376,15 +1532,31 @@ function ExpedienteAereoView({
   boleto,
   clients,
   directClients,
+  payableObligations,
+  onAddObligation,
+  onUpdateObligation,
+  invoices,
+  onAddInvoice,
+  onUpdateClient,
+  onUpdateDirectClient,
   onBack,
   onUpdateBoleto,
   onShowVoucher,
+  companyConfig,
   jurisdiction,
   currentExchangeRate,
 }: {
   boleto: FlightTicket;
   clients: B2BClient[];
   directClients: DirectClient[];
+  payableObligations: PayableObligation[];
+  onAddObligation?: (o: PayableObligation) => void;
+  onUpdateObligation?: (o: PayableObligation) => void;
+  invoices?: FinancialInvoice[];
+  onAddInvoice?: (inv: FinancialInvoice) => void;
+  onUpdateClient?: (c: B2BClient) => void;
+  onUpdateDirectClient?: (c: DirectClient) => void;
+  companyConfig: CompanyConfig;
   onBack: () => void;
   onUpdateBoleto: (boleto: FlightTicket) => void;
   onShowVoucher: (boleto: FlightTicket) => void;
@@ -1427,6 +1599,187 @@ function ExpedienteAereoView({
     setExpediente(updated);
     onUpdateBoleto({ ...boleto, expedienteAereo: updated });
     showAlert({ title: "Éxito", message: "Expediente enviado a facturación exitosamente.", type: "success" });
+  };
+
+  // ── Reembolso / anulación con penalidad (post-venta) ──
+  const [showReembolso, setShowReembolso] = useState(false);
+  const [reembolsoForm, setReembolsoForm] = useState({ penalidad: "", motivo: "" });
+
+  const handleReembolso = (e: React.FormEvent) => {
+    e.preventDefault();
+    const venta = boleto.precioVenta || 0;
+    const penalidad = Math.max(0, parseFloat(reembolsoForm.penalidad) || 0);
+    const montoReembolsado = Math.max(0, venta - penalidad);
+
+    const cliB2B = expediente.clienteB2BId ? clients.find(c => c.id === expediente.clienteB2BId) : undefined;
+    const cliDir = expediente.clienteDirectoId ? directClients.find(c => c.id === expediente.clienteDirectoId) : undefined;
+    const cliId = cliB2B?.id || cliDir?.id;
+    const cliNombre = cliB2B?.nombre || cliDir?.nombre || expediente.titular;
+
+    // 1. Nota de crédito al cliente por el monto reembolsado.
+    let ncId: string | undefined;
+    if (onAddInvoice && montoReembolsado > 0) {
+      ncId = nextSequentialId("NC", (invoices || []).map(i => i.id));
+      onAddInvoice({
+        id: ncId,
+        clientName: `${cliNombre} - Boleto ${boleto.pnr} (Nota de Crédito por reembolso aéreo${reembolsoForm.motivo ? ": " + reembolsoForm.motivo.trim() : ""})`,
+        clientId: cliId,
+        date: new Date().toISOString().split("T")[0],
+        dueDate: new Date().toISOString().split("T")[0],
+        // Convención del sistema: las notas de crédito llevan monto NEGATIVO (igual que
+        // FacturacionView) para que reduzcan correctamente los totales del cliente.
+        amount: -montoReembolsado,
+        vatAmount: 0,
+        type: "Cobro",
+        status: "Pagado",
+      } as FinancialInvoice);
+    }
+
+    // 2. Ajustar saldo del cliente: reduce deuda por el reembolso; excedente → saldo a favor.
+    if (cliB2B && onUpdateClient) {
+      const reduce = Math.min(montoReembolsado, cliB2B.saldoDeber || 0);
+      onUpdateClient({ ...cliB2B, saldoDeber: Math.max(0, (cliB2B.saldoDeber || 0) - reduce), saldoFavor: (cliB2B.saldoFavor || 0) + (montoReembolsado - reduce) });
+    } else if (cliDir && onUpdateDirectClient) {
+      const reduce = Math.min(montoReembolsado, cliDir.saldoDeber || 0);
+      onUpdateDirectClient({ ...cliDir, saldoDeber: Math.max(0, (cliDir.saldoDeber || 0) - reduce), saldoFavor: (cliDir.saldoFavor || 0) + (montoReembolsado - reduce) });
+    }
+
+    // 3. Congelar la obligación a la aerolínea (reclamar reembolso / no pagar).
+    const obl = (payableObligations || []).find(o => o.locatorId === boleto.id);
+    if (obl && onUpdateObligation) {
+      onUpdateObligation({ ...obl, status: "Congelado", isFrozen: true, notes: `${obl.notes || ""}\n[Bloqueado] Boleto reembolsado — reclamar reembolso a la aerolínea.` });
+    }
+
+    // 4. Cerrar el expediente como Reembolsado.
+    const updated = { ...expediente, status: "Reembolsado" as const, reembolso: { fecha: new Date().toISOString(), penalidad, montoReembolsado, notaCreditoId: ncId, motivo: reembolsoForm.motivo.trim() || undefined } };
+    setExpediente(updated);
+    onUpdateBoleto({ ...boleto, expedienteAereo: updated });
+    setShowReembolso(false);
+    showAlert({ title: "Reembolso procesado", message: `Nota de crédito emitida por ${formatCurrency(montoReembolsado, "USD")} (penalidad retenida ${formatCurrency(penalidad, "USD")}). La obligación a la aerolínea quedó congelada para reclamo.`, type: "success" });
+  };
+
+  // ── Reemisión (reissue): cambio con diferencia de tarifa + penalidad ──
+  const [showReemision, setShowReemision] = useState(false);
+  const [reemisionForm, setReemisionForm] = useState({ adc: "", penalidad: "", nuevoTicket: "", motivo: "" });
+
+  const handleReemision = (e: React.FormEvent) => {
+    e.preventDefault();
+    const adc = Math.max(0, parseFloat(reemisionForm.adc) || 0);          // diferencia de tarifa
+    const penalidad = Math.max(0, parseFloat(reemisionForm.penalidad) || 0);
+    const total = adc + penalidad;
+    if (total <= 0) { showAlert({ title: "Nada que cobrar", message: "Ingresa la diferencia de tarifa y/o la penalidad de cambio.", type: "warning" }); return; }
+
+    const cliB2B = expediente.clienteB2BId ? clients.find(c => c.id === expediente.clienteB2BId) : undefined;
+    const cliDir = expediente.clienteDirectoId ? directClients.find(c => c.id === expediente.clienteDirectoId) : undefined;
+    const cliId = cliB2B?.id || cliDir?.id;
+    const cliNombre = cliB2B?.nombre || cliDir?.nombre || expediente.titular;
+
+    // 1. Factura al cliente por la reemisión (ADC + penalidad).
+    let facId: string | undefined;
+    if (onAddInvoice) {
+      facId = nextSequentialId("FAC", (invoices || []).map(i => i.id));
+      onAddInvoice({
+        id: facId,
+        clientName: `${cliNombre} - Boleto ${boleto.pnr} (Reemisión: dif. tarifa + penalidad${reemisionForm.motivo ? " · " + reemisionForm.motivo.trim() : ""})`,
+        clientId: cliId,
+        date: new Date().toISOString().split("T")[0],
+        dueDate: new Date().toISOString().split("T")[0],
+        amount: total,
+        vatAmount: 0,
+        type: "Cobro",
+        status: "Facturado",
+      } as FinancialInvoice);
+    }
+
+    // 2. Cargar la deuda del cliente por el total de la reemisión.
+    if (cliB2B && onUpdateClient) onUpdateClient({ ...cliB2B, saldoDeber: (cliB2B.saldoDeber || 0) + total });
+    else if (cliDir && onUpdateDirectClient) onUpdateDirectClient({ ...cliDir, saldoDeber: (cliDir.saldoDeber || 0) + total });
+
+    // 3. Incrementar la obligación a la aerolínea por el total (se debe pagar la reemisión).
+    const obl = (payableObligations || []).find(o => o.locatorId === boleto.id);
+    if (obl && onUpdateObligation) {
+      const newNet = obl.netCost + total;
+      onUpdateObligation({ ...obl, netCost: newNet, isFrozen: false, status: obl.paidAmount >= newNet ? "Pagado Total" : obl.paidAmount > 0 ? "Pagado Parcial" : "Pendiente" });
+    }
+
+    // 4. Actualizar el boleto: costo y venta suben por la reemisión; nuevo e-ticket si aplica.
+    const nb: FlightTicket = {
+      ...boleto,
+      costoNeto: (boleto.costoNeto || 0) + total,
+      precioVenta: (boleto.precioVenta || 0) + total,
+      ticketNumero: reemisionForm.nuevoTicket.trim() || boleto.ticketNumero,
+    };
+
+    // 5. Registrar la reemisión y re-facturar el expediente.
+    const reem = { fecha: new Date().toISOString(), diferenciaTarifa: adc, penalidad, totalCobrado: total, nuevoTicket: reemisionForm.nuevoTicket.trim() || undefined, facturaId: facId, motivo: reemisionForm.motivo.trim() || undefined };
+    const updated = { ...expediente, status: "Facturado" as const, reemisiones: [...(expediente.reemisiones || []), reem] };
+    setExpediente(updated);
+    onUpdateBoleto({ ...nb, expedienteAereo: updated });
+    setShowReemision(false);
+    showAlert({ title: "Reemisión procesada", message: `Se cobró ${formatCurrency(total, "USD")} al cliente (dif. tarifa ${formatCurrency(adc, "USD")} + penalidad ${formatCurrency(penalidad, "USD")}) y se ajustó la cuenta por pagar a la aerolínea.`, type: "success" });
+  };
+
+  // ── EMD: servicios/ancillaries (equipaje, asiento, etc.) sobre el boleto ──
+  const [showEmd, setShowEmd] = useState(false);
+  const [emdForm, setEmdForm] = useState({ concepto: "Equipaje adicional", montoVenta: "", costoNeto: "", notas: "" });
+
+  // Liquidación al cliente (documento financiero imprimible).
+  const [showLiquidacion, setShowLiquidacion] = useState(false);
+  const liqCliente = expediente.clienteB2BId
+    ? (() => { const c = clients.find(x => x.id === expediente.clienteB2BId); return c ? { nombre: c.nombre, doc: c.rif, tipo: "Agencia B2B" } : undefined; })()
+    : expediente.clienteDirectoId
+    ? (() => { const c = directClients.find(x => x.id === expediente.clienteDirectoId); return c ? { nombre: c.nombre, doc: c.cedula, tipo: "Cliente Directo" } : undefined; })()
+    : undefined;
+
+  const handleEmd = (e: React.FormEvent) => {
+    e.preventDefault();
+    const montoVenta = Math.max(0, parseFloat(emdForm.montoVenta) || 0);
+    const costoNeto = Math.max(0, parseFloat(emdForm.costoNeto) || 0);
+    if (montoVenta <= 0) { showAlert({ title: "Monto inválido", message: "Ingresa el monto de venta del EMD.", type: "warning" }); return; }
+
+    const cliB2B = expediente.clienteB2BId ? clients.find(c => c.id === expediente.clienteB2BId) : undefined;
+    const cliDir = expediente.clienteDirectoId ? directClients.find(c => c.id === expediente.clienteDirectoId) : undefined;
+    const cliId = cliB2B?.id || cliDir?.id;
+    const cliNombre = cliB2B?.nombre || cliDir?.nombre || expediente.titular;
+
+    // 1. Factura al cliente por el EMD (monto de venta).
+    let facId: string | undefined;
+    if (onAddInvoice) {
+      facId = nextSequentialId("FAC", (invoices || []).map(i => i.id));
+      onAddInvoice({
+        id: facId,
+        clientName: `${cliNombre} - Boleto ${boleto.pnr} (EMD: ${emdForm.concepto})`,
+        clientId: cliId,
+        date: new Date().toISOString().split("T")[0],
+        dueDate: new Date().toISOString().split("T")[0],
+        amount: montoVenta,
+        vatAmount: 0,
+        type: "Cobro",
+        status: "Facturado",
+      } as FinancialInvoice);
+    }
+
+    // 2. Cargar la deuda del cliente por el monto de venta.
+    if (cliB2B && onUpdateClient) onUpdateClient({ ...cliB2B, saldoDeber: (cliB2B.saldoDeber || 0) + montoVenta });
+    else if (cliDir && onUpdateDirectClient) onUpdateDirectClient({ ...cliDir, saldoDeber: (cliDir.saldoDeber || 0) + montoVenta });
+
+    // 3. Sumar el costo neto a la obligación con la aerolínea (si hay costo).
+    if (costoNeto > 0) {
+      const obl = (payableObligations || []).find(o => o.locatorId === boleto.id);
+      if (obl && onUpdateObligation) {
+        const newNet = obl.netCost + costoNeto;
+        onUpdateObligation({ ...obl, netCost: newNet, isFrozen: false, status: obl.paidAmount >= newNet ? "Pagado Total" : obl.paidAmount > 0 ? "Pagado Parcial" : "Pendiente" });
+      }
+    }
+
+    // 4. Actualizar el boleto y registrar el EMD en el expediente.
+    const nb: FlightTicket = { ...boleto, costoNeto: (boleto.costoNeto || 0) + costoNeto, precioVenta: (boleto.precioVenta || 0) + montoVenta };
+    const emd = { fecha: new Date().toISOString(), concepto: emdForm.concepto, montoVenta, costoNeto, facturaId: facId, notas: emdForm.notas.trim() || undefined };
+    const updated = { ...expediente, emds: [...(expediente.emds || []), emd] };
+    setExpediente(updated);
+    onUpdateBoleto({ ...nb, expedienteAereo: updated });
+    setShowEmd(false);
+    showAlert({ title: "EMD emitido", message: `Se emitió el EMD "${emdForm.concepto}" y se cobró ${formatCurrency(montoVenta, "USD")} al cliente.`, type: "success" });
   };
 
   // Elegir/limpiar el cliente facturable (B2B o Directo), fijando el tipo de facturación.
@@ -1482,6 +1835,9 @@ function ExpedienteAereoView({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setShowLiquidacion(true)}>
+            <FileText className="w-3.5 h-3.5" /> Liquidación
+          </Button>
           {expediente.status === "Borrador" && !boleto.facturarConjunto && (
             <>
               <Button variant="secondary" size="sm" onClick={handleSave}>
@@ -1538,9 +1894,31 @@ function ExpedienteAereoView({
             </Button>
           )}
           {(expediente.status === "Facturado" || expediente.status === "PagadoAerolinea") && (
-            <Button variant="success" size="sm" onClick={() => onShowVoucher(boleto)}>
-              <Download className="w-3.5 h-3.5" /> Descargar Voucher
-            </Button>
+            <>
+              <Button variant="success" size="sm" onClick={() => onShowVoucher(boleto)}>
+                <Download className="w-3.5 h-3.5" /> Descargar Voucher
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => { setEmdForm({ concepto: "Equipaje adicional", montoVenta: "", costoNeto: "", notas: "" }); setShowEmd(true); }}>
+                <FileText className="w-3.5 h-3.5" /> EMD
+              </Button>
+              <Button variant="warning" size="sm" onClick={() => { setReemisionForm({ adc: "", penalidad: "", nuevoTicket: "", motivo: "" }); setShowReemision(true); }}>
+                <RefreshCw className="w-3.5 h-3.5" /> Reemitir
+              </Button>
+              <Button variant="danger" size="sm" onClick={() => { setReembolsoForm({ penalidad: "", motivo: "" }); setShowReembolso(true); }}>
+                <XCircle className="w-3.5 h-3.5" /> Reembolsar
+              </Button>
+            </>
+          )}
+          {expediente.status === "Reembolsado" && expediente.reembolso && (
+            <>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 border border-purple-200 text-purple-700 text-xs font-bold rounded">
+                <Info className="w-3.5 h-3.5" />
+                Reembolsado: {formatCurrency(expediente.reembolso.montoReembolsado, "USD")} · penalidad {formatCurrency(expediente.reembolso.penalidad, "USD")}
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => onShowVoucher(boleto)}>
+                <Download className="w-3.5 h-3.5" /> Constancia
+              </Button>
+            </>
           )}
           {expediente.status === "Borrador" && boleto.facturarConjunto && (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded">
@@ -1550,6 +1928,190 @@ function ExpedienteAereoView({
           )}
         </div>
       </div>
+
+      {/* ── MODAL: REEMBOLSO / ANULACIÓN CON PENALIDAD ── */}
+      {showReembolso && (() => {
+        const venta = boleto.precioVenta || 0;
+        const penalidad = Math.max(0, parseFloat(reembolsoForm.penalidad) || 0);
+        const reembolsable = Math.max(0, venta - penalidad);
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in font-sans p-4">
+            <form onSubmit={handleReembolso} className="bg-white rounded-lg w-full max-w-md shadow-2xl overflow-hidden">
+              <div className="bg-zinc-950 text-white p-5 flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400">Post-venta</span>
+                  <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2 mt-0.5">
+                    <XCircle className="w-4.5 h-4.5 text-red-400" /> Reembolso del boleto {boleto.pnr}
+                  </h4>
+                </div>
+                <button type="button" onClick={() => setShowReembolso(false)} className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded cursor-pointer"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-5 space-y-4 text-left">
+                <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3.5 space-y-1.5 text-[11px] font-mono">
+                  <div className="flex justify-between text-zinc-600"><span>Venta al cliente</span><span>{formatCurrency(venta, "USD")}</span></div>
+                  <div className="flex justify-between text-red-600"><span>Penalidad retenida</span><span>-{formatCurrency(penalidad, "USD")}</span></div>
+                  <div className="flex justify-between font-black text-emerald-700 border-t border-zinc-200 pt-1"><span>A reembolsar (nota de crédito)</span><span>{formatCurrency(reembolsable, "USD")}</span></div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Penalidad de la aerolínea (USD)</label>
+                  <input type="number" step="0.01" min="0" autoFocus value={reembolsoForm.penalidad}
+                    onChange={e => setReembolsoForm(f => ({ ...f, penalidad: e.target.value }))}
+                    placeholder="0.00"
+                    className="w-full p-2 border border-zinc-200 rounded text-sm font-mono font-bold text-right focus:outline-none focus:border-zinc-500" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Motivo (opcional)</label>
+                  <input type="text" value={reembolsoForm.motivo}
+                    onChange={e => setReembolsoForm(f => ({ ...f, motivo: e.target.value }))}
+                    placeholder="Ej: cancelación del pasajero"
+                    className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold focus:outline-none focus:border-zinc-500" />
+                </div>
+                <p className="text-[10px] text-zinc-500 leading-snug">Se emitirá una nota de crédito al cliente por el monto a reembolsar, se ajustará su saldo, y la cuenta por pagar a la aerolínea quedará <b>congelada</b> para reclamar el reembolso.</p>
+              </div>
+              <div className="border-t border-zinc-100 p-4 flex justify-end gap-3">
+                <button type="button" onClick={() => setShowReembolso(false)} className="px-5 py-2.5 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
+                <button type="submit" className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md">Confirmar reembolso</button>
+              </div>
+            </form>
+          </div>
+        );
+      })()}
+
+      {/* ── MODAL: REEMISIÓN (REISSUE) ── */}
+      {showReemision && (() => {
+        const adc = Math.max(0, parseFloat(reemisionForm.adc) || 0);
+        const penalidad = Math.max(0, parseFloat(reemisionForm.penalidad) || 0);
+        const total = adc + penalidad;
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in font-sans p-4">
+            <form onSubmit={handleReemision} className="bg-white rounded-lg w-full max-w-md shadow-2xl overflow-hidden">
+              <div className="bg-zinc-950 text-white p-5 flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400">Post-venta</span>
+                  <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2 mt-0.5">
+                    <RefreshCw className="w-4.5 h-4.5 text-amber-400" /> Reemisión del boleto {boleto.pnr}
+                  </h4>
+                </div>
+                <button type="button" onClick={() => setShowReemision(false)} className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded cursor-pointer"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-5 space-y-4 text-left">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Diferencia de tarifa (ADC)</label>
+                    <input type="number" step="0.01" min="0" autoFocus value={reemisionForm.adc}
+                      onChange={e => setReemisionForm(f => ({ ...f, adc: e.target.value }))}
+                      placeholder="0.00"
+                      className="w-full p-2 border border-zinc-200 rounded text-sm font-mono font-bold text-right focus:outline-none focus:border-zinc-500" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Penalidad de cambio</label>
+                    <input type="number" step="0.01" min="0" value={reemisionForm.penalidad}
+                      onChange={e => setReemisionForm(f => ({ ...f, penalidad: e.target.value }))}
+                      placeholder="0.00"
+                      className="w-full p-2 border border-zinc-200 rounded text-sm font-mono font-bold text-right focus:outline-none focus:border-zinc-500" />
+                  </div>
+                </div>
+                <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 flex justify-between items-center text-[11px] font-mono">
+                  <span className="font-bold text-zinc-700 uppercase tracking-wider text-[10px]">Total a cobrar al cliente</span>
+                  <span className="font-black text-zinc-900 text-sm">{formatCurrency(total, "USD")}</span>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Nuevo nº de e-ticket (opcional)</label>
+                  <input type="text" value={reemisionForm.nuevoTicket}
+                    onChange={e => setReemisionForm(f => ({ ...f, nuevoTicket: e.target.value }))}
+                    placeholder="Ej: 045-2345678902"
+                    className="w-full p-2 border border-zinc-200 rounded text-xs font-mono font-semibold focus:outline-none focus:border-zinc-500" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Motivo (opcional)</label>
+                  <input type="text" value={reemisionForm.motivo}
+                    onChange={e => setReemisionForm(f => ({ ...f, motivo: e.target.value }))}
+                    placeholder="Ej: cambio de fecha de regreso"
+                    className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold focus:outline-none focus:border-zinc-500" />
+                </div>
+                <p className="text-[10px] text-zinc-500 leading-snug">Se emitirá una factura al cliente por el total (dif. tarifa + penalidad), se sumará a su saldo y a la cuenta por pagar de la aerolínea. El boleto se re-factura conservando su historial de reemisiones.</p>
+              </div>
+              <div className="border-t border-zinc-100 p-4 flex justify-end gap-3">
+                <button type="button" onClick={() => setShowReemision(false)} className="px-5 py-2.5 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
+                <button type="submit" className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md">Confirmar reemisión</button>
+              </div>
+            </form>
+          </div>
+        );
+      })()}
+
+      {/* ── MODAL: EMD (SERVICIOS / ANCILLARIES) ── */}
+      {showEmd && (() => {
+        const venta = Math.max(0, parseFloat(emdForm.montoVenta) || 0);
+        const neto = Math.max(0, parseFloat(emdForm.costoNeto) || 0);
+        const margen = venta - neto;
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in font-sans p-4">
+            <form onSubmit={handleEmd} className="bg-white rounded-lg w-full max-w-md shadow-2xl overflow-hidden">
+              <div className="bg-zinc-950 text-white p-5 flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400">Servicios / ancillaries</span>
+                  <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2 mt-0.5">
+                    <FileText className="w-4.5 h-4.5 text-blue-400" /> EMD — Boleto {boleto.pnr}
+                  </h4>
+                </div>
+                <button type="button" onClick={() => setShowEmd(false)} className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded cursor-pointer"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-5 space-y-4 text-left">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Concepto</label>
+                  <select value={emdForm.concepto} onChange={e => setEmdForm(f => ({ ...f, concepto: e.target.value }))}
+                    className="w-full p-2 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer">
+                    <option>Equipaje adicional</option>
+                    <option>Selección de asiento</option>
+                    <option>Cargo por cambio</option>
+                    <option>Upgrade de cabina</option>
+                    <option>Otro servicio</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Venta (cliente)</label>
+                    <input type="number" step="0.01" min="0" autoFocus value={emdForm.montoVenta}
+                      onChange={e => setEmdForm(f => ({ ...f, montoVenta: e.target.value }))} placeholder="0.00"
+                      className="w-full p-2 border border-zinc-200 rounded text-sm font-mono font-bold text-right focus:outline-none focus:border-zinc-500" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Neto (aerolínea)</label>
+                    <input type="number" step="0.01" min="0" value={emdForm.costoNeto}
+                      onChange={e => setEmdForm(f => ({ ...f, costoNeto: e.target.value }))} placeholder="0.00"
+                      className="w-full p-2 border border-zinc-200 rounded text-sm font-mono font-bold text-right focus:outline-none focus:border-zinc-500" />
+                  </div>
+                </div>
+                <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 flex justify-between items-center text-[11px] font-mono">
+                  <span className="font-bold text-zinc-700 uppercase tracking-wider text-[10px]">Margen del EMD</span>
+                  <span className={`font-black text-sm ${margen >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatCurrency(margen, "USD")}</span>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Notas (opcional)</label>
+                  <input type="text" value={emdForm.notas} onChange={e => setEmdForm(f => ({ ...f, notas: e.target.value }))}
+                    placeholder="Ej: 1 pieza extra 23kg" className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold focus:outline-none focus:border-zinc-500" />
+                </div>
+                <p className="text-[10px] text-zinc-500 leading-snug">Se emite una factura al cliente por el monto de venta y, si hay costo neto, se suma a la cuenta por pagar de la aerolínea.</p>
+              </div>
+              <div className="border-t border-zinc-100 p-4 flex justify-end gap-3">
+                <button type="button" onClick={() => setShowEmd(false)} className="px-5 py-2.5 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
+                <button type="submit" className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md">Emitir EMD</button>
+              </div>
+            </form>
+          </div>
+        );
+      })()}
+
+      {/* ── MODAL: LIQUIDACIÓN AL CLIENTE ── */}
+      {showLiquidacion && (
+        <FlightLiquidacionModal
+          boleto={{ ...boleto, expedienteAereo: expediente }}
+          cliente={liqCliente}
+          companyConfig={companyConfig}
+          onClose={() => setShowLiquidacion(false)}
+        />
+      )}
 
       <div className="grid grid-cols-3 gap-6">
         {/* Columna Izquierda: Detalles del Boleto (Solo lectura) */}
@@ -1564,6 +2126,34 @@ function ExpedienteAereoView({
                 <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1">Localizador (PNR)</p>
                 <p className="font-mono text-xl font-black text-zinc-900">{boleto.pnr}</p>
               </div>
+
+              {(boleto.timeLimit || boleto.ticketNumero || boleto.aerolineaValidadora) && (
+                <div className="border-t border-zinc-200 pt-3 space-y-2">
+                  {boleto.timeLimit && (() => {
+                    const lvl = timeLimitLevel(boleto.timeLimit);
+                    return (
+                      <div>
+                        <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-0.5">Time limit de emisión</p>
+                        <p className={`text-xs font-bold ${lvl === "vencido" ? "text-red-600" : lvl === "proximo" ? "text-amber-600" : "text-zinc-900"}`}>
+                          {boleto.timeLimit}{lvl === "vencido" ? " · VENCIDO" : lvl === "proximo" ? " · PRÓXIMO" : ""}
+                        </p>
+                      </div>
+                    );
+                  })()}
+                  {boleto.ticketNumero && (
+                    <div>
+                      <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-0.5">Nº de e-ticket</p>
+                      <p className="text-xs font-mono font-bold text-zinc-900">{boleto.ticketNumero}</p>
+                    </div>
+                  )}
+                  {boleto.aerolineaValidadora && (
+                    <div>
+                      <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-0.5">Aerolínea validadora</p>
+                      <p className="text-xs font-bold text-zinc-900">{boleto.aerolineaValidadora}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="border-t border-zinc-200 pt-3 mt-3">
                 <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2">Segmentos de Vuelo</p>
@@ -1922,7 +2512,28 @@ function ExpedienteAereoView({
                   };
                   setExpediente(updated);
                   onUpdateBoleto({ ...boleto, expedienteAereo: updated });
-                  showAlert({ title: "Solicitud enviada", message: "Solicitud enviada a Facturación. El departamento debe aprobar la emisión de factura y pagos.", type: "success" });
+
+                  // Generar la Cuenta por Pagar a la aerolínea/BSP (una sola vez) → Tesorería.
+                  const yaTiene = (payableObligations || []).some(o => o.locatorId === boleto.id);
+                  const tlDate = parseTimeLimitDate(boleto.timeLimit);
+                  if (!yaTiene && onAddObligation && boleto.costoNeto > 0) {
+                    onAddObligation({
+                      id: nextSequentialId("PAY", (payableObligations || []).map(o => o.id)),
+                      dueDate: (tlDate || new Date()).toISOString().split("T")[0],
+                      date: new Date().toISOString().split("T")[0],
+                      providerName: boleto.aerolineaValidadora?.trim()
+                        || (boleto.segmentos?.[0] ? getAirlineName(boleto.segmentos[0].aerolinea) : "")
+                        || "Aerolínea / BSP",
+                      serviceDetail: `Boleto aéreo ${boleto.pnr} — ${buildRoute(boleto.segmentos || [])}`,
+                      locatorId: boleto.id,
+                      netCost: boleto.costoNeto,
+                      paidAmount: 0,
+                      status: "Pendiente",
+                      currency: "USD",
+                    });
+                  }
+
+                  showAlert({ title: "Solicitud enviada", message: "Solicitud enviada a Facturación. Se generó la cuenta por pagar a la aerolínea en Tesorería para su liquidación.", type: "success" });
                 }}
                 disabled={expediente.status !== "Borrador"}
                 className="shadow-xs"
@@ -1967,6 +2578,29 @@ function EmptyState({ onNuevo }: { onNuevo: () => void }) {
   );
 }
 
+// CSS de impresión: aísla el modal imprimible (voucher/liquidación) ocultando TODO el
+// resto de la app con visibility, y lo posiciona limpio en la hoja. Antes solo hacía
+// `static` los elementos .fixed, por lo que el contenido de fondo se imprimía igual.
+const PRINT_ISOLATE_CSS = `
+  @media print {
+    @page { margin: 12mm; }
+    html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
+    /* El modal imprimible está portalizado a <body>; se oculta el resto de la app. */
+    #root { display: none !important; }
+    .print-modal-container {
+      position: static !important; inset: auto !important; display: block !important;
+      width: 100% !important; height: auto !important; min-height: 0 !important;
+      background: #fff !important; backdrop-filter: none !important;
+      padding: 0 !important; margin: 0 !important; overflow: visible !important;
+    }
+    .print-modal-content {
+      background: #fff !important; border: none !important; box-shadow: none !important;
+      max-width: 100% !important; width: 100% !important; max-height: none !important;
+      height: auto !important; overflow: visible !important; display: block !important; border-radius: 0 !important;
+    }
+  }
+`;
+
 // ─── MODAL VOUCHER AÉREO ────────────────────────────────────────────────────────
 function FlightVoucherModal({
   boleto,
@@ -1977,44 +2611,13 @@ function FlightVoucherModal({
   onClose: () => void;
   companyConfig: CompanyConfig;
 }) {
-  return (
+  const exp = boleto.expedienteAereo;
+  const reembolsado = exp?.status === "Reembolsado";
+  const reemisiones = exp?.reemisiones ?? [];
+  const emds = exp?.emds ?? [];
+  return createPortal((
     <>
-      <style>{`
-        @media print {
-          @page {
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          html, body, #root, .min-h-screen, .fixed:not(.print-modal-container) {
-            position: static !important;
-            height: auto !important;
-            min-height: auto !important;
-            overflow: visible !important;
-          }
-          .print-modal-container {
-            position: static !important;
-            display: block !important;
-            background: transparent !important;
-            backdrop-filter: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            height: auto !important;
-            min-height: auto !important;
-            overflow: visible !important;
-            z-index: 99999 !important;
-          }
-          .print-modal-content {
-            background: none !important;
-            border: none !important;
-            box-shadow: none !important;
-            max-width: 100% !important;
-            max-height: none !important;
-            height: auto !important;
-            overflow: visible !important;
-            display: block !important;
-          }
-        }
-      `}</style>
+      <style>{PRINT_ISOLATE_CSS}</style>
       <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans print-modal-container">
         <div className="bg-white border border-zinc-200 rounded-lg shadow-xl w-full max-w-3xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh] print-modal-content">
           {/* Header UI (Not printed) */}
@@ -2064,21 +2667,34 @@ function FlightVoucherModal({
                   E-TICKET ITINERARY / RECEIPT
                 </span>
                 <span className="text-xs font-mono font-bold text-zinc-900">PNR: {boleto.pnr}</span>
+                {boleto.ticketNumero && (
+                  <span className="text-[10px] font-mono font-semibold text-zinc-600">E-TKT: {boleto.ticketNumero}</span>
+                )}
+                {boleto.aerolineaValidadora && (
+                  <span className="text-[10px] font-semibold text-zinc-500 uppercase">{boleto.aerolineaValidadora}</span>
+                )}
               </div>
             </div>
 
-            {/* Paid Stamp */}
-            <div className="border border-emerald-250 bg-emerald-50/40 rounded-lg p-4 mb-6 flex items-center justify-between gap-4">
+            {/* Status Stamp (dinámico: emitido / reembolsado, con nota de reemisión) */}
+            <div className={`border rounded-lg p-4 mb-6 flex items-center justify-between gap-4 ${reembolsado ? "border-red-250 bg-red-50/40" : "border-emerald-250 bg-emerald-50/40"}`}>
               <div className="space-y-1">
-                <h4 className="text-xs font-extrabold uppercase text-emerald-800 font-sans">Estado: BOLETO EMITIDO Y CONFIRMADO</h4>
+                <h4 className={`text-xs font-extrabold uppercase font-sans ${reembolsado ? "text-red-800" : "text-emerald-800"}`}>
+                  {reembolsado ? "Estado: BOLETO REEMBOLSADO / ANULADO" : "Estado: BOLETO EMITIDO Y CONFIRMADO"}
+                </h4>
                 <p className="text-[10.5px] text-zinc-600 leading-relaxed font-semibold font-sans">
-                  Este documento certifica la emisión de los boletos aéreos electrónicos detallados a continuación. Por favor presente este recibo junto a su documento de identidad vigente al momento del chequeo en el aeropuerto.
+                  {reembolsado
+                    ? "Este boleto ha sido reembolsado/anulado. El itinerario ya no es válido para viajar; conserve este documento como constancia."
+                    : "Este documento certifica la emisión de los boletos aéreos electrónicos detallados a continuación. Por favor presente este recibo junto a su documento de identidad vigente al momento del chequeo en el aeropuerto."}
                 </p>
+                {reemisiones.length > 0 && !reembolsado && (
+                  <p className="text-[10px] text-amber-700 font-bold font-sans">↻ Boleto reemitido{reemisiones.length > 1 ? ` ${reemisiones.length} veces` : ""} — este itinerario refleja el cambio más reciente.</p>
+                )}
               </div>
-              <div className="flex-shrink-0 w-24 h-24 border-4 border-emerald-600/40 rounded-full flex flex-col items-center justify-center text-center rotate-12 font-sans select-none">
-                <span className="text-[9px] font-black uppercase text-emerald-600/60 leading-none">FORATOUR</span>
-                <span className="text-sm font-black text-emerald-600 uppercase tracking-widest mt-1">EMITIDO</span>
-                <span className="text-[8px] font-mono text-emerald-500 mt-0.5 leading-none">OK</span>
+              <div className={`flex-shrink-0 w-24 h-24 border-4 rounded-full flex flex-col items-center justify-center text-center rotate-12 font-sans select-none ${reembolsado ? "border-red-600/40" : "border-emerald-600/40"}`}>
+                <span className={`text-[9px] font-black uppercase leading-none ${reembolsado ? "text-red-600/60" : "text-emerald-600/60"}`}>FORATOUR</span>
+                <span className={`text-sm font-black uppercase tracking-widest mt-1 ${reembolsado ? "text-red-600" : "text-emerald-600"}`}>{reembolsado ? "ANULADO" : "EMITIDO"}</span>
+                <span className={`text-[8px] font-mono mt-0.5 leading-none ${reembolsado ? "text-red-500" : "text-emerald-500"}`}>{reembolsado ? "VOID" : "OK"}</span>
               </div>
             </div>
 
@@ -2110,7 +2726,7 @@ function FlightVoucherModal({
                         TRAMO {String(i + 1).padStart(2, "0")}
                       </span>
                       <span className="px-2 py-0.5 bg-blue-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
-                        CLASE {seg.clase}
+                        CLASE {seg.clase}{seg.cabina ? ` · ${seg.cabina}` : ""}
                       </span>
                     </div>
                     
@@ -2135,16 +2751,46 @@ function FlightVoucherModal({
                       </div>
                       
                       <div className="text-right">
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase block mb-0.5">Fecha y Hora de Salida</span>
-                        <span className="font-bold text-sm text-zinc-800 block">
-                          {formatGDSDate(seg.fecha)} · {seg.horaSalida}
-                        </span>
+                        <span className="text-[10px] text-zinc-500 font-bold uppercase block mb-0.5">Salida → Llegada</span>
+                        <span className="font-bold text-sm text-zinc-800 block">{formatGDSDate(seg.fecha)}</span>
+                        <span className="font-mono text-xs text-zinc-600 block">{seg.horaSalida} → {seg.horaLlegada}</span>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
+
+            {/* Servicios adicionales (EMD) — sin precios (documento del pasajero) */}
+            {emds.length > 0 && (
+              <div className="space-y-3 mb-6 break-inside-avoid print:break-inside-avoid">
+                <h5 className="text-[9.5px] font-black text-zinc-500 uppercase tracking-widest border-b border-zinc-100 pb-1.5 font-sans">Servicios Adicionales Incluidos</h5>
+                <ul className="border border-zinc-200 rounded-lg divide-y divide-zinc-100 bg-white">
+                  {emds.map((e, i) => (
+                    <li key={i} className="flex items-center gap-2 p-3 text-[11px] font-sans">
+                      <FileText className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      <span className="font-bold text-zinc-800">{e.concepto}</span>
+                      {e.notas && <span className="text-zinc-500">— {e.notas}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Historial de reemisiones (cambios del boleto) */}
+            {reemisiones.length > 0 && !reembolsado && (
+              <div className="space-y-2 mb-6 break-inside-avoid print:break-inside-avoid">
+                <h5 className="text-[9.5px] font-black text-zinc-500 uppercase tracking-widest border-b border-zinc-100 pb-1.5 font-sans">Historial de Cambios (Reemisiones)</h5>
+                <ul className="text-[10.5px] text-zinc-600 space-y-1 font-sans">
+                  {reemisiones.map((r, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                      <RefreshCw className="w-3 h-3 text-amber-500 shrink-0" />
+                      <span>Reemisión del {new Date(r.fecha).toLocaleDateString("es-ES")}{r.motivo ? ` — ${r.motivo}` : ""}{r.nuevoTicket ? ` · nuevo e-ticket ${r.nuevoTicket}` : ""}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* General Instructions */}
             <div className="bg-zinc-50 border border-zinc-100 rounded p-4 text-[10px] text-zinc-600 font-semibold space-y-2 font-sans mt-8 break-inside-avoid print:break-inside-avoid">
@@ -2166,5 +2812,177 @@ function FlightVoucherModal({
         </div>
       </div>
     </>
-  );
+  ), document.body);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  LIQUIDACIÓN AL CLIENTE (documento financiero, con precios) — imprimible
+// ═══════════════════════════════════════════════════════════════════════════════
+function FlightLiquidacionModal({
+  boleto,
+  cliente,
+  companyConfig,
+  onClose,
+}: {
+  boleto: FlightTicket;
+  cliente?: { nombre: string; doc?: string; tipo: string };
+  companyConfig: CompanyConfig;
+  onClose: () => void;
+}) {
+  const exp = boleto.expedienteAereo;
+  const reemisiones = exp?.reemisiones ?? [];
+  const emds = exp?.emds ?? [];
+  const reembolso = exp?.reembolso;
+  const impuestos = boleto.impuestos ?? [];
+  const totalActual = boleto.precioVenta || 0;
+  const reemTotal = reemisiones.reduce((s, r) => s + r.totalCobrado, 0);
+  const emdsTotal = emds.reduce((s, e) => s + e.montoVenta, 0);
+  const baseTicket = Math.max(0, totalActual - reemTotal - emdsTotal);
+  const totalNeto = totalActual - (reembolso?.montoReembolsado ?? 0);
+  const fmt = (n: number) => formatCurrency(n, "USD");
+  const ruta = buildRoute(boleto.segmentos || []);
+  const hoy = new Date().toLocaleDateString("es-ES");
+
+  // Desglose por pasajero + comisión (para agencias B2B).
+  const esB2B = cliente?.tipo === "Agencia B2B";
+  const pasajeros = boleto.pasajeros || [];
+  const hasPerPax = pasajeros.some(p => p.precioVenta != null || p.costoNeto != null);
+  const basePvp = boleto.precioPvp ?? baseTicket;            // PVP del boleto base (venta al público)
+  const pvpTotal = basePvp + reemTotal + emdsTotal;          // PVP total (base + reemisión + EMD)
+  const comisionAgencia = pvpTotal - totalActual;            // ganancia de la agencia (PVP − neto)
+
+  return createPortal((
+    <>
+      <style>{PRINT_ISOLATE_CSS}</style>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans print-modal-container">
+        <div className="bg-white border border-zinc-200 rounded-lg shadow-xl w-full max-w-2xl overflow-hidden animate-fade-in flex flex-col max-h-[90vh] print-modal-content">
+          {/* Header UI (no impreso) */}
+          <div className="bg-zinc-950 text-white px-5 py-4 flex items-center justify-between print:hidden shrink-0">
+            <div>
+              <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2 font-sans">
+                <FileText className="w-4.5 h-4.5 text-zinc-400" /> Liquidación al Cliente
+              </h4>
+              <p className="text-[10px] text-zinc-400 font-semibold mt-0.5 font-sans">Documento financiero con el desglose de cargos.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button variant="success" onClick={() => window.print()}>
+                <Download className="w-3.5 h-3.5" /> Generar PDF / Imprimir
+              </Button>
+              <button onClick={onClose} className="text-zinc-400 hover:text-white transition-colors cursor-pointer"><X className="w-5 h-5" /></button>
+            </div>
+          </div>
+
+          {/* Área imprimible */}
+          <div className="p-8 overflow-y-auto flex-1 bg-white print:p-0 print:overflow-visible">
+            {/* Encabezado */}
+            <div className="flex justify-between items-start border-b-2 border-zinc-900 pb-6 mb-6">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded bg-zinc-950 text-white flex items-center justify-center font-black text-base">{companyConfig.logoLetter}</div>
+                <div>
+                  <h2 className="font-black text-base tracking-tight leading-none text-zinc-950 uppercase">{companyConfig.name}</h2>
+                  <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block">{companyConfig.subtitle}</span>
+                </div>
+              </div>
+              <div className="text-right flex flex-col items-end gap-1">
+                <span className="px-2.5 py-0.5 bg-zinc-900 text-white rounded text-[9px] font-black uppercase tracking-wider">Liquidación / Cotización</span>
+                <span className="text-xs font-mono font-bold text-zinc-900">PNR: {boleto.pnr}</span>
+                {boleto.ticketNumero && <span className="text-[10px] font-mono font-semibold text-zinc-600">E-TKT: {boleto.ticketNumero}</span>}
+                <span className="text-[10px] text-zinc-500 font-semibold">Fecha: {hoy}</span>
+              </div>
+            </div>
+
+            {/* Cliente + boleto */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="bg-zinc-50 border border-zinc-200 rounded p-3">
+                <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Cliente</span>
+                <p className="text-sm font-black text-zinc-900">{cliente?.nombre || exp?.titular || "—"}</p>
+                <p className="text-[10px] text-zinc-500 font-semibold">{cliente?.tipo || "Sin asignar"}{cliente?.doc ? ` · ${cliente.doc}` : ""}</p>
+              </div>
+              <div className="bg-zinc-50 border border-zinc-200 rounded p-3">
+                <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1">Boleto</span>
+                <p className="text-sm font-black text-zinc-900">{ruta}</p>
+                <p className="text-[10px] text-zinc-500 font-semibold">{(boleto.pasajeros?.length || 0)} pasajero(s) · {(boleto.segmentos?.length || 0)} tramo(s)</p>
+              </div>
+            </div>
+
+            {/* Desglose de tarifa (informativo) */}
+            {(boleto.tarifaBase != null || impuestos.length > 0) && (
+              <div className="mb-4 text-[11px] font-mono bg-zinc-50 border border-zinc-100 rounded p-3 space-y-1">
+                <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest block mb-1 font-sans">Desglose de tarifa (referencial)</span>
+                {boleto.tarifaBase != null && <div className="flex justify-between text-zinc-600"><span>Tarifa base</span><span>{fmt(boleto.tarifaBase)}</span></div>}
+                {impuestos.map((imp, i) => (<div key={i} className="flex justify-between text-zinc-500"><span>Impuesto {imp.codigo}</span><span>+{fmt(imp.monto)}</span></div>))}
+              </div>
+            )}
+
+            {/* Detalle de cargos al cliente */}
+            <div className="mb-6">
+              <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest border-b border-zinc-100 pb-1.5 block mb-2 font-sans">Detalle de Cargos</span>
+              <table className="w-full text-xs">
+                <tbody className="divide-y divide-zinc-100">
+                  {/* Boleto: desglosado por pasajero (ADT/CHD/INF) si hay precio por pasajero */}
+                  {hasPerPax ? (
+                    pasajeros.map((p, i) => (
+                      <tr key={`pax-${i}`}>
+                        <td className="py-2 text-zinc-700 font-semibold">
+                          {p.nombre}
+                          <span className="text-[8.5px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded ml-1.5 uppercase font-bold">{p.paxType || p.tipo}</span>
+                          <span className="block text-[9px] text-zinc-400 font-normal font-sans">Boleto {boleto.pnr} — {ruta}</span>
+                        </td>
+                        <td className="py-2 text-right font-mono font-bold text-zinc-900 align-top">{fmt(p.precioVenta ?? p.costoNeto ?? 0)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td className="py-2 text-zinc-700 font-semibold">Boleto aéreo — {ruta} ({boleto.pnr}) · {pasajeros.length} pax</td>
+                      <td className="py-2 text-right font-mono font-bold text-zinc-900">{fmt(basePvp)}</td>
+                    </tr>
+                  )}
+                  {reemisiones.map((r, i) => (
+                    <tr key={`re-${i}`}>
+                      <td className="py-2 text-zinc-700 font-semibold">Reemisión ({new Date(r.fecha).toLocaleDateString("es-ES")}){r.motivo ? ` — ${r.motivo}` : ""}</td>
+                      <td className="py-2 text-right font-mono font-bold text-zinc-900">{fmt(r.totalCobrado)}</td>
+                    </tr>
+                  ))}
+                  {emds.map((e, i) => (
+                    <tr key={`emd-${i}`}>
+                      <td className="py-2 text-zinc-700 font-semibold">EMD — {e.concepto}{e.notas ? ` (${e.notas})` : ""}</td>
+                      <td className="py-2 text-right font-mono font-bold text-zinc-900">{fmt(e.montoVenta)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Resumen financiero (para B2B: comisión + neto a pagar; siempre reconcilia) */}
+              <div className="mt-3 border-t border-zinc-200 pt-3 space-y-1.5 text-xs font-sans">
+                <div className="flex justify-between text-zinc-600"><span>Subtotal (PVP)</span><span className="font-mono font-bold">{fmt(pvpTotal)}</span></div>
+                {Math.abs(comisionAgencia) > 0.005 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>{esB2B ? `Comisión de la agencia${boleto.comisionB2B != null ? ` (${boleto.comisionB2B}%)` : ""}` : "Descuento comercial"}</span>
+                    <span className="font-mono font-bold">{comisionAgencia >= 0 ? "-" : "+"}{fmt(Math.abs(comisionAgencia))}</span>
+                  </div>
+                )}
+                {reembolso && (
+                  <div className="flex justify-between text-red-600">
+                    <span>Nota de crédito por reembolso{reembolso.penalidad ? ` (penalidad ${fmt(reembolso.penalidad)})` : ""}</span>
+                    <span className="font-mono font-bold">-{fmt(reembolso.montoReembolsado)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t-2 border-zinc-900 pt-2 mt-1">
+                  <span className="text-sm font-black text-zinc-900 uppercase">{esB2B ? `Neto a pagar a ${companyConfig.name}` : "Total a pagar"}</span>
+                  <span className="text-base font-black font-mono text-zinc-900">{fmt(totalNeto)}</span>
+                </div>
+              </div>
+              <p className="text-[10px] text-zinc-500 font-semibold mt-3">Condición de pago: <b>{exp?.facturacionTipo || "Pago Contado"}</b>. Montos expresados en USD.{esB2B ? " El neto a pagar es el monto que la agencia abona a Foratour, ya descontada su comisión." : ""}</p>
+            </div>
+
+            {/* Pie */}
+            <div className="mt-8 pt-6 border-t border-zinc-200 text-center text-[9px] font-medium text-zinc-400 break-inside-avoid print:break-inside-avoid">
+              <p>Documento de liquidación emitido por {companyConfig.name}. Válido como detalle de cargos del boleto aéreo referenciado.</p>
+              <p className="mt-1">{companyConfig.name} | RIF: {companyConfig.rif} | {companyConfig.address} | Email: {companyConfig.email}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  ), document.body);
 }

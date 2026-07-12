@@ -76,9 +76,15 @@ const s1_3 = r1.data.segmentos?.[3]; // último (CM223 PTYCCS)
 assert(s1_3?.origen  === "PTY", `SEG4 origen = "PTY"`, s1_3?.origen);
 assert(s1_3?.destino === "CCS", `SEG4 destino = "CCS"`, s1_3?.destino);
 
-section("  → buildRoute");
-assert(buildRoute(r1.data.segmentos!) === "CCS → CCS",
-  `buildRoute = "CCS → CCS" (ida y vuelta)`, buildRoute(r1.data.segmentos!));
+section("  → buildRoute (cadena con escalas, sin fusionar engañoso)");
+assert(buildRoute(r1.data.segmentos!) === "CCS → PTY → MIA → PTY → CCS",
+  `buildRoute = "CCS → PTY → MIA → PTY → CCS"`, buildRoute(r1.data.segmentos!));
+
+section("  → Campos comerciales (TAW, cabina, paxType)");
+assert((r1.data.timeLimit || "").includes("12/11"), `timeLimit incluye "12/11" (TAW12NOV)`, r1.data.timeLimit);
+assert(s1_0?.cabina === "Economy", `SEG1 cabina = "Economy" (clase Y)`, s1_0?.cabina);
+assert(r1.data.pasajeros?.[0].paxType === "ADT", `[0] paxType = "ADT"`, r1.data.pasajeros?.[0].paxType);
+assert(r1.data.pasajeros?.[0].titulo === "MR", `[0] titulo = "MR"`, r1.data.pasajeros?.[0].titulo);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  CASO REAL 2: Reserva Especial AA/LA — X7P4ZQ
@@ -131,18 +137,32 @@ assert(s2_1?.aerolinea   === "LA",    `SEG2 aerolínea = "LA"`,    s2_1?.aerolin
 assert(s2_1?.origen      === "SCL",   `SEG2 origen    = "SCL"`,   s2_1?.origen);
 assert(s2_1?.destino     === "CJC",   `SEG2 destino   = "CJC"`,   s2_1?.destino);
 
-section("  → buildRoute");
-assert(buildRoute(r2.data.segmentos!) === "MIA → CJC",
-  `buildRoute = "MIA → CJC"`, buildRoute(r2.data.segmentos!));
+section("  → buildRoute (muestra la escala en SCL)");
+assert(buildRoute(r2.data.segmentos!) === "MIA → SCL → CJC",
+  `buildRoute = "MIA → SCL → CJC" (con escala, no fusionado)`, buildRoute(r2.data.segmentos!));
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  CASOS ADICIONALES: Helpers y texto de muestra
 // ═══════════════════════════════════════════════════════════════════════════════
 
-section("HELPERS — formatGDSDate");
-assert(formatGDSDate("15NOV") === "15 Nov", `"15NOV" → "15 Nov"`, formatGDSDate("15NOV"));
-assert(formatGDSDate("10DEC") === "10 Dic", `"10DEC" → "10 Dic"`, formatGDSDate("10DEC"));
-assert(formatGDSDate("01JAN") === "01 Ene", `"01JAN" → "01 Ene"`, formatGDSDate("01JAN"));
+section("HELPERS — formatGDSDate (año inferido con rollover)");
+const refDate = new Date("2026-06-15T00:00:00");
+assert(formatGDSDate("15NOV", refDate) === "15/11/2026", `"15NOV" (ref jun-26) → "15/11/2026"`, formatGDSDate("15NOV", refDate));
+assert(formatGDSDate("10DEC", refDate) === "10/12/2026", `"10DEC" (ref jun-26) → "10/12/2026"`, formatGDSDate("10DEC", refDate));
+assert(formatGDSDate("01JAN", refDate) === "01/01/2027", `"01JAN" (ref jun-26) → "01/01/2027" (rollover a año siguiente)`, formatGDSDate("01JAN", refDate));
+
+section("ROBUSTEZ — status no estándar, pax sin título, apóstrofe/guion, ida-vuelta");
+const rRobust = parseGDS(`ZZ9K1P
+ 1.1PEREZ/ANA 2.1O'BRIEN/SEAN-PAUL MR
+ 1 AV 88 J 03MAR 1 BOGMIA GK1  0800  1230
+ 2 AV 89 J 10MAR 1 MIABOG SS1  1400  1830`);
+assert(rRobust.data.segmentos?.length === 2, `2 segmentos con status GK/SS (antes se perdían)`, rRobust.data.segmentos?.length);
+assert(rRobust.data.segmentos?.[0].status === "GK1", `SEG1 status = "GK1" (genérico)`, rRobust.data.segmentos?.[0].status);
+assert(rRobust.data.segmentos?.[0].cabina === "Business", `SEG1 cabina = "Business" (clase J)`, rRobust.data.segmentos?.[0].cabina);
+assert(rRobust.data.pasajeros?.length === 2, `2 pax (uno SIN título)`, rRobust.data.pasajeros?.length);
+assert(rRobust.data.pasajeros?.[0].nombre === "PEREZ/ANA", `[0] pax sin título extraído`, rRobust.data.pasajeros?.[0].nombre);
+assert(rRobust.data.pasajeros?.[1].nombre === "O'BRIEN/SEAN-PAUL", `[1] apellido/nombre con apóstrofe y guion`, rRobust.data.pasajeros?.[1].nombre);
+assert(buildRoute(rRobust.data.segmentos!) === "BOG ⇄ MIA", `ida-vuelta directa → "BOG ⇄ MIA"`, buildRoute(rRobust.data.segmentos!));
 
 section("HELPERS — Entrada inválida");
 const rEmpty = parseGDS("");

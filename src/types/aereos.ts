@@ -13,10 +13,25 @@ export type PassengerType = "MR" | "MRS" | "MS" | "CHD" | "INF" | "MSTR" | "DR" 
 export interface Passenger {
   /** Apellido en mayúsculas, separado por slash del nombre. Ej: PEREZ/ADRIAN */
   nombre: string;
-  /** Tipo/título del pasajero según estándar IATA */
+  /** Tipo/título del pasajero según estándar IATA (retrocompat: puede traer MR/MRS/CHD/INF) */
   tipo: PassengerType;
+  /** Tipo de pasajero tarifario: ADT (adulto), CHD (niño), INF (infante). */
+  paxType?: "ADT" | "CHD" | "INF";
+  /** Título de cortesía (MR, MRS, MS, DR…) separado del tipo tarifario. */
+  titulo?: string;
+  /** Número de viajero frecuente, si aparece en el PNR. */
+  frequentFlyer?: string;
   /** Documento de identidad o Pasaporte del pasajero */
   documento?: string;
+  /** Número de e-ticket asignado a este pasajero (si aplica). */
+  ticketNumero?: string;
+  // ── Precios por pasajero (opcional; permite tarifas distintas ADT/CHD/INF) ──
+  /** Tarifa base de este pasajero. */
+  tarifaBase?: number;
+  /** Costo neto de este pasajero (tarifa + impuestos). */
+  costoNeto?: number;
+  /** Precio de venta de este pasajero. */
+  precioVenta?: number;
 }
 
 // ─── SEGMENTO DE VUELO ────────────────────────────────────────────────────────
@@ -49,8 +64,15 @@ export interface FlightSegment {
   /**
    * Estado del segmento con código + cantidad de pasajeros.
    * Ej: "HK2" (Confirmed 2 pax), "RQ1" (Requested 1 pax).
+   * Se acepta cualquier código de 2 letras (GK/TK/SS/PN/NN/DK/HN/WK/US/HX…).
    */
   status: SegmentStatus;
+  /** Nombre legible de la cabina, mapeado desde la clase RBD. Ej: "Economy", "Business". */
+  cabina?: string;
+  /** Terminal de salida, si aparece. */
+  terminal?: string;
+  /** Días de diferencia de la llegada respecto a la salida (+1 = llega al día siguiente). */
+  diaLlegada?: number;
 }
 
 // ─── BOLETO AÉREO ─────────────────────────────────────────────────────────────
@@ -114,6 +136,12 @@ export interface FlightTicket {
   ticketNumero?: string;
   /** Nombre de la aerolínea validadora del ticket */
   aerolineaValidadora?: string;
+  /** Fecha/hora límite de emisión (TAW/time limit del PNR). Ej: "2026-11-12T18:00" o "12NOV/1800". */
+  timeLimit?: string;
+  /** Tarifa base del boleto (sin impuestos). */
+  tarifaBase?: number;
+  /** Desglose de impuestos/tasas del boleto (YQ, YR, XT, tasas locales…). */
+  impuestos?: { codigo: string; monto: number }[];
   /** Observaciones adicionales del agente */
   notas?: string;
   /** Expediente de facturación aérea asociado a este boleto */
@@ -149,7 +177,53 @@ export type StatusExpedienteAereo =
   | "Solicitado"
   | "Facturado"
   | "PagadoAerolinea"
+  | "Reembolsado"
   | "Anulado";
+
+/** Registro de un reembolso / anulación con penalidad de un boleto. */
+export interface ReembolsoAereo {
+  fecha: string;
+  /** Penalidad retenida (no reembolsable). */
+  penalidad: number;
+  /** Monto efectivamente reembolsado al cliente (venta − penalidad). */
+  montoReembolsado: number;
+  /** Id de la nota de crédito emitida al cliente (si aplica). */
+  notaCreditoId?: string;
+  motivo?: string;
+}
+
+/**
+ * EMD (Electronic Miscellaneous Document): cargo por servicios/ancillaries asociados a un
+ * boleto (equipaje adicional, selección de asiento, cargo por cambio, etc.).
+ */
+export interface EmdAereo {
+  fecha: string;
+  /** Concepto del EMD. Ej: "Equipaje adicional", "Selección de asiento", "Cargo por cambio". */
+  concepto: string;
+  /** Monto de venta cobrado al cliente. */
+  montoVenta: number;
+  /** Costo neto que se debe a la aerolínea por el servicio. */
+  costoNeto: number;
+  /** Id de la factura emitida al cliente por el EMD. */
+  facturaId?: string;
+  notas?: string;
+}
+
+/** Registro de una reemisión (reissue) de un boleto: cambio con diferencia de tarifa. */
+export interface ReemisionAereo {
+  fecha: string;
+  /** Diferencia de tarifa (ADC — Additional Collection). */
+  diferenciaTarifa: number;
+  /** Penalidad de cambio de la aerolínea. */
+  penalidad: number;
+  /** Total cobrado al cliente (ADC + penalidad). */
+  totalCobrado: number;
+  /** Nuevo nº de e-ticket tras la reemisión (si aplica). */
+  nuevoTicket?: string;
+  /** Id de la factura emitida al cliente por la reemisión. */
+  facturaId?: string;
+  motivo?: string;
+}
 
 /**
  * Expediente de facturación propio del módulo de Vuelos.
@@ -183,6 +257,12 @@ export interface AereoExpediente {
   comprobanteArchivo?: string;
   /** Información del pago realizado a la aerolínea/GDS */
   pagoAerolinea?: PagoAerolinea;
+  /** Registro del reembolso/anulación con penalidad, si se realizó. */
+  reembolso?: ReembolsoAereo;
+  /** Historial de reemisiones (reissue) del boleto. */
+  reemisiones?: ReemisionAereo[];
+  /** EMDs (servicios/ancillaries) emitidos sobre el boleto. */
+  emds?: EmdAereo[];
   /** Observaciones internas del expediente */
   notas?: string;
   /** Timestamp de creación (ISO string) */

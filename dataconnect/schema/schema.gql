@@ -225,6 +225,9 @@ type FlightTicket @table {
   createdAt: String
   ticketNumero: String
   aerolineaValidadora: String
+  timeLimit: String
+  tarifaBase: Float
+  impuestos: Any
   notas: String
   expedienteAereo: Any
   updatedAt: String
