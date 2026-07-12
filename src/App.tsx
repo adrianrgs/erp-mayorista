@@ -478,7 +478,8 @@ export default function App() {
     // Si la obligación saldada corresponde a un BOLETO aéreo (locatorId = BOL-x), cerrar su
     // ciclo pasando el expediente a "PagadoAerolinea" (antes era un estado muerto/inalcanzable).
     if (updated.status === "Pagado Total") {
-      const boleto = boletos.find(b => b.id === updated.locatorId && b.expedienteAereo);
+      // La obligación aérea puede estar enlazada por el id del boleto (BOL-x) o del expediente (AER-x).
+      const boleto = boletos.find(b => (b.id === updated.locatorId || b.expedienteAereo?.id === updated.locatorId) && b.expedienteAereo);
       if (boleto?.expedienteAereo && boleto.expedienteAereo.status !== "PagadoAerolinea") {
         const nb: FlightTicket = { ...boleto, expedienteAereo: { ...boleto.expedienteAereo, status: "PagadoAerolinea" } };
         setBoletos(prev => prev.map(b => b.id === nb.id ? nb : b));
@@ -2046,6 +2047,7 @@ onDeleteStopSale={handleDeleteStopSale}
                        onUpdateDirectClient={handleUpdateDirectClient}
                        payableObligations={payableObligations}
                        onAddPayableObligation={handleAddPayableObligation}
+                       onUpdateObligation={handleUpdateObligation}
                        providerStatements={providerStatements}
                        onAddProviderStatement={handleAddStatement}
                        vouchers={vouchers}

@@ -185,11 +185,25 @@ export interface ReembolsoAereo {
   fecha: string;
   /** Penalidad retenida (no reembolsable). */
   penalidad: number;
-  /** Monto efectivamente reembolsado al cliente (venta − penalidad). */
+  /** Monto de la nota de crédito (venta − penalidad). */
   montoReembolsado: number;
   /** Id de la nota de crédito emitida al cliente (si aplica). */
   notaCreditoId?: string;
   motivo?: string;
+  /**
+   * Reembolso SOLICITADO pero aún NO aprobado por el operador de Facturación.
+   * Mientras esté `true`, no se ha emitido la NC ni se aplicaron los efectos
+   * (saldo del cliente / obligación al proveedor). El operador lo aprueba en
+   * Facturación (mismo flujo que la NC de reservas) y recién ahí se ejecuta.
+   */
+  pendiente?: boolean;
+  // Plan pre-calculado en la solicitud, para que el operador solo lo aplique:
+  /** Saldo a favor a generar al cliente (max(0, pagado − penalidad)). */
+  saldoFavorGenerado?: number;
+  /** Deuda pendiente del expediente a cancelar (venta − pagado). */
+  outstanding?: number;
+  /** Neto cliente (pagado − penalidad); si < 0 el cliente aún debe la diferencia. */
+  netCliente?: number;
 }
 
 /**

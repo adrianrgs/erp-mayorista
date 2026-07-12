@@ -1645,12 +1645,7 @@ function ExpedienteAereoView({
     e.preventDefault();
     const venta = boleto.precioVenta || 0;
     const penalidad = Math.max(0, parseFloat(reembolsoForm.penalidad) || 0);
-    const montoNC = Math.max(0, venta - penalidad); // valor de la nota de crédito: revierte la venta reteniendo la penalidad
-
-    const cliB2B = expediente.clienteB2BId ? clients.find(c => c.id === expediente.clienteB2BId) : undefined;
-    const cliDir = expediente.clienteDirectoId ? directClients.find(c => c.id === expediente.clienteDirectoId) : undefined;
-    const cliId = cliB2B?.id || cliDir?.id;
-    const cliNombre = cliB2B?.nombre || cliDir?.nombre || expediente.titular;
+    const montoNC = Math.max(0, venta - penalidad); // valor de la nota de crédito
 
     // Lo que el cliente REALMENTE pagó por este expediente (no la venta total):
     //  · Contado → se pagó completo al facturar (= venta).
@@ -1659,60 +1654,34 @@ function ExpedienteAereoView({
       .filter(v => v.locatorId === expediente.id && v.status === "Verificado")
       .reduce((s, v) => s + (v.amount || 0), 0);
     const totalPagado = expediente.facturacionTipo === "Pago Contado" ? venta : voucherPaid;
-    const outstanding = Math.max(0, venta - totalPagado); // deuda pendiente del expediente que se cancela
-    const netCliente = totalPagado - penalidad;           // >0 → devolver a favor · <0 → aún debe la penalidad
+    const outstanding = Math.max(0, venta - totalPagado);
+    const netCliente = totalPagado - penalidad;
     const saldoFavorGenerado = Math.max(0, netCliente);
 
-    // 1. Nota de crédito al cliente (revierte la venta menos la penalidad retenida).
-    let ncId: string | undefined;
-    if (onAddInvoice && montoNC > 0) {
-      ncId = nextSequentialId("NC", (invoices || []).map(i => i.id));
-      onAddInvoice({
-        id: ncId,
-        clientName: `${cliNombre} - Localizador ${expediente.id} · Boleto ${boleto.pnr} (Nota de Crédito por reembolso aéreo${reembolsoForm.motivo ? ": " + reembolsoForm.motivo.trim() : ""})`,
-        clientId: cliId,
-        reservationId: expediente.id,
-        date: new Date().toISOString().split("T")[0],
-        dueDate: new Date().toISOString().split("T")[0],
-        // Convención del sistema: las notas de crédito llevan monto NEGATIVO (igual que
-        // FacturacionView) para que reduzcan correctamente los totales del cliente.
-        amount: -montoNC,
-        vatAmount: 0,
-        type: "Cobro",
-        status: "Pagado",
-      } as FinancialInvoice);
-    }
-
-    // 2. Ajustar saldo del cliente CORRECTAMENTE (basado en lo pagado, no en la venta):
-    //    · se cancela la deuda pendiente del expediente (outstanding);
-    //    · si pagó MÁS que la penalidad → el excedente va a saldo a favor;
-    //    · si pagó MENOS que la penalidad → aún debe la diferencia (saldoDeber).
-    //    Robusto aunque saldoDeber esté desincronizado (el cobro de crédito viene por vouchers).
-    if (cliB2B && onUpdateClient) {
-      const nuevoDeber = Math.max(0, (cliB2B.saldoDeber || 0) - outstanding) + (netCliente < 0 ? -netCliente : 0);
-      onUpdateClient({ ...cliB2B, saldoDeber: nuevoDeber, saldoFavor: (cliB2B.saldoFavor || 0) + saldoFavorGenerado });
-    } else if (cliDir && onUpdateDirectClient) {
-      const nuevoDeber = Math.max(0, (cliDir.saldoDeber || 0) - outstanding) + (netCliente < 0 ? -netCliente : 0);
-      onUpdateDirectClient({ ...cliDir, saldoDeber: nuevoDeber, saldoFavor: (cliDir.saldoFavor || 0) + saldoFavorGenerado });
-    }
-
-    // 3. Congelar la obligación a la aerolínea (reclamar reembolso / no pagar).
-    const obl = (payableObligations || []).find(o => o.locatorId === boleto.id);
-    if (obl && onUpdateObligation) {
-      onUpdateObligation({ ...obl, status: "Congelado", isFrozen: true, notes: `${obl.notes || ""}\n[Bloqueado] Boleto reembolsado — reclamar reembolso a la aerolínea.` });
-    }
-
-    // 4. Cerrar el expediente como Reembolsado.
-    const updated = { ...expediente, status: "Reembolsado" as const, reembolso: { fecha: new Date().toISOString(), penalidad, montoReembolsado: montoNC, notaCreditoId: ncId, motivo: reembolsoForm.motivo.trim() || undefined } };
+    // Se SOLICITA el reembolso: NO se emite la NC ni se aplican efectos (saldo del cliente ni
+    // obligación al proveedor) hasta que el OPERADOR DE FACTURACIÓN lo apruebe — mismo flujo que
+    // la nota de crédito de reservas. Se guarda el plan pre-calculado para que el operador lo aplique.
+    const updated = {
+      ...expediente,
+      reembolso: {
+        fecha: new Date().toISOString(),
+        penalidad,
+        montoReembolsado: montoNC,
+        motivo: reembolsoForm.motivo.trim() || undefined,
+        pendiente: true,
+        saldoFavorGenerado,
+        outstanding,
+        netCliente,
+      },
+    };
     setExpediente(updated);
     onUpdateBoleto({ ...boleto, expedienteAereo: updated });
     setShowReembolso(false);
-    const saldoMsg = saldoFavorGenerado > 0
-      ? `Se generó ${formatCurrency(saldoFavorGenerado, "USD")} de saldo a favor al cliente (pagó ${formatCurrency(totalPagado, "USD")}, penalidad ${formatCurrency(penalidad, "USD")}).`
-      : netCliente < 0
-      ? `El cliente aún debe ${formatCurrency(-netCliente, "USD")} de penalidad (pagó ${formatCurrency(totalPagado, "USD")} de ${formatCurrency(penalidad, "USD")}).`
-      : `Sin saldo a favor: lo pagado cubrió exactamente la penalidad.`;
-    showAlert({ title: "Reembolso procesado", message: `Nota de crédito emitida por ${formatCurrency(montoNC, "USD")}. ${saldoMsg} La obligación a la aerolínea quedó congelada para reclamo.`, type: "success" });
+    showAlert({
+      title: "Reembolso solicitado",
+      message: `Solicitud enviada al operador de Facturación. La nota de crédito por ${formatCurrency(montoNC, "USD")}, el saldo a favor del cliente y la cancelación de la deuda al proveedor se aplicarán cuando el operador la apruebe.`,
+      type: "info",
+    });
   };
 
   // ── Reemisión (reissue): cambio con diferencia de tarifa + penalidad ──
@@ -1754,7 +1723,7 @@ function ExpedienteAereoView({
     else if (cliDir && onUpdateDirectClient) onUpdateDirectClient({ ...cliDir, saldoDeber: (cliDir.saldoDeber || 0) + total });
 
     // 3. Incrementar la obligación a la aerolínea por el total (se debe pagar la reemisión).
-    const obl = (payableObligations || []).find(o => o.locatorId === boleto.id);
+    const obl = (payableObligations || []).find(o => o.locatorId === boleto.id || o.locatorId === expediente.id);
     if (obl && onUpdateObligation) {
       const newNet = obl.netCost + total;
       onUpdateObligation({ ...obl, netCost: newNet, isFrozen: false, status: obl.paidAmount >= newNet ? "Pagado Total" : obl.paidAmount > 0 ? "Pagado Parcial" : "Pendiente" });
@@ -1824,7 +1793,7 @@ function ExpedienteAereoView({
 
     // 3. Sumar el costo neto a la obligación con la aerolínea (si hay costo).
     if (costoNeto > 0) {
-      const obl = (payableObligations || []).find(o => o.locatorId === boleto.id);
+      const obl = (payableObligations || []).find(o => o.locatorId === boleto.id || o.locatorId === expediente.id);
       if (obl && onUpdateObligation) {
         const newNet = obl.netCost + costoNeto;
         onUpdateObligation({ ...obl, netCost: newNet, isFrozen: false, status: obl.paidAmount >= newNet ? "Pagado Total" : obl.paidAmount > 0 ? "Pagado Parcial" : "Pendiente" });
@@ -1926,6 +1895,17 @@ function ExpedienteAereoView({
                         const updated = { ...expediente, status: "Anulado" as const };
                         setExpediente(updated);
                         onUpdateBoleto({ ...boleto, expedienteAereo: updated });
+                        // Cancelar la obligación al proveedor si existiera (no debería en Borrador):
+                        // no pagada → Anulada; pagada (parcial/total) → Congelada (netCost = pagado) para reclamo.
+                        const oblAnular = (payableObligations || []).find(o => o.locatorId === boleto.id || o.locatorId === expediente.id);
+                        if (oblAnular && onUpdateObligation) {
+                          const pagadoAnular = oblAnular.paidAmount || 0;
+                          if (pagadoAnular > 0) {
+                            onUpdateObligation({ ...oblAnular, netCost: pagadoAnular, status: "Congelado", isFrozen: true, notes: `${oblAnular.notes || ""}\n[Bloqueado] Expediente anulado — pagado ${formatCurrency(pagadoAnular, "USD")}; saldo restante cancelado; reclamar a la aerolínea.` });
+                          } else {
+                            onUpdateObligation({ ...oblAnular, status: "Anulado", isFrozen: true, notes: `${oblAnular.notes || ""}\n[Anulado] Expediente anulado sin pago al proveedor — deuda cancelada.` });
+                          }
+                        }
                         showAlert({ title: "Expediente Anulado", message: "El expediente ha sido anulado correctamente.", type: "success" });
                       }
                     });
@@ -1963,15 +1943,24 @@ function ExpedienteAereoView({
               <Button variant="success" size="sm" onClick={() => onShowVoucher(boleto)}>
                 <Download className="w-3.5 h-3.5" /> Descargar Voucher
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => { setEmdForm({ concepto: "Equipaje adicional", montoVenta: "", costoNeto: "", notas: "" }); setShowEmd(true); }}>
-                <FileText className="w-3.5 h-3.5" /> EMD
-              </Button>
-              <Button variant="warning" size="sm" onClick={() => { setReemisionForm({ adc: "", penalidad: "", nuevoTicket: "", motivo: "" }); setShowReemision(true); }}>
-                <RefreshCw className="w-3.5 h-3.5" /> Reemitir
-              </Button>
-              <Button variant="danger" size="sm" onClick={() => { setReembolsoForm({ penalidad: "", motivo: "" }); setShowReembolso(true); }}>
-                <XCircle className="w-3.5 h-3.5" /> Reembolsar
-              </Button>
+              {expediente.reembolso?.pendiente ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold rounded">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Reembolso solicitado — pendiente de aprobación de Facturación
+                </div>
+              ) : (
+                <>
+                  <Button variant="secondary" size="sm" onClick={() => { setEmdForm({ concepto: "Equipaje adicional", montoVenta: "", costoNeto: "", notas: "" }); setShowEmd(true); }}>
+                    <FileText className="w-3.5 h-3.5" /> EMD
+                  </Button>
+                  <Button variant="warning" size="sm" onClick={() => { setReemisionForm({ adc: "", penalidad: "", nuevoTicket: "", motivo: "" }); setShowReemision(true); }}>
+                    <RefreshCw className="w-3.5 h-3.5" /> Reemitir
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => { setReembolsoForm({ penalidad: "", motivo: "" }); setShowReembolso(true); }}>
+                    <XCircle className="w-3.5 h-3.5" /> Reembolsar
+                  </Button>
+                </>
+              )}
             </>
           )}
           {expediente.status === "Reembolsado" && expediente.reembolso && (
@@ -2070,11 +2059,11 @@ function ExpedienteAereoView({
                     placeholder="Ej: cancelación del pasajero"
                     className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold focus:outline-none focus:border-zinc-500" />
                 </div>
-                <p className="text-[10px] text-zinc-500 leading-snug">Se emitirá una nota de crédito al cliente por el monto a reembolsar, se ajustará su saldo, y la cuenta por pagar a la aerolínea quedará <b>congelada</b> para reclamar el reembolso.</p>
+                <p className="text-[10px] text-zinc-500 leading-snug">Esto <b>solicita</b> el reembolso al Dpto. de Facturación. La nota de crédito, el saldo a favor del cliente y la cancelación de la deuda al proveedor <b>se aplicarán cuando el operador de Facturación apruebe</b> la solicitud (mismo flujo que las notas de crédito de reservas).</p>
               </div>
               <div className="border-t border-zinc-100 p-4 flex justify-end gap-3">
                 <button type="button" onClick={() => setShowReembolso(false)} className="px-5 py-2.5 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
-                <button type="submit" className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md">Confirmar reembolso</button>
+                <button type="submit" className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md">Solicitar reembolso</button>
               </div>
             </form>
           </div>
@@ -2618,7 +2607,7 @@ function ExpedienteAereoView({
                   onUpdateBoleto({ ...boleto, expedienteAereo: updated });
 
                   // Generar la Cuenta por Pagar a la aerolínea/BSP (una sola vez) → Tesorería.
-                  const yaTiene = (payableObligations || []).some(o => o.locatorId === boleto.id);
+                  const yaTiene = (payableObligations || []).some(o => o.locatorId === boleto.id || o.locatorId === expediente.id);
                   const tlDate = parseTimeLimitDate(boleto.timeLimit);
                   if (!yaTiene && onAddObligation && boleto.costoNeto > 0) {
                     onAddObligation({

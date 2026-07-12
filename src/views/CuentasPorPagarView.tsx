@@ -218,7 +218,9 @@ export default function CuentasPorPagarView({
   // Total Active Debt: Net cost - Paid Amount for pending/overdue/partial obligations
   const activeDebt = useMemo(() => {
     return obligations
-      .filter(o => o.status !== "Pagado Total")
+      // No cuentan como deuda: pagadas, anuladas (boleto reembolsado sin pagar) ni congeladas
+      // (reclamo de reembolso a la aerolínea, ya no es un pasivo por pagar).
+      .filter(o => o.status !== "Pagado Total" && o.status !== "Anulado" && o.status !== "Congelado" && !o.isFrozen)
       .reduce((sum, o) => sum + (o.netCost - o.paidAmount), 0);
   }, [obligations]);
 
@@ -228,7 +230,7 @@ export default function CuentasPorPagarView({
     weekFromNow.setDate(weekFromNow.getDate() + 7);
     const weekFromNowStr = weekFromNow.toISOString().split("T")[0];
     return obligations
-      .filter(o => o.status !== "Pagado Total" && o.dueDate <= weekFromNowStr)
+      .filter(o => o.status !== "Pagado Total" && o.status !== "Anulado" && o.status !== "Congelado" && !o.isFrozen && o.dueDate <= weekFromNowStr)
       .reduce((sum, o) => sum + (o.netCost - o.paidAmount), 0);
   }, [obligations]);
 
@@ -241,6 +243,8 @@ export default function CuentasPorPagarView({
   const filteredObligations = useMemo(() => {
     return obligations.filter(o => {
       const isOverpaid = o.paidAmount > o.netCost;
+      // Las anuladas (boleto reembolsado sin pago al proveedor) no son deuda ni pago: se ocultan.
+      if (o.status === "Anulado") return false;
       // Overpaid obligations need action even though status is "Pagado Total" — keep in obligaciones tab
       if (activeTab === "obligaciones" && o.status === "Pagado Total" && !isOverpaid) return false;
       if (activeTab === "pagadas" && o.status !== "Pagado Total") return false;

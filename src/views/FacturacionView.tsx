@@ -58,6 +58,7 @@ interface FacturacionViewProps {
   onUpdateDirectClient?: (updated: DirectClient) => void;
   payableObligations?: PayableObligation[];
   onAddPayableObligation?: (obligation: PayableObligation) => void;
+  onUpdateObligation?: (obligation: PayableObligation) => void;
   providerStatements?: ProviderStatement[];
   onAddProviderStatement?: (statement: ProviderStatement) => void;
   vouchers?: PaymentVoucher[];
@@ -87,6 +88,7 @@ export default function FacturacionView({
   onUpdateDirectClient,
   payableObligations = [],
   onAddPayableObligation,
+  onUpdateObligation,
   providerStatements = [],
   onAddProviderStatement,
   vouchers = [],
@@ -569,7 +571,21 @@ export default function FacturacionView({
               segmentos: b.segmentos
             }
           }
-        ]
+        ],
+        // Reembolso SOLICITADO pero no aprobado → se expone como variación tipo "Credito"
+        // pendiente, para que aparezca en el panel "Pendientes de Facturación" con el botón
+        // "Emitir Nota de Crédito" (mismo flujo de aprobación que la NC de reservas).
+        variaciones: exp.reembolso?.pendiente
+          ? ([{
+              id: `REEMB-${b.id}`,
+              type: "Credito",
+              amountSale: -(exp.reembolso.montoReembolsado || 0),
+              reason: `Reembolso aéreo boleto ${b.pnr}${exp.reembolso.motivo ? `: ${exp.reembolso.motivo}` : ""}`,
+              status: "Solicitado",
+              date: (exp.reembolso.fecha || "").split("T")[0],
+              __aereoRefundBoletoId: b.id,
+            }] as any)
+          : undefined,
       } as Reservation;
     });
 
@@ -888,6 +904,76 @@ export default function FacturacionView({
         : `✓ Nota de Crédito emitida con éxito. Documento: ${creditNote.id}`
     );
     setTimeout(() => setStatusMessage(""), 5000);
+  };
+
+  // Emisión de la NC de un REEMBOLSO AÉREO solicitado (aprobación del operador de Facturación).
+  // Aplica el plan pre-calculado en la solicitud: emite la NC, ajusta el saldo del cliente y
+  // cancela/congela la obligación al proveedor, y cierra el expediente como Reembolsado.
+  const handleAereoRefundEmit = (variation: any) => {
+    const boletoId = variation.__aereoRefundBoletoId;
+    const boleto = boletos.find(b => b.id === boletoId);
+    const exp = boleto?.expedienteAereo;
+    const plan = exp?.reembolso;
+    if (!boleto || !exp || !plan || !plan.pendiente) return;
+
+    const cliB2B = exp.clienteB2BId ? clients.find(c => c.id === exp.clienteB2BId) : undefined;
+    const cliDir = exp.clienteDirectoId ? directClients.find(c => c.id === exp.clienteDirectoId) : undefined;
+    const cliId = cliB2B?.id || cliDir?.id;
+    const cliNombre = cliB2B?.nombre || cliDir?.nombre || exp.titular;
+    const montoNC = plan.montoReembolsado || 0;
+    const saldoFavorGenerado = plan.saldoFavorGenerado || 0;
+    const outstanding = plan.outstanding || 0;
+    const netCliente = plan.netCliente ?? 0;
+
+    // 1. Emitir la nota de crédito (ahora sí aprobada por el operador).
+    let ncId: string | undefined;
+    if (onAddInvoice && montoNC > 0) {
+      ncId = nextSequentialId("NC", invoices.map(i => i.id));
+      onAddInvoice({
+        id: ncId,
+        clientName: `${cliNombre} - Localizador ${exp.id} · Boleto ${boleto.pnr} (Nota de Crédito por reembolso aéreo${plan.motivo ? ": " + plan.motivo : ""})`,
+        clientId: cliId,
+        reservationId: exp.id,
+        date: new Date().toISOString().split("T")[0],
+        dueDate: new Date().toISOString().split("T")[0],
+        amount: -montoNC,
+        vatAmount: 0,
+        type: "Cobro",
+        status: "Pagado",
+      } as FinancialInvoice);
+    }
+
+    // 2. Ajustar saldo del cliente (deltas del plan sobre los valores actuales).
+    if (cliB2B && onUpdateClient) {
+      const nuevoDeber = Math.max(0, (cliB2B.saldoDeber || 0) - outstanding) + (netCliente < 0 ? -netCliente : 0);
+      onUpdateClient({ ...cliB2B, saldoDeber: nuevoDeber, saldoFavor: (cliB2B.saldoFavor || 0) + saldoFavorGenerado });
+    } else if (cliDir && onUpdateDirectClient) {
+      const nuevoDeber = Math.max(0, (cliDir.saldoDeber || 0) - outstanding) + (netCliente < 0 ? -netCliente : 0);
+      onUpdateDirectClient({ ...cliDir, saldoDeber: nuevoDeber, saldoFavor: (cliDir.saldoFavor || 0) + saldoFavorGenerado });
+    }
+
+    // 3. Obligación al proveedor: no pagada → Anulada; pagada (parcial/total) → Congelada (netCost = pagado).
+    const obl = payableObligations.find(o => o.locatorId === boleto.id || o.locatorId === exp.id);
+    const provPagado = obl?.paidAmount || 0;
+    if (obl && onUpdateObligation) {
+      if (provPagado > 0) {
+        onUpdateObligation({ ...obl, netCost: provPagado, status: "Congelado", isFrozen: true, notes: `${obl.notes || ""}\n[Bloqueado] Boleto reembolsado (aprobado) — pagado ${provPagado.toFixed(2)} al proveedor; saldo restante cancelado; reclamar a la aerolínea.` });
+      } else {
+        onUpdateObligation({ ...obl, status: "Anulado", isFrozen: true, notes: `${obl.notes || ""}\n[Anulado] Boleto reembolsado (aprobado) sin pago al proveedor — deuda cancelada.` });
+      }
+    }
+
+    // 4. Cerrar el expediente como Reembolsado (plan aplicado, ya no pendiente).
+    if (onUpdateBoleto) {
+      onUpdateBoleto({
+        ...boleto,
+        expedienteAereo: { ...exp, status: "Reembolsado", reembolso: { ...plan, pendiente: false, notaCreditoId: ncId } },
+      } as FlightTicket);
+    }
+
+    setStatusMessage(`✓ Reembolso aprobado. Nota de crédito ${ncId ?? ""} emitida por $${montoNC.toFixed(2)}${saldoFavorGenerado > 0 ? ` · saldo a favor $${saldoFavorGenerado.toFixed(2)}` : ""}. Deuda al proveedor ${provPagado > 0 ? "congelada para reclamo" : "anulada"}.`);
+    setTimeout(() => setStatusMessage(""), 6000);
+    setSelectedResId(null);
   };
 
   const handleResolvePendingExcess = (variation: any, refundedAmount: number) => {
@@ -2000,8 +2086,8 @@ export default function FacturacionView({
                                 accion: AccionPermiso.ANULAR,
                                 entidadTipo: "FinancialInvoice",
                                 entidadId: v.id,
-                                descripcion: `Emitir Nota de Crédito por variación ${v.id} del expediente ${activeRes?.id}`,
-                                ejecutar: () => handleCreditNoteVariation(v),
+                                descripcion: `Emitir Nota de Crédito por ${v.__aereoRefundBoletoId ? "reembolso aéreo" : "variación"} ${v.id} del expediente ${activeRes?.id}`,
+                                ejecutar: () => v.__aereoRefundBoletoId ? handleAereoRefundEmit(v) : handleCreditNoteVariation(v),
                               })}
                               className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[9.5px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs flex items-center gap-1 transition-all shrink-0"
                             >

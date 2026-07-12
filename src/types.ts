@@ -406,7 +406,7 @@ export interface PayableObligation {
   locatorId: string;
   netCost: number;
   paidAmount: number;
-  status: "Pendiente" | "Vencido" | "Pagado Parcial" | "Pagado Total" | "Congelado";
+  status: "Pendiente" | "Vencido" | "Pagado Parcial" | "Pagado Total" | "Congelado" | "Anulado";
   paymentMethod?: string;
   reference?: string;
   notes?: string;
