@@ -522,17 +522,19 @@ export default function FacturacionView({
   };
 
   const aereoReservations: Reservation[] = boletos
+    // Se incluyen los cerrados (Reembolsado/Anulado) para que su nota de crédito quede
+    // visible en Facturación, igual que una reserva anulada. Solo se excluye Borrador
+    // (aún no enviado) y los que se facturan junto a una reserva terrestre.
     .filter(b => b.expedienteAereo
       && b.expedienteAereo.status !== "Borrador"
-      && b.expedienteAereo.status !== "Anulado"
-      && b.expedienteAereo.status !== "Reembolsado"
       && !b.facturarConjunto)
     .map(b => {
       const exp = b.expedienteAereo!;
       const checkIn = b.segmentos?.[0]?.fecha;
       const origin = b.segmentos?.[0]?.origen || "";
       const dest = b.segmentos && b.segmentos.length > 0 ? b.segmentos[b.segmentos.length-1].destino : "";
-      
+      const cerradoLabel = exp.status === "Reembolsado" ? " | REEMBOLSADO" : exp.status === "Anulado" ? " | ANULADO" : "";
+
       return {
         id: exp.id,
         holder: exp.titular,
@@ -554,10 +556,12 @@ export default function FacturacionView({
           {
             id: b.id,
             tipo: ServiceType.AEREO,
-            descripcion: `PNR: ${b.pnr} | Ruta: ${origin}-${dest}`,
+            descripcion: `PNR: ${b.pnr} | Ruta: ${origin}-${dest}${cerradoLabel}`,
             precioNeto: b.costoNeto,
             precioVenta: b.precioVenta,
-            statusFacturacion: exp.status === "Solicitado" ? "Solicitado" : 
+            // Reembolsado/Anulado → "Rechazado" (estado cerrado): quedan fuera de la bandeja
+            // de pendientes pero visibles en el histórico, con su NC asociada por Localizador.
+            statusFacturacion: exp.status === "Solicitado" ? "Solicitado" :
                                exp.status === "Facturado" || exp.status === "PagadoAerolinea" ? "Facturado" : "Rechazado",
             detalles: {
               pnr: b.pnr,
@@ -962,12 +966,14 @@ export default function FacturacionView({
       __billingOnly: true
     } as any;
     
+    // Al aprobar, marcar Facturado y limpiar cualquier rechazo previo.
+    const clearRechazo = { facturacionRechazoMotivo: undefined, facturacionRechazoArchivos: undefined };
     if (onUpdateBoleto && jointFlights.length > 0) {
       jointFlights.forEach(jf => {
         if (jf.expedienteAereo) {
           onUpdateBoleto({
             ...jf,
-            expedienteAereo: { ...jf.expedienteAereo, status: "Facturado" }
+            expedienteAereo: { ...jf.expedienteAereo, status: "Facturado", ...clearRechazo }
           });
         }
       });
@@ -979,7 +985,7 @@ export default function FacturacionView({
       if (boleto && boleto.expedienteAereo) {
         onUpdateBoleto({
           ...boleto,
-          expedienteAereo: { ...boleto.expedienteAereo, status: "Facturado" }
+          expedienteAereo: { ...boleto.expedienteAereo, status: "Facturado", ...clearRechazo }
         });
       }
     }
@@ -1330,19 +1336,29 @@ export default function FacturacionView({
         __billingOnly: true
       } as any;
       
-      if (onBoletosChange && jointFlights.length > 0) {
-        onBoletosChange(prev => prev.map(b => 
-          jointFlights.some(jf => jf.id === b.id) && b.expedienteAereo
-            ? { ...b, expedienteAereo: { ...b.expedienteAereo, status: "Borrador" as any } } 
-            : b
-        ));
+      // El motivo/archivos del rechazo se persisten DENTRO del expedienteAereo del boleto
+      // (antes se perdían para aéreos standalone porque el else de onUpdateReservation se saltaba).
+      const rechazoInfo = {
+        status: "Borrador" as any,
+        facturacionRechazoMotivo: rejectReason,
+        facturacionRechazoArchivos: JSON.stringify(uploadedUrls),
+      };
+
+      // Usar onUpdateBoleto (persiste a BD), no onBoletosChange (solo estado local),
+      // para que el rechazo + motivo sobrevivan a la recarga.
+      if (onUpdateBoleto && jointFlights.length > 0) {
+        jointFlights.forEach(jf => {
+          if (jf.expedienteAereo) {
+            onUpdateBoleto({ ...jf, expedienteAereo: { ...jf.expedienteAereo, ...rechazoInfo } });
+          }
+        });
       }
 
-      if (activeRes.hotelName === "Boleto Aéreo GDS" && onBoletosChange) {
+      if (activeRes.hotelName === "Boleto Aéreo GDS" && onUpdateBoleto) {
         const boletoId = activeRes.servicios?.[0]?.id;
         const boleto = boletos.find(b => b.id === boletoId);
         if (boleto && boleto.expedienteAereo) {
-          onBoletosChange(prev => prev.map(b => b.id === boleto.id ? { ...b, expedienteAereo: { ...b.expedienteAereo!, status: "Borrador" as any } } : b));
+          onUpdateBoleto({ ...boleto, expedienteAereo: { ...boleto.expedienteAereo, ...rechazoInfo } });
         }
       } else {
         onUpdateReservation(updatedRes);

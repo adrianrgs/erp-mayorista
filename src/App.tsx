@@ -1330,12 +1330,25 @@ export default function App() {
       await insertInvoice(dataConnect, {
         id: newInv.id,
         clientName: newInv.clientName,
+        // Persistir la asociación (antes se perdía al recargar): clientId (Cobranzas) y
+        // reservationId (expediente / boleto aéreo AER-x), más los campos fiscales.
+        clientId: newInv.clientId,
+        reservationId: newInv.reservationId,
         date: newInv.date,
         dueDate: newInv.dueDate,
         amount: newInv.amount,
         vatAmount: newInv.vatAmount,
         type: newInv.type,
         status: newInv.status,
+        taxableBase: newInv.taxableBase,
+        surchargeAmount: newInv.surchargeAmount,
+        vatWithheld: newInv.vatWithheld,
+        incomeTaxWithheld: newInv.incomeTaxWithheld,
+        exchangeRate: newInv.exchangeRate,
+        localCurrencyAmount: newInv.localCurrencyAmount,
+        fiscalDocNumber: newInv.fiscalDocNumber,
+        isExempt: newInv.isExempt,
+        paymentMethod: newInv.paymentMethod,
         updatedAt: newInv.updatedAt
       });
     } catch (e) {
@@ -2061,6 +2074,7 @@ onDeleteStopSale={handleDeleteStopSale}
                     onUpdateObligation={handleUpdateObligation}
                     invoices={invoices}
                     onAddInvoice={handleAddInvoice}
+                    vouchers={vouchers}
                     onUpdateClient={handleUpdateClient}
                     onUpdateDirectClient={handleUpdateDirectClient}
                     companyConfig={companyConfig}

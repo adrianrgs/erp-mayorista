@@ -131,6 +131,43 @@ export default function CobranzasB2BPanel({
 
   const activeClient = clients.find(c => c.id === selectedClientId);
 
+  // ── Neteo de notas de crédito por localizador ─────────────────────────────────
+  // La deuda pendiente de una factura debe descontar las notas de crédito (NC-) emitidas
+  // para el mismo localizador (p.ej. reembolso aéreo). Sin esto, tras un reembolso la FAC
+  // seguía mostrando el saldo original en vez del neto realmente adeudado.
+  const extractLocator = (name: string): string => {
+    const m = name.match(/Localizador\s+([A-Z]{2,4}-\d+)/i) || name.match(/\b((?:RES|AER)-\d+)\b/);
+    return m ? m[1].toUpperCase() : "";
+  };
+  const netByInvoice = React.useMemo(() => {
+    const ncByLoc: Record<string, number> = {};
+    invoices.forEach(inv => {
+      if (inv.type === "Cobro" && inv.id.startsWith("NC-") && inv.amount < 0) {
+        const loc = extractLocator(inv.clientName);
+        if (loc) ncByLoc[loc] = (ncByLoc[loc] || 0) + Math.abs(inv.amount);
+      }
+    });
+    const ncLeft: Record<string, number> = { ...ncByLoc };
+    const result: Record<string, { paid: number; ncApplied: number; remaining: number }> = {};
+    invoices.forEach(inv => {
+      if (!inv.id.startsWith("FAC-") || inv.type !== "Cobro") return;
+      const paid = vouchers
+        .filter(v => v.invoiceId === inv.id && v.status === "Verificado")
+        .reduce((s, v) => s + v.amount, 0);
+      let remaining = Math.max(0, inv.amount - paid);
+      let ncApplied = 0;
+      const isUnpaid = inv.status === "Facturado" || inv.status === "Vencido";
+      const loc = extractLocator(inv.clientName);
+      if (isUnpaid && loc && ncLeft[loc] > 0 && remaining > 0) {
+        ncApplied = Math.min(remaining, ncLeft[loc]);
+        remaining -= ncApplied;
+        ncLeft[loc] -= ncApplied;
+      }
+      result[inv.id] = { paid, ncApplied, remaining };
+    });
+    return result;
+  }, [invoices, vouchers]);
+
   // Financial KPIs Calculations
   // Total outstanding accounts receivable
   const accountsReceivable = invoices
@@ -218,10 +255,10 @@ export default function CobranzasB2BPanel({
   // Open payment registration form for specific invoice
   const openRegisterPaymentModal = (invoice: FinancialInvoice) => {
     setSelectedInvoiceForPayment(invoice);
-    const paid = vouchers
+    // Pendiente neto: descuenta pagos y notas de crédito del mismo localizador.
+    const remaining = netByInvoice[invoice.id]?.remaining ?? Math.max(0, invoice.amount - vouchers
       .filter(v => v.invoiceId === invoice.id && v.status === "Verificado")
-      .reduce((sum, v) => sum + v.amount, 0);
-    const remaining = Math.max(0, invoice.amount - paid);
+      .reduce((sum, v) => sum + v.amount, 0));
 
     setPaymentForm({
       invoiceId: invoice.id,
@@ -253,9 +290,12 @@ export default function CobranzasB2BPanel({
       ? vouchers.filter(v => v.invoiceId === paymentForm.invoiceId && v.status === "Verificado").reduce((sum, v) => sum + v.amount, 0)
       : 0;
 
+    // Crédito de notas de crédito ya aplicado a esta factura (p.ej. reembolso): reduce lo cobrable.
+    const ncAppliedOnInvoice = targetInvoice ? (netByInvoice[targetInvoice.id]?.ncApplied ?? 0) : 0;
+
     if (targetInvoice) {
       const totalPaid = alreadyPaidOnInvoice + amountPaid;
-      if (totalPaid >= targetInvoice.amount) {
+      if (totalPaid >= targetInvoice.amount - ncAppliedOnInvoice) {
         onUpdateInvoice({
           ...targetInvoice,
           status: "Pagado" as const
@@ -267,7 +307,8 @@ export default function CobranzasB2BPanel({
     // actually owed on the TARGETED invoice (if any) — not the client's aggregate saldoDeber,
     // which can be larger due to other unrelated pending invoices and would otherwise absorb a
     // genuine overpayment on this invoice without ever crediting the excess to saldoFavor.
-    const amountOwed = targetInvoice ? Math.max(0, targetInvoice.amount - alreadyPaidOnInvoice) : activeClient.saldoDeber;
+    // Se descuenta también el crédito de notas de crédito ya aplicado (reembolsos).
+    const amountOwed = targetInvoice ? Math.max(0, targetInvoice.amount - alreadyPaidOnInvoice - ncAppliedOnInvoice) : activeClient.saldoDeber;
     const excess = Math.max(0, amountPaid - amountOwed);
     const debtPortion = amountPaid - excess;
 
@@ -1000,9 +1041,11 @@ export default function CobranzasB2BPanel({
                         return matchesClient && isUnpaid && isCollection;
                       });
 
-                      const filteredInvoices = unpaidInvoices.filter(inv => 
-                        inv.id.toLowerCase().includes(invoiceSearchQuery.toLowerCase()) ||
-                        inv.clientName.toLowerCase().includes(invoiceSearchQuery.toLowerCase())
+                      const filteredInvoices = unpaidInvoices.filter(inv =>
+                        (inv.id.toLowerCase().includes(invoiceSearchQuery.toLowerCase()) ||
+                        inv.clientName.toLowerCase().includes(invoiceSearchQuery.toLowerCase()))
+                        // Ocultar facturas cuyo pendiente neto (tras pagos + notas de crédito) es 0.
+                        && (netByInvoice[inv.id]?.remaining ?? inv.amount) > 0.005
                       );
 
                       return (
@@ -1038,7 +1081,7 @@ export default function CobranzasB2BPanel({
                                   </tr>
                                 ) : (
                                   filteredInvoices.map((inv) => {
-                                    const locatorMatch = inv.clientName.match(/(RES-\d+)/);
+                                    const locatorMatch = inv.clientName.match(/((?:RES|AER)-\d+)/);
                                     const locator = locatorMatch ? locatorMatch[1] : null;
                                     return (
                                     <tr key={inv.id} className="hover:bg-zinc-50/50 transition-colors">
@@ -1059,15 +1102,19 @@ export default function CobranzasB2BPanel({
                                       </td>
                                       <td className="p-3 text-right font-mono font-black">
                                         {(() => {
-                                          const paid = vouchers
-                                            .filter(v => v.invoiceId === inv.id && v.status === "Verificado")
-                                            .reduce((sum, v) => sum + v.amount, 0);
-                                          const remaining = Math.max(0, inv.amount - paid);
+                                          const info = netByInvoice[inv.id];
+                                          const paid = info?.paid ?? 0;
+                                          const ncApplied = info?.ncApplied ?? 0;
+                                          const remaining = info?.remaining ?? Math.max(0, inv.amount - paid);
                                           return (
                                             <div>
                                               <span className="text-zinc-950 font-bold block">${remaining.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
-                                              {paid > 0 && (
-                                                <span className="text-[9px] text-zinc-400 font-medium block">Orig: ${inv.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} (Abono: ${paid.toFixed(2)})</span>
+                                              {(paid > 0 || ncApplied > 0) && (
+                                                <span className="text-[9px] text-zinc-400 font-medium block">
+                                                  Orig: ${inv.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                                                  {paid > 0 ? ` (Abono: $${paid.toFixed(2)}` : " ("}
+                                                  {ncApplied > 0 ? `${paid > 0 ? " · " : ""}NC: $${ncApplied.toFixed(2)}` : ""})
+                                                </span>
                                               )}
                                             </div>
                                           );

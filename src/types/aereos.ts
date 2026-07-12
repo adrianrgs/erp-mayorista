@@ -247,6 +247,10 @@ export interface AereoExpediente {
   clienteDirectoNombre?: string;
   /** Tipo de facturación del cliente */
   facturacionTipo?: "Crédito" | "Pago Contado";
+  /** Motivo del rechazo de facturación (si Facturación rechazó la solicitud). */
+  facturacionRechazoMotivo?: string;
+  /** Archivos de soporte del rechazo (JSON string de URLs de Firebase Storage). */
+  facturacionRechazoArchivos?: string;
   /** Referencia del comprobante de pago del cliente */
   comprobanteRef?: string;
   /** Monto del comprobante de pago del cliente */
