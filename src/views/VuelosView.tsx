@@ -201,6 +201,7 @@ export default function VuelosView({ flights: _flights, boletos, onAddBoleto, on
       ) : boletos.find((b) => b.id === selectedBoletoId) ? (
         <ExpedienteAereoView
           boleto={boletos.find((b) => b.id === selectedBoletoId)!}
+          allBoletos={boletos}
           clients={clients}
           directClients={directClients}
           payableObligations={payableObligations}
@@ -1533,6 +1534,7 @@ function NuevoBoletoView({
 
 function ExpedienteAereoView({
   boleto,
+  allBoletos,
   clients,
   directClients,
   payableObligations,
@@ -1550,6 +1552,7 @@ function ExpedienteAereoView({
   currentExchangeRate,
 }: {
   boleto: FlightTicket;
+  allBoletos: FlightTicket[];
   clients: B2BClient[];
   directClients: DirectClient[];
   payableObligations: PayableObligation[];
@@ -1571,7 +1574,8 @@ function ExpedienteAereoView({
   // Inicializamos el expediente aéreo si no existe
   const [expediente, setExpediente] = useState(
     boleto.expedienteAereo || {
-      id: `AER-${Math.floor(Math.random() * 10000)}`,
+      // ID secuencial AER-1, AER-2, … a partir de los expedientes ya existentes en los boletos.
+      id: nextSequentialId("AER", allBoletos.map(b => b.expedienteAereo?.id)),
       status: "Borrador" as const,
       titular: boleto.pasajeros[0]?.nombre || "",
       createdAt: new Date().toISOString(),
@@ -1835,6 +1839,12 @@ function ExpedienteAereoView({
             <p className="text-sm text-zinc-500 font-medium">
               Gestión de cobro al cliente y pago al proveedor
             </p>
+            {boleto.expedienteId && (
+              <div className="inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100">
+                <Link2 className="w-3 h-3 text-blue-500" />
+                <span className="text-xs font-bold text-blue-700">Venta vinculada a la reserva {boleto.expedienteId}</span>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">

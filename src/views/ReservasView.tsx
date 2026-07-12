@@ -765,20 +765,24 @@ export default function ReservasView({
     } as any;
 
     if (onUpdateBoleto) {
+      // IDs AER- ya usados; se numeran los nuevos de forma ascendente (AER-1, AER-2, …).
+      const usedAerIds: (string | undefined)[] = (boletos || []).map(b => b.expedienteAereo?.id);
       boletos?.forEach(b => {
         if (b.expedienteId === activeRes.id && b.facturarConjunto && (!b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined)) {
-          const updatedB = {
-            ...b,
-            expedienteAereo: b.expedienteAereo
-              ? { ...b.expedienteAereo, status: "Solicitado" as const }
-              : {
-                  id: `EXP-AER-${b.id}`,
-                  status: "Solicitado" as const,
-                  titular: b.pasajeros?.[0]?.nombre || "Pasajero",
-                  createdAt: new Date().toISOString()
-                }
-          };
-          onUpdateBoleto(updatedB);
+          let expedienteAereo;
+          if (b.expedienteAereo) {
+            expedienteAereo = { ...b.expedienteAereo, status: "Solicitado" as const };
+          } else {
+            const nuevoId = nextSequentialId("AER", usedAerIds);
+            usedAerIds.push(nuevoId); // reservar el id para el siguiente boleto del lote
+            expedienteAereo = {
+              id: nuevoId,
+              status: "Solicitado" as const,
+              titular: b.pasajeros?.[0]?.nombre || "Pasajero",
+              createdAt: new Date().toISOString()
+            };
+          }
+          onUpdateBoleto({ ...b, expedienteAereo });
         }
       });
     }
