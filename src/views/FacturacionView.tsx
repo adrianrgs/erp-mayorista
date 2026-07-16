@@ -921,9 +921,12 @@ export default function FacturacionView({
     const cliId = cliB2B?.id || cliDir?.id;
     const cliNombre = cliB2B?.nombre || cliDir?.nombre || exp.titular;
     const montoNC = plan.montoReembolsado || 0;
-    const saldoFavorGenerado = plan.saldoFavorGenerado || 0;
+    const penalidad = plan.penalidad || 0;
+    const R = montoNC + penalidad;              // monto de venta reembolsado
+    const venta = boleto.precioVenta || 0;
     const outstanding = plan.outstanding || 0;
-    const netCliente = plan.netCliente ?? 0;
+    const saldoFavorGenerado = plan.saldoFavorGenerado || 0;
+    const alcance = plan.alcance || "todo";
 
     // 1. Emitir la nota de crédito (ahora sí aprobada por el operador).
     let ncId: string | undefined;
@@ -943,35 +946,82 @@ export default function FacturacionView({
       } as FinancialInvoice);
     }
 
-    // 2. Ajustar saldo del cliente (deltas del plan sobre los valores actuales).
+    // 2. Ajustar saldo del cliente — fórmula unificada (total y parcial):
+    //    la NC reduce la deuda del expediente; el excedente sobre la deuda va a saldo a favor.
+    const saldoDeberReduction = Math.min(montoNC, outstanding);
     if (cliB2B && onUpdateClient) {
-      const nuevoDeber = Math.max(0, (cliB2B.saldoDeber || 0) - outstanding) + (netCliente < 0 ? -netCliente : 0);
-      onUpdateClient({ ...cliB2B, saldoDeber: nuevoDeber, saldoFavor: (cliB2B.saldoFavor || 0) + saldoFavorGenerado });
+      onUpdateClient({ ...cliB2B, saldoDeber: Math.max(0, (cliB2B.saldoDeber || 0) - saldoDeberReduction), saldoFavor: (cliB2B.saldoFavor || 0) + saldoFavorGenerado });
     } else if (cliDir && onUpdateDirectClient) {
-      const nuevoDeber = Math.max(0, (cliDir.saldoDeber || 0) - outstanding) + (netCliente < 0 ? -netCliente : 0);
-      onUpdateDirectClient({ ...cliDir, saldoDeber: nuevoDeber, saldoFavor: (cliDir.saldoFavor || 0) + saldoFavorGenerado });
+      onUpdateDirectClient({ ...cliDir, saldoDeber: Math.max(0, (cliDir.saldoDeber || 0) - saldoDeberReduction), saldoFavor: (cliDir.saldoFavor || 0) + saldoFavorGenerado });
     }
 
-    // 3. Obligación al proveedor: no pagada → Anulada; pagada (parcial/total) → Congelada (netCost = pagado).
+    // 3. Marcar los ítems reembolsados con un modelo unificado de celdas (pasajero×tramo).
+    const segs0 = boleto.segmentos || [];
+    const pax0 = boleto.pasajeros || [];
+    const segIdOf = (s: any, i: number) => s.boletoId || `BOL-${exp.id.replace(/^AER-/, "")}-${i + 1}`;
+    const allSegIds = segs0.map(segIdOf);
+    // Conjunto de celdas (paxIndex → boletoIds) a reembolsar, según el alcance.
+    const cellsByPax: Record<number, Set<string>> = {};
+    const addCell = (pi: number, id: string) => { (cellsByPax[pi] = cellsByPax[pi] || new Set()).add(id); };
+    if (alcance === "todo") {
+      pax0.forEach((_, pi) => allSegIds.forEach(id => addCell(pi, id)));
+    } else if (alcance === "tramos") {
+      const set = new Set(plan.itemsTramos || []);
+      pax0.forEach((_, pi) => allSegIds.forEach(id => { if (set.has(id)) addCell(pi, id); }));
+    } else if (alcance === "pasajeros") {
+      const set = new Set(plan.itemsPasajeros || []);
+      pax0.forEach((_, pi) => { if (set.has(pi)) allSegIds.forEach(id => addCell(pi, id)); });
+    } else if (alcance === "pax-tramos") {
+      (plan.itemsCeldas || []).forEach((c: { pax: number; boletoId: string }) => addCell(c.pax, c.boletoId));
+    }
+    // Aplicar: acumular en tramosReembolsados de cada pasajero; marcar pax completo si cubre todos los tramos.
+    const nuevosPax = pax0.map((p, pi) => {
+      const nuevos = cellsByPax[pi];
+      if (!nuevos || nuevos.size === 0) return p;
+      const merged = Array.from(new Set([...(p.tramosReembolsados || []), ...nuevos]));
+      const fully = allSegIds.length > 0 && allSegIds.every(id => merged.includes(id));
+      return { ...p, tramosReembolsados: merged, reembolsado: p.reembolsado || fully };
+    });
+    // Derivar: un tramo queda reembolsado (para el voucher) si TODOS los pasajeros lo tienen. Backfill boletoId.
+    const nuevosSeg = segs0.map((s, i) => {
+      const id = segIdOf(s, i);
+      const allReemb = nuevosPax.length > 0 && nuevosPax.every(p => p.reembolsado || (p.tramosReembolsados || []).includes(id));
+      return { ...s, boletoId: s.boletoId || id, ...(allReemb ? { reembolsado: true } : {}) };
+    });
+    const fullyRefunded = nuevosPax.length > 0 && nuevosPax.every(p => p.reembolsado);
+
+    // 4. Obligación al proveedor.
     const obl = payableObligations.find(o => o.locatorId === boleto.id || o.locatorId === exp.id);
     const provPagado = obl?.paidAmount || 0;
     if (obl && onUpdateObligation) {
-      if (provPagado > 0) {
-        onUpdateObligation({ ...obl, netCost: provPagado, status: "Congelado", isFrozen: true, notes: `${obl.notes || ""}\n[Bloqueado] Boleto reembolsado (aprobado) — pagado ${provPagado.toFixed(2)} al proveedor; saldo restante cancelado; reclamar a la aerolínea.` });
+      if (fullyRefunded) {
+        if (provPagado > 0) {
+          onUpdateObligation({ ...obl, netCost: provPagado, status: "Congelado", isFrozen: true, notes: `${obl.notes || ""}\n[Bloqueado] Boleto reembolsado (aprobado) — pagado ${provPagado.toFixed(2)} al proveedor; saldo restante cancelado; reclamar a la aerolínea.` });
+        } else {
+          onUpdateObligation({ ...obl, status: "Anulado", isFrozen: true, notes: `${obl.notes || ""}\n[Anulado] Boleto reembolsado (aprobado) sin pago al proveedor — deuda cancelada.` });
+        }
       } else {
-        onUpdateObligation({ ...obl, status: "Anulado", isFrozen: true, notes: `${obl.notes || ""}\n[Anulado] Boleto reembolsado (aprobado) sin pago al proveedor — deuda cancelada.` });
+        // Parcial: reducir el costo del proveedor en proporción a lo reembolsado (R/venta).
+        const fraccion = venta > 0 ? Math.min(1, R / venta) : 0;
+        const refundedCost = fraccion * obl.netCost;
+        const newNet = Math.max(0, obl.netCost - refundedCost);
+        const newStatus = provPagado >= newNet ? "Pagado Total" : provPagado > 0 ? "Pagado Parcial" : "Pendiente";
+        onUpdateObligation({ ...obl, netCost: newNet, status: newStatus as any, notes: `${obl.notes || ""}\n[Parcial] Reembolso aprobado: costo al proveedor reducido en ${refundedCost.toFixed(2)} (${(fraccion * 100).toFixed(0)}%).` });
       }
     }
 
-    // 4. Cerrar el expediente como Reembolsado (plan aplicado, ya no pendiente).
+    // 5. Actualizar el boleto (ítems marcados) y el estado del expediente.
     if (onUpdateBoleto) {
       onUpdateBoleto({
         ...boleto,
-        expedienteAereo: { ...exp, status: "Reembolsado", reembolso: { ...plan, pendiente: false, notaCreditoId: ncId } },
+        segmentos: nuevosSeg,
+        pasajeros: nuevosPax,
+        expedienteAereo: { ...exp, status: fullyRefunded ? "Reembolsado" : exp.status, reembolso: { ...plan, pendiente: false, notaCreditoId: ncId } },
       } as FlightTicket);
     }
 
-    setStatusMessage(`✓ Reembolso aprobado. Nota de crédito ${ncId ?? ""} emitida por $${montoNC.toFixed(2)}${saldoFavorGenerado > 0 ? ` · saldo a favor $${saldoFavorGenerado.toFixed(2)}` : ""}. Deuda al proveedor ${provPagado > 0 ? "congelada para reclamo" : "anulada"}.`);
+    const alcanceMsg = alcance === "todo" ? "expediente completo" : alcance === "tramos" ? `${(plan.itemsTramos || []).length} tramo(s)` : alcance === "pasajeros" ? `${(plan.itemsPasajeros || []).length} pasajero(s)` : `${(plan.itemsCeldas || []).length} celda(s) pasajero×tramo`;
+    setStatusMessage(`✓ Reembolso aprobado (${alcanceMsg}). Nota de crédito ${ncId ?? ""} por $${montoNC.toFixed(2)}${saldoFavorGenerado > 0 ? ` · saldo a favor $${saldoFavorGenerado.toFixed(2)}` : ""}.${fullyRefunded ? " Expediente reembolsado." : " Expediente sigue activo por el resto."}`);
     setTimeout(() => setStatusMessage(""), 6000);
     setSelectedResId(null);
   };

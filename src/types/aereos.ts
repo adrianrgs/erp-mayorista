@@ -32,6 +32,10 @@ export interface Passenger {
   costoNeto?: number;
   /** Precio de venta de este pasajero. */
   precioVenta?: number;
+  /** El pasajero fue reembolsado/anulado por completo (todos sus tramos). */
+  reembolsado?: boolean;
+  /** boletoIds de los tramos reembolsados SOLO para este pasajero (reembolso parcial pax×tramo). */
+  tramosReembolsados?: string[];
 }
 
 // ─── SEGMENTO DE VUELO ────────────────────────────────────────────────────────
@@ -73,6 +77,12 @@ export interface FlightSegment {
   terminal?: string;
   /** Días de diferencia de la llegada respecto a la salida (+1 = llega al día siguiente). */
   diaLlegada?: number;
+  /** Id del "boleto" de este tramo dentro del expediente. Ej: "BOL-5-1" (AER-5, tramo 1). */
+  boletoId?: string;
+  /** Precio de venta de este tramo (opcional; permite reembolso por tramo con su valor). */
+  precio?: number;
+  /** El tramo fue reembolsado/anulado (queda como historial, tachado). */
+  reembolsado?: boolean;
 }
 
 // ─── BOLETO AÉREO ─────────────────────────────────────────────────────────────
@@ -198,12 +208,21 @@ export interface ReembolsoAereo {
    */
   pendiente?: boolean;
   // Plan pre-calculado en la solicitud, para que el operador solo lo aplique:
-  /** Saldo a favor a generar al cliente (max(0, pagado − penalidad)). */
+  /** Saldo a favor a generar al cliente (max(0, montoNC − oldOutstanding)). */
   saldoFavorGenerado?: number;
-  /** Deuda pendiente del expediente a cancelar (venta − pagado). */
+  /** Deuda pendiente del expediente al momento de la solicitud (venta − pagado). */
   outstanding?: number;
   /** Neto cliente (pagado − penalidad); si < 0 el cliente aún debe la diferencia. */
   netCliente?: number;
+  // ── Alcance del reembolso (parcial por tramo/pasajero/celda o total) ──
+  /** "todo" = expediente completo · "tramos" · "pasajeros" · "pax-tramos" = celdas pasajero×tramo. */
+  alcance?: "todo" | "tramos" | "pasajeros" | "pax-tramos";
+  /** boletoIds (BOL-[aer]-[k]) de los tramos reembolsados (alcance "tramos"). */
+  itemsTramos?: string[];
+  /** Índices de los pasajeros reembolsados (alcance "pasajeros"). */
+  itemsPasajeros?: number[];
+  /** Celdas pasajero×tramo reembolsadas (alcance "pax-tramos"). */
+  itemsCeldas?: { pax: number; boletoId: string }[];
 }
 
 /**

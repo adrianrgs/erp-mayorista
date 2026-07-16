@@ -1451,7 +1451,20 @@ export default function App() {
 
   // --- FLIGHT TICKETS (Boletos) ---
   const handleAddBoleto = async (newBol: FlightTicket): Promise<FlightTicket> => {
-    const finalBol = { ...newBol, id: nextSequentialId("BOL", boletos.map(b => b.id)) };
+    // El id principal del boleto ES el del expediente aéreo (AER-N): antes había un BOL-N
+    // redundante 1:1. Ahora "BOL-" se reusa por tramo (BOL-[nºAER]-[k]).
+    const nuevoId = nextSequentialId("AER", boletos.flatMap(b => [b.id, b.expedienteAereo?.id]));
+    const nAer = nuevoId.replace(/^AER-/, ""); // número para los BOL-[n]-[k]
+    const segmentos = (newBol.segmentos || []).map((s, i) => ({ ...s, boletoId: `BOL-${nAer}-${i + 1}` }));
+    const finalBol: FlightTicket = {
+      ...newBol,
+      id: nuevoId,
+      segmentos,
+      // Expediente aéreo creado eager con el MISMO id (antes se creaba lazy en la vista).
+      expedienteAereo: newBol.expedienteAereo
+        ? { ...newBol.expedienteAereo, id: nuevoId }
+        : { id: nuevoId, status: "Borrador", titular: newBol.pasajeros?.[0]?.nombre || "", createdAt: new Date().toISOString() },
+    };
     setBoletos(prev => [...prev, finalBol]);
     try {
       await insertFlightTicket(dataConnect, { ...finalBol });

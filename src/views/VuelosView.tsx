@@ -125,6 +125,31 @@ function timeLimitLevel(tl?: string): "vencido" | "proximo" | null {
   return null;
 }
 
+// ─── HELPERS: reembolso parcial pasajero×tramo ────────────────────────────────
+// Id del tramo (almacenado en boletoId o derivado del expediente para boletos viejos).
+function segBoletoId(seg: FlightSegment, idx: number, expedienteId?: string): string {
+  if (seg.boletoId) return seg.boletoId;
+  const n = (expedienteId || "").replace(/^AER-/, "") || "0";
+  return `BOL-${n}-${idx + 1}`;
+}
+// ¿El tramo (segId) está reembolsado para el pasajero p? (pax completo, tramo completo, o celda).
+function celdaReembolsada(p: Passenger, segId: string, segReembolsado?: boolean): boolean {
+  return !!p.reembolsado || !!segReembolsado || !!p.tramosReembolsados?.includes(segId);
+}
+// ¿El pasajero p quedó totalmente reembolsado (todos sus tramos)?
+function paxTotalmenteReembolsado(p: Passenger, segmentos: FlightSegment[], expId?: string): boolean {
+  if (p.reembolsado) return true;
+  if (!segmentos.length) return false;
+  return segmentos.every((s, i) => celdaReembolsada(p, segBoletoId(s, i, expId), s.reembolsado));
+}
+// ¿El tramo quedó totalmente reembolsado (para todos los pasajeros)?
+function segTotalmenteReembolsado(seg: FlightSegment, idx: number, pasajeros: Passenger[], expId?: string): boolean {
+  if (seg.reembolsado) return true;
+  if (!pasajeros.length) return false;
+  const segId = segBoletoId(seg, idx, expId);
+  return pasajeros.every(p => celdaReembolsada(p, segId, seg.reembolsado));
+}
+
 // ─── HELPERS UI ───────────────────────────────────────────────────────────────
 
 function Badge({
@@ -1639,28 +1664,66 @@ function ExpedienteAereoView({
 
   // ── Reembolso / anulación con penalidad (post-venta) ──
   const [showReembolso, setShowReembolso] = useState(false);
-  const [reembolsoForm, setReembolsoForm] = useState({ penalidad: "", motivo: "" });
+  const [reembolsoForm, setReembolsoForm] = useState<{
+    penalidad: string;
+    motivo: string;
+    alcance: "todo" | "tramos" | "pasajeros" | "pax-tramos";
+    sel: Record<string, boolean>;   // clave: boletoId (tramo), "pax-<i>", o "cell-<i>-<boletoId>"
+    monto: Record<string, string>;  // clave: misma que sel; "__total" para el total de pax-tramos
+  }>({ penalidad: "", motivo: "", alcance: "todo", sel: {}, monto: {} });
 
   const handleReembolso = (e: React.FormEvent) => {
     e.preventDefault();
     const venta = boleto.precioVenta || 0;
     const penalidad = Math.max(0, parseFloat(reembolsoForm.penalidad) || 0);
-    const montoNC = Math.max(0, venta - penalidad); // valor de la nota de crédito
+    const alcance = reembolsoForm.alcance;
 
-    // Lo que el cliente REALMENTE pagó por este expediente (no la venta total):
-    //  · Contado → se pagó completo al facturar (= venta).
-    //  · Crédito → suma de comprobantes cobrados (vouchers con locatorId = AER-x, verificados).
+    // Monto de venta a reembolsar (R) e ítems seleccionados, según el alcance:
+    const segmentos = boleto.segmentos || [];
+    let R = venta;
+    let itemsTramos: string[] | undefined;
+    let itemsPasajeros: number[] | undefined;
+    let itemsCeldas: { pax: number; boletoId: string }[] | undefined;
+    if (alcance === "tramos") {
+      itemsTramos = segmentos
+        .map((s, i) => segBoletoId(s, i, expediente.id))
+        .filter((id, i) => !segTotalmenteReembolsado(segmentos[i], i, boleto.pasajeros || [], expediente.id) && reembolsoForm.sel[id]);
+      R = itemsTramos.reduce((sum, id) => sum + (parseFloat(reembolsoForm.monto[id]) || 0), 0);
+    } else if (alcance === "pasajeros") {
+      itemsPasajeros = (boleto.pasajeros || [])
+        .map((_, i) => i)
+        .filter(i => !paxTotalmenteReembolsado(boleto.pasajeros[i], segmentos, expediente.id) && reembolsoForm.sel[`pax-${i}`]);
+      R = itemsPasajeros.reduce((sum, i) => sum + (parseFloat(reembolsoForm.monto[`pax-${i}`]) || 0), 0);
+    } else if (alcance === "pax-tramos") {
+      itemsCeldas = [];
+      (boleto.pasajeros || []).forEach((p, pi) => {
+        segmentos.forEach((s, si) => {
+          const segId = segBoletoId(s, si, expediente.id);
+          if (!celdaReembolsada(p, segId, s.reembolsado) && reembolsoForm.sel[`cell-${pi}-${segId}`]) {
+            itemsCeldas!.push({ pax: pi, boletoId: segId });
+          }
+        });
+      });
+      R = parseFloat(reembolsoForm.monto["__total"]) || 0; // monto total para las celdas seleccionadas
+    }
+    if (R <= 0 || (alcance === "pax-tramos" && (itemsCeldas?.length || 0) === 0)) {
+      showAlert({ title: "Nada que reembolsar", message: alcance === "todo" ? "El boleto no tiene monto de venta." : alcance === "pax-tramos" ? "Selecciona al menos una celda pasajero×tramo e ingresa el monto total (> 0)." : "Selecciona al menos un ítem e ingresa su monto (> 0).", type: "warning" });
+      return;
+    }
+
+    const montoNC = Math.max(0, R - penalidad); // NC: revierte R reteniendo la penalidad
+
+    // Lo REALMENTE pagado por el expediente (contado = venta; crédito = vouchers verificados).
     const voucherPaid = (vouchers || [])
       .filter(v => v.locatorId === expediente.id && v.status === "Verificado")
       .reduce((s, v) => s + (v.amount || 0), 0);
     const totalPagado = expediente.facturacionTipo === "Pago Contado" ? venta : voucherPaid;
-    const outstanding = Math.max(0, venta - totalPagado);
-    const netCliente = totalPagado - penalidad;
-    const saldoFavorGenerado = Math.max(0, netCliente);
+    // Fórmula unificada (total y parcial): la NC reduce la deuda del expediente; el excedente va a favor.
+    const oldOutstanding = Math.max(0, venta - totalPagado);
+    const saldoFavorGenerado = Math.max(0, montoNC - oldOutstanding);
 
-    // Se SOLICITA el reembolso: NO se emite la NC ni se aplican efectos (saldo del cliente ni
-    // obligación al proveedor) hasta que el OPERADOR DE FACTURACIÓN lo apruebe — mismo flujo que
-    // la nota de crédito de reservas. Se guarda el plan pre-calculado para que el operador lo aplique.
+    // Se SOLICITA el reembolso: NO se emite la NC ni se aplican efectos hasta que el OPERADOR DE
+    // FACTURACIÓN lo apruebe (mismo flujo que la NC de reservas). Se guarda el plan pre-calculado.
     const updated = {
       ...expediente,
       reembolso: {
@@ -1670,16 +1733,20 @@ function ExpedienteAereoView({
         motivo: reembolsoForm.motivo.trim() || undefined,
         pendiente: true,
         saldoFavorGenerado,
-        outstanding,
-        netCliente,
+        outstanding: oldOutstanding,
+        alcance,
+        itemsTramos,
+        itemsPasajeros,
+        itemsCeldas,
       },
     };
     setExpediente(updated);
     onUpdateBoleto({ ...boleto, expedienteAereo: updated });
     setShowReembolso(false);
+    const alcanceMsg = alcance === "todo" ? "todo el expediente" : alcance === "tramos" ? `${itemsTramos!.length} tramo(s)` : alcance === "pasajeros" ? `${itemsPasajeros!.length} pasajero(s)` : `${itemsCeldas!.length} celda(s) pasajero×tramo`;
     showAlert({
       title: "Reembolso solicitado",
-      message: `Solicitud enviada al operador de Facturación. La nota de crédito por ${formatCurrency(montoNC, "USD")}, el saldo a favor del cliente y la cancelación de la deuda al proveedor se aplicarán cuando el operador la apruebe.`,
+      message: `Solicitud (${alcanceMsg}) enviada al operador de Facturación. La nota de crédito por ${formatCurrency(montoNC, "USD")}, el saldo a favor y la cancelación de la deuda al proveedor se aplicarán cuando el operador la apruebe.`,
       type: "info",
     });
   };
@@ -1956,7 +2023,7 @@ function ExpedienteAereoView({
                   <Button variant="warning" size="sm" onClick={() => { setReemisionForm({ adc: "", penalidad: "", nuevoTicket: "", motivo: "" }); setShowReemision(true); }}>
                     <RefreshCw className="w-3.5 h-3.5" /> Reemitir
                   </Button>
-                  <Button variant="danger" size="sm" onClick={() => { setReembolsoForm({ penalidad: "", motivo: "" }); setShowReembolso(true); }}>
+                  <Button variant="danger" size="sm" onClick={() => { setReembolsoForm({ penalidad: "", motivo: "", alcance: "todo", sel: {}, monto: {} }); setShowReembolso(true); }}>
                     <XCircle className="w-3.5 h-3.5" /> Reembolsar
                   </Button>
                 </>
@@ -2016,38 +2083,162 @@ function ExpedienteAereoView({
       {showReembolso && (() => {
         const venta = boleto.precioVenta || 0;
         const penalidad = Math.max(0, parseFloat(reembolsoForm.penalidad) || 0);
-        const montoNC = Math.max(0, venta - penalidad);
-        const voucherPaid = (vouchers || [])
-          .filter(v => v.locatorId === expediente.id && v.status === "Verificado")
-          .reduce((s, v) => s + (v.amount || 0), 0);
+        const alcance = reembolsoForm.alcance;
+        const segsTodos = (boleto.segmentos || []);
+        const paxTodos = (boleto.pasajeros || []);
+        const expId = expediente.id;
+        const segsActivos = segsTodos.map((s, i) => ({ s, i, id: segBoletoId(s, i, expId) })).filter(x => !segTotalmenteReembolsado(x.s, x.i, paxTodos, expId));
+        const paxActivos = paxTodos.map((p, i) => ({ p, i })).filter(x => !paxTotalmenteReembolsado(x.p, segsTodos, expId));
+        // Celdas pasajero×tramo aún activas (para el modo pax-tramos):
+        const celdasActivas = paxTodos.flatMap((p, pi) => segsTodos.map((s, si) => ({ pi, si, p, s, id: segBoletoId(s, si, expId) })).filter(c => !celdaReembolsada(c.p, c.id, c.s.reembolsado)));
+        // Monto de venta a reembolsar (R) según el alcance:
+        let R = venta;
+        if (alcance === "tramos") {
+          R = segsActivos.filter(x => reembolsoForm.sel[x.id]).reduce((sum, x) => sum + (parseFloat(reembolsoForm.monto[x.id]) || 0), 0);
+        } else if (alcance === "pasajeros") {
+          R = paxActivos.filter(x => reembolsoForm.sel[`pax-${x.i}`]).reduce((sum, x) => sum + (parseFloat(reembolsoForm.monto[`pax-${x.i}`]) || 0), 0);
+        } else if (alcance === "pax-tramos") {
+          R = parseFloat(reembolsoForm.monto["__total"]) || 0;
+        }
+        const celdasSel = alcance === "pax-tramos" ? celdasActivas.filter(c => reembolsoForm.sel[`cell-${c.pi}-${c.id}`]).length : 0;
+        const montoNC = Math.max(0, R - penalidad);
+        const voucherPaid = (vouchers || []).filter(v => v.locatorId === expediente.id && v.status === "Verificado").reduce((s, v) => s + (v.amount || 0), 0);
         const totalPagado = expediente.facturacionTipo === "Pago Contado" ? venta : voucherPaid;
-        const netCliente = totalPagado - penalidad;
-        const saldoFavor = Math.max(0, netCliente);
-        const deudaResidual = Math.max(0, -netCliente);
+        const oldOutstanding = Math.max(0, venta - totalPagado);
+        const saldoFavor = Math.max(0, montoNC - oldOutstanding);
+        const setAlcance = (a: "todo" | "tramos" | "pasajeros" | "pax-tramos") => setReembolsoForm(f => ({ ...f, alcance: a, sel: {}, monto: {} }));
+        const toggleSel = (key: string, defMonto?: number) => setReembolsoForm(f => {
+          const on = !f.sel[key];
+          const nextMonto = { ...f.monto };
+          if (on && nextMonto[key] == null && defMonto != null && defMonto > 0) nextMonto[key] = String(defMonto);
+          return { ...f, sel: { ...f.sel, [key]: on }, monto: nextMonto };
+        });
+        const setMonto = (key: string, val: string) => setReembolsoForm(f => ({ ...f, monto: { ...f.monto, [key]: val } }));
         return (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 animate-fade-in font-sans p-4">
-            <form onSubmit={handleReembolso} className="bg-white rounded-lg w-full max-w-md shadow-2xl overflow-hidden">
-              <div className="bg-zinc-950 text-white p-5 flex items-center justify-between">
+            <form onSubmit={handleReembolso} className="bg-white rounded-lg w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="bg-zinc-950 text-white p-5 flex items-center justify-between shrink-0">
                 <div>
-                  <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400">Post-venta</span>
+                  <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400">Post-venta · {expediente.id}</span>
                   <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2 mt-0.5">
                     <XCircle className="w-4.5 h-4.5 text-red-400" /> Reembolso del boleto {boleto.pnr}
                   </h4>
                 </div>
                 <button type="button" onClick={() => setShowReembolso(false)} className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded cursor-pointer"><X className="w-5 h-5" /></button>
               </div>
-              <div className="p-5 space-y-4 text-left">
+              <div className="p-5 space-y-4 text-left overflow-y-auto">
+                {/* Selector de alcance */}
+                <div>
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-1.5">¿Qué reembolsar?</label>
+                  <div className="grid grid-cols-2 gap-1 bg-zinc-100 p-1 rounded-lg border border-zinc-200">
+                    {([["todo", "Todo el expediente"], ["tramos", "Por tramo"], ["pasajeros", "Por pasajero"], ["pax-tramos", "Pasajero + tramo"]] as const).map(([val, lbl]) => (
+                      <button key={val} type="button" onClick={() => setAlcance(val)}
+                        className={`px-2 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wide transition-all cursor-pointer ${alcance === val ? "bg-zinc-950 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-800"}`}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Lista de tramos */}
+                {alcance === "tramos" && (
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Tramos a reembolsar (para todos los pasajeros)</label>
+                    {segsActivos.length === 0 && <p className="text-[10px] text-zinc-400 italic">No hay tramos activos.</p>}
+                    {segsActivos.map(({ s, id: key }) => {
+                      const on = !!reembolsoForm.sel[key];
+                      return (
+                        <div key={key} className={`flex items-center gap-2 p-2 rounded border ${on ? "border-red-200 bg-red-50/40" : "border-zinc-200"}`}>
+                          <input type="checkbox" checked={on} onChange={() => toggleSel(key, s.precio)} className="cursor-pointer" />
+                          <div className="flex-1 min-w-0">
+                            <span className="font-mono text-[9px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">{key}</span>
+                            <span className="ml-2 text-xs font-bold text-zinc-800">{s.origen} → {s.destino}</span>
+                            <span className="ml-1.5 text-[9px] text-zinc-400">{s.aerolinea}{s.numeroVuelo} · {s.fecha}</span>
+                          </div>
+                          {on && (
+                            <input type="number" step="0.01" min="0" value={reembolsoForm.monto[key] ?? ""} onChange={e => setMonto(key, e.target.value)}
+                              placeholder="Monto" className="w-24 p-1.5 border border-zinc-200 rounded text-xs font-mono text-right focus:outline-none focus:border-zinc-500" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Matriz pasajero × tramo */}
+                {alcance === "pax-tramos" && (
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Celdas pasajero × tramo a reembolsar</label>
+                    {celdasActivas.length === 0 && <p className="text-[10px] text-zinc-400 italic">No hay celdas activas.</p>}
+                    {paxActivos.map(({ p, i: pi }) => {
+                      const celdasPax = celdasActivas.filter(c => c.pi === pi);
+                      if (celdasPax.length === 0) return null;
+                      return (
+                        <div key={pi} className="border border-zinc-200 rounded p-2">
+                          <p className="text-[10px] font-bold text-zinc-700 font-mono mb-1.5">{p.nombre} <span className="text-[8px] bg-zinc-100 text-zinc-500 px-1 py-0.5 rounded uppercase">{p.tipo}</span></p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {celdasPax.map(c => {
+                              const key = `cell-${pi}-${c.id}`;
+                              const on = !!reembolsoForm.sel[key];
+                              return (
+                                <button key={key} type="button" onClick={() => toggleSel(key)}
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-bold cursor-pointer transition-all ${on ? "bg-red-600 text-white border-red-600" : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400"}`}>
+                                  <span className="font-mono">{c.id}</span> {c.s.origen}→{c.s.destino}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {celdasActivas.length > 0 && (
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <span className="text-[10px] font-bold text-zinc-500">{celdasSel} celda(s) seleccionada(s) · Monto total a reembolsar</span>
+                        <input type="number" step="0.01" min="0" value={reembolsoForm.monto["__total"] ?? ""} onChange={e => setMonto("__total", e.target.value)}
+                          placeholder="Monto total" className="w-28 p-1.5 border border-zinc-200 rounded text-xs font-mono text-right focus:outline-none focus:border-zinc-500" />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Lista de pasajeros */}
+                {alcance === "pasajeros" && (
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Pasajeros a reembolsar</label>
+                    {paxActivos.length === 0 && <p className="text-[10px] text-zinc-400 italic">No hay pasajeros activos.</p>}
+                    {paxActivos.map(({ p, i }) => {
+                      const key = `pax-${i}`;
+                      const on = !!reembolsoForm.sel[key];
+                      return (
+                        <div key={key} className={`flex items-center gap-2 p-2 rounded border ${on ? "border-red-200 bg-red-50/40" : "border-zinc-200"}`}>
+                          <input type="checkbox" checked={on} onChange={() => toggleSel(key, p.precioVenta)} className="cursor-pointer" />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-xs font-bold text-zinc-800 font-mono">{p.nombre}</span>
+                            <span className="ml-1.5 text-[8.5px] bg-zinc-100 text-zinc-500 px-1 py-0.5 rounded uppercase font-bold">{p.tipo}</span>
+                            {p.ticketNumero && <span className="ml-1.5 text-[9px] text-zinc-400 font-mono">{p.ticketNumero}</span>}
+                          </div>
+                          {on && (
+                            <input type="number" step="0.01" min="0" value={reembolsoForm.monto[key] ?? ""} onChange={e => setMonto(key, e.target.value)}
+                              placeholder="Monto" className="w-24 p-1.5 border border-zinc-200 rounded text-xs font-mono text-right focus:outline-none focus:border-zinc-500" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Resumen financiero */}
                 <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3.5 space-y-1.5 text-[11px] font-mono">
-                  <div className="flex justify-between text-zinc-600"><span>Venta al cliente</span><span>{formatCurrency(venta, "USD")}</span></div>
+                  <div className="flex justify-between text-zinc-600"><span>{alcance === "todo" ? "Venta al cliente" : "Monto a reembolsar (R)"}</span><span>{formatCurrency(R, "USD")}</span></div>
                   <div className="flex justify-between text-zinc-600"><span>Pagado por el cliente</span><span>{formatCurrency(totalPagado, "USD")}</span></div>
                   <div className="flex justify-between text-red-600"><span>Penalidad retenida</span><span>-{formatCurrency(penalidad, "USD")}</span></div>
-                  <div className="flex justify-between text-zinc-500 border-t border-zinc-200 pt-1"><span>Nota de crédito (revierte venta)</span><span>-{formatCurrency(montoNC, "USD")}</span></div>
+                  <div className="flex justify-between text-zinc-500 border-t border-zinc-200 pt-1"><span>Nota de crédito</span><span>-{formatCurrency(montoNC, "USD")}</span></div>
                   {saldoFavor > 0 && <div className="flex justify-between font-black text-emerald-700"><span>Saldo a favor al cliente</span><span>{formatCurrency(saldoFavor, "USD")}</span></div>}
-                  {deudaResidual > 0 && <div className="flex justify-between font-black text-red-700"><span>Penalidad que aún debe</span><span>{formatCurrency(deudaResidual, "USD")}</span></div>}
                 </div>
+
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Penalidad de la aerolínea (USD)</label>
-                  <input type="number" step="0.01" min="0" autoFocus value={reembolsoForm.penalidad}
+                  <input type="number" step="0.01" min="0" value={reembolsoForm.penalidad}
                     onChange={e => setReembolsoForm(f => ({ ...f, penalidad: e.target.value }))}
                     placeholder="0.00"
                     className="w-full p-2 border border-zinc-200 rounded text-sm font-mono font-bold text-right focus:outline-none focus:border-zinc-500" />
@@ -2056,12 +2247,12 @@ function ExpedienteAereoView({
                   <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Motivo (opcional)</label>
                   <input type="text" value={reembolsoForm.motivo}
                     onChange={e => setReembolsoForm(f => ({ ...f, motivo: e.target.value }))}
-                    placeholder="Ej: cancelación del pasajero"
+                    placeholder="Ej: solo viaja un pasajero / se cancela la vuelta"
                     className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold focus:outline-none focus:border-zinc-500" />
                 </div>
-                <p className="text-[10px] text-zinc-500 leading-snug">Esto <b>solicita</b> el reembolso al Dpto. de Facturación. La nota de crédito, el saldo a favor del cliente y la cancelación de la deuda al proveedor <b>se aplicarán cuando el operador de Facturación apruebe</b> la solicitud (mismo flujo que las notas de crédito de reservas).</p>
+                <p className="text-[10px] text-zinc-500 leading-snug">Esto <b>solicita</b> el reembolso al Dpto. de Facturación. La NC, el saldo a favor y la cancelación de la deuda al proveedor <b>se aplicarán cuando el operador de Facturación apruebe</b> (mismo flujo que las notas de crédito de reservas).</p>
               </div>
-              <div className="border-t border-zinc-100 p-4 flex justify-end gap-3">
+              <div className="border-t border-zinc-100 p-4 flex justify-end gap-3 shrink-0">
                 <button type="button" onClick={() => setShowReembolso(false)} className="px-5 py-2.5 border border-zinc-200 bg-white hover:bg-zinc-50 rounded text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
                 <button type="submit" className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer shadow-md">Solicitar reembolso</button>
               </div>
@@ -2252,12 +2443,14 @@ function ExpedienteAereoView({
                 <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-2">Segmentos de Vuelo</p>
                 <div className="space-y-3">
                   {(boleto.segmentos?.map ? boleto.segmentos : []).map((s, i) => (
-                    <div key={i} className="flex justify-between items-center bg-white p-2 rounded border border-zinc-100 shadow-xs">
+                    <div key={i} className={`flex justify-between items-center bg-white p-2 rounded border shadow-xs ${s.reembolsado ? "border-red-100 opacity-60" : "border-zinc-100"}`}>
                       <div className="flex flex-col">
                         <div className="flex items-center gap-1.5 text-xs">
-                          <span className="font-bold text-zinc-900">{s.origen}</span>
+                          {s.boletoId && <span className="font-mono text-[8.5px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded mr-1">{s.boletoId}</span>}
+                          <span className={`font-bold text-zinc-900 ${s.reembolsado ? "line-through" : ""}`}>{s.origen}</span>
                           <ArrowRight className="w-3 h-3 text-zinc-400" />
-                          <span className="font-bold text-zinc-900">{s.destino}</span>
+                          <span className={`font-bold text-zinc-900 ${s.reembolsado ? "line-through" : ""}`}>{s.destino}</span>
+                          {s.reembolsado && <span className="text-[8px] font-black text-red-600 bg-red-50 border border-red-200 px-1 py-0.5 rounded uppercase">Reembolsado</span>}
                         </div>
                         <span className="text-[10px] text-zinc-500 font-medium mt-0.5">
                           {formatGDSDate(s.fecha)} | {s.horaSalida} - {s.horaLlegada}
@@ -2279,7 +2472,13 @@ function ExpedienteAereoView({
                 <div className="space-y-2">
                   {(boleto.pasajeros?.map ? boleto.pasajeros : []).map((p, i) => (
                     <div key={i} className="flex flex-col">
-                      <p className="text-xs text-zinc-700 font-semibold">{p.nombre}</p>
+                      <p className={`text-xs font-semibold flex items-center gap-1.5 ${p.reembolsado ? "text-zinc-400 line-through" : "text-zinc-700"}`}>
+                        {p.nombre}
+                        {p.reembolsado && <span className="text-[8px] font-black text-red-600 bg-red-50 border border-red-200 px-1 py-0.5 rounded uppercase no-underline">Reembolsado</span>}
+                      </p>
+                      {!p.reembolsado && (p.tramosReembolsados?.length ?? 0) > 0 && (
+                        <p className="text-[9px] text-red-500 font-semibold mt-0.5">Tramos reembolsados: {p.tramosReembolsados!.join(", ")}</p>
+                      )}
                       {p.documento && (
                         <p className="text-[10px] text-zinc-500 font-mono mt-0.5">ID/Pasaporte: {p.documento}</p>
                       )}
@@ -2796,10 +2995,14 @@ function FlightVoucherModal({
               <h5 className="text-[9.5px] font-black text-zinc-500 uppercase tracking-widest border-b border-zinc-100 pb-1.5 font-sans">Datos de los Pasajeros</h5>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {(boleto.pasajeros?.map ? boleto.pasajeros : []).map((p, i) => (
-                  <div key={i} className="flex flex-col gap-0.5">
-                    <span className="text-sm font-black text-zinc-900 font-mono uppercase">
-                      {p.nombre} <span className="text-[9px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded ml-1">{p.tipo}</span>
+                  <div key={i} className={`flex flex-col gap-0.5 ${p.reembolsado ? "opacity-60" : ""}`}>
+                    <span className={`text-sm font-black font-mono uppercase ${p.reembolsado ? "text-zinc-400 line-through" : "text-zinc-900"}`}>
+                      {p.nombre} <span className="text-[9px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded ml-1 no-underline">{p.tipo}</span>
+                      {p.reembolsado && <span className="text-[8px] font-black text-red-600 bg-red-50 border border-red-200 px-1 py-0.5 rounded ml-1 no-underline">Reembolsado</span>}
                     </span>
+                    {!p.reembolsado && (p.tramosReembolsados?.length ?? 0) > 0 && (
+                      <span className="text-[9px] font-bold text-red-500">Tramos reembolsados: {p.tramosReembolsados!.join(", ")}</span>
+                    )}
                     <span className="text-[10px] font-bold text-zinc-500">
                       Doc. Identidad: <span className="text-zinc-800">{p.documento || "No especificado"}</span>
                     </span>
@@ -2818,10 +3021,11 @@ function FlightVoucherModal({
               <h5 className="text-[9.5px] font-black text-zinc-500 uppercase tracking-widest border-b border-zinc-100 pb-1.5 font-sans">Itinerario de Vuelos</h5>
               <div className="divide-y divide-zinc-200 border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/30 break-inside-avoid print:break-inside-avoid">
                 {(boleto.segmentos?.map ? boleto.segmentos : []).map((seg, i) => (
-                  <div key={i} className="p-4 bg-white space-y-2 break-inside-avoid print:break-inside-avoid">
+                  <div key={i} className={`p-4 space-y-2 break-inside-avoid print:break-inside-avoid ${seg.reembolsado ? "bg-red-50/40 opacity-60" : "bg-white"}`}>
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider font-sans">
-                        TRAMO {String(i + 1).padStart(2, "0")}
+                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider font-sans flex items-center gap-1.5">
+                        {seg.boletoId ? seg.boletoId : `TRAMO ${String(i + 1).padStart(2, "0")}`}
+                        {seg.reembolsado && <span className="text-[8px] font-black text-red-600 bg-red-50 border border-red-200 px-1 py-0.5 rounded uppercase">Reembolsado</span>}
                       </span>
                       <span className="px-2 py-0.5 bg-blue-900 text-white rounded text-[8px] font-black uppercase tracking-wider font-sans">
                         CLASE {seg.clase}{seg.cabina ? ` · ${seg.cabina}` : ""}
@@ -3020,13 +3224,14 @@ function FlightLiquidacionModal({
                   {/* Boleto: desglosado por pasajero (ADT/CHD/INF) si hay precio por pasajero */}
                   {hasPerPax ? (
                     pasajeros.map((p, i) => (
-                      <tr key={`pax-${i}`}>
-                        <td className="py-2 text-zinc-700 font-semibold">
+                      <tr key={`pax-${i}`} className={p.reembolsado ? "opacity-50" : ""}>
+                        <td className={`py-2 font-semibold ${p.reembolsado ? "text-zinc-400 line-through" : "text-zinc-700"}`}>
                           {p.nombre}
-                          <span className="text-[8.5px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded ml-1.5 uppercase font-bold">{p.tipo || p.paxType}</span>
-                          <span className="block text-[9px] text-zinc-400 font-normal font-sans">Boleto {boleto.pnr} — {ruta}</span>
+                          <span className="text-[8.5px] bg-zinc-100 text-zinc-500 px-1.5 py-0.5 rounded ml-1.5 uppercase font-bold no-underline">{p.tipo || p.paxType}</span>
+                          {p.reembolsado && <span className="text-[8px] font-black text-red-600 bg-red-50 border border-red-200 px-1 py-0.5 rounded ml-1 uppercase no-underline">Reembolsado</span>}
+                          <span className="block text-[9px] text-zinc-400 font-normal font-sans no-underline">Boleto {boleto.pnr} — {ruta}</span>
                         </td>
-                        <td className="py-2 text-right font-mono font-bold text-zinc-900 align-top">{fmt(p.precioVenta ?? p.costoNeto ?? 0)}</td>
+                        <td className={`py-2 text-right font-mono font-bold align-top ${p.reembolsado ? "text-zinc-400 line-through" : "text-zinc-900"}`}>{fmt(p.precioVenta ?? p.costoNeto ?? 0)}</td>
                       </tr>
                     ))
                   ) : (
