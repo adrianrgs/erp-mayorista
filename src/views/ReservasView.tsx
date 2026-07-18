@@ -57,7 +57,7 @@ import { reconcileDossierUpdate } from "../lib/financialReconciler";
 import { resolveSaleClient, isCreditEligible } from "../lib/clientResolver";
 import { nextSequentialId } from "../lib/idGenerator";
 import { parseAttachment, downloadAttachment } from "../lib/attachments";
-import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
+import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { getStatusBadge, formatDate } from "../components/reservas/reservasFormat";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
@@ -2512,27 +2512,27 @@ export default function ReservasView({
                             <div className="w-full md:w-auto grid grid-cols-2 sm:grid-cols-5 md:flex md:items-center gap-x-4 gap-y-2 md:gap-6 text-xs font-semibold text-zinc-800 border-t md:border-t-0 border-zinc-100 pt-2 md:pt-0">
                               <div className="text-left md:text-right">
                                 <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">PVP (Público)</span>
-                                <span className="text-zinc-900 font-bold">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                <span className="text-zinc-900 font-bold">{formatCurrency(pvp, getOperatingCurrency())}</span>
                               </div>
                               
                               <div className="text-left md:text-right">
                                 <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">Comisión ({comisionPct}%)</span>
-                                <span className="text-amber-600 font-bold">-${comisionAmt.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                <span className="text-amber-600 font-bold">-{formatCurrency(comisionAmt, getOperatingCurrency())}</span>
                               </div>
 
                               <div className="text-left md:text-right">
                                 <span className="text-[9px] text-zinc-500 uppercase tracking-wider block font-black text-zinc-950">Neto B2B (Cobrar)</span>
-                                <span className="text-zinc-950 font-black">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                <span className="text-zinc-950 font-black">{formatCurrency(s.precioVenta, getOperatingCurrency())}</span>
                               </div>
 
                               <div className="text-left md:text-right">
                                 <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">Neto Proveedor (Costo)</span>
-                                <span className="text-zinc-500 font-bold">${s.precioNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                <span className="text-zinc-500 font-bold">{formatCurrency(s.precioNeto, getOperatingCurrency())}</span>
                               </div>
 
                               <div className="text-left md:text-right">
                                 <span className="text-[9px] text-emerald-600 uppercase tracking-wider block font-bold">Ganancia Foratour</span>
-                                <span className="text-emerald-700 font-bold">+${gananciaMayorista.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                <span className="text-emerald-700 font-bold">+{formatCurrency(gananciaMayorista, getOperatingCurrency())}</span>
                               </div>
                             </div>
                           </div>
@@ -2556,23 +2556,23 @@ export default function ReservasView({
                                       <div className="flex flex-wrap gap-4 text-right">
                                         <div>
                                           <span className="text-[8px] text-zinc-400 block uppercase font-bold">PVP (Público)</span>
-                                          <span className="text-zinc-900 font-semibold">${rates.pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                          <span className="text-zinc-900 font-semibold">{formatCurrency(rates.pvp, getOperatingCurrency())}</span>
                                         </div>
                                         <div>
                                           <span className="text-[8px] text-zinc-400 block uppercase font-bold">Comisión ({comisionPct}%)</span>
-                                          <span className="text-amber-600 font-semibold">-${rates.comisionB2BVal.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                          <span className="text-amber-600 font-semibold">-{formatCurrency(rates.comisionB2BVal, getOperatingCurrency())}</span>
                                         </div>
                                         <div>
                                           <span className="text-[8px] text-zinc-500 block uppercase font-black text-zinc-950 font-mono">Neto B2B</span>
-                                          <span className="text-zinc-950 font-black">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                          <span className="text-zinc-950 font-black">{formatCurrency(rates.sale, getOperatingCurrency())}</span>
                                         </div>
                                         <div>
                                           <span className="text-[8px] text-zinc-400 block uppercase font-bold">Neto Prov</span>
-                                          <span className="text-zinc-500 font-semibold">${rates.net.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                          <span className="text-zinc-500 font-semibold">{formatCurrency(rates.net, getOperatingCurrency())}</span>
                                         </div>
                                         <div>
                                           <span className="text-[8px] text-emerald-600 block uppercase font-bold">Ganancia</span>
-                                          <span className="text-emerald-700 font-bold">+${roomProfit.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                                          <span className="text-emerald-700 font-bold">+{formatCurrency(roomProfit, getOperatingCurrency())}</span>
                                         </div>
                                       </div>
                                     </div>
@@ -2605,27 +2605,27 @@ export default function ReservasView({
                           <div className="w-full md:w-auto grid grid-cols-2 sm:grid-cols-5 md:flex md:items-center gap-x-4 gap-y-2 md:gap-6 text-xs font-semibold text-zinc-800 border-t md:border-t-0 border-zinc-100 pt-2 md:pt-0">
                             <div className="text-left md:text-right">
                               <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">PVP (Público)</span>
-                              <span className="text-zinc-900 font-bold">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-zinc-900 font-bold">{formatCurrency(pvp, getOperatingCurrency())}</span>
                             </div>
 
                             <div className="text-left md:text-right">
                               <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">Comisión (10%)</span>
-                              <span className="text-amber-600 font-bold">-${comisionAmt.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-amber-600 font-bold">-{formatCurrency(comisionAmt, getOperatingCurrency())}</span>
                             </div>
 
                             <div className="text-left md:text-right">
                               <span className="text-[9px] text-zinc-500 uppercase tracking-wider block font-black text-zinc-950">Neto B2B (Cobrar)</span>
-                              <span className="text-zinc-950 font-black">${activeRes.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-zinc-950 font-black">{formatCurrency(activeRes.totalPrice, getOperatingCurrency())}</span>
                             </div>
 
                             <div className="text-left md:text-right">
                               <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">Neto Proveedor (Costo)</span>
-                              <span className="text-zinc-500 font-bold">${activeRes.netPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-zinc-500 font-bold">{formatCurrency(activeRes.netPrice, getOperatingCurrency())}</span>
                             </div>
 
                             <div className="text-left md:text-right">
                               <span className="text-[9px] text-emerald-600 uppercase tracking-wider block font-bold">Ganancia Foratour</span>
-                              <span className="text-emerald-700 font-bold">+${gananciaMayorista.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-emerald-700 font-bold">+{formatCurrency(gananciaMayorista, getOperatingCurrency())}</span>
                             </div>
                           </div>
                         </div>
@@ -2663,27 +2663,27 @@ export default function ReservasView({
                           <div className="w-full md:w-auto grid grid-cols-2 sm:grid-cols-5 md:flex md:items-center gap-x-4 gap-y-2 md:gap-6 text-xs font-semibold text-zinc-800 border-t md:border-t-0 border-zinc-100 pt-2 md:pt-0">
                             <div className="text-left md:text-right">
                               <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">PVP (Público)</span>
-                              <span className="text-zinc-900 font-bold">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-zinc-900 font-bold">{formatCurrency(pvp, getOperatingCurrency())}</span>
                             </div>
                             
                             <div className="text-left md:text-right">
                               <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">Comisión ({comisionPct}%)</span>
-                              <span className="text-amber-600 font-bold">-${comisionAmt.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-amber-600 font-bold">-{formatCurrency(comisionAmt, getOperatingCurrency())}</span>
                             </div>
 
                             <div className="text-left md:text-right">
                               <span className="text-[9px] text-zinc-500 uppercase tracking-wider block font-black text-zinc-950">Neto B2B (Cobrar)</span>
-                              <span className="text-zinc-950 font-black">${vuelo.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-zinc-950 font-black">{formatCurrency(vuelo.precioVenta, getOperatingCurrency())}</span>
                             </div>
 
                             <div className="text-left md:text-right">
                               <span className="text-[9px] text-zinc-400 uppercase tracking-wider block font-bold">Neto Proveedor (Costo)</span>
-                              <span className="text-zinc-500 font-bold">${vuelo.costoNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-zinc-500 font-bold">{formatCurrency(vuelo.costoNeto, getOperatingCurrency())}</span>
                             </div>
 
                             <div className="text-left md:text-right">
                               <span className="text-[9px] text-emerald-600 uppercase tracking-wider block font-bold">Ganancia Foratour</span>
-                              <span className="text-emerald-700 font-bold">+${vProfit.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                              <span className="text-emerald-700 font-bold">+{formatCurrency(vProfit, getOperatingCurrency())}</span>
                             </div>
                           </div>
                         </div>
@@ -2743,7 +2743,7 @@ export default function ReservasView({
 
                       <div className="flex items-center justify-between py-2 border-b border-zinc-800 text-amber-400 font-semibold">
                         <span>Comisión Retenida B2B</span>
-                        <span>-{formatCurrency(totalComisionesB2B, "USD")}</span>
+                        <span>-{formatCurrency(totalComisionesB2B, getOperatingCurrency())}</span>
                       </div>
 
                       <div className="flex items-center justify-between py-2 border-b border-zinc-800">
@@ -2753,12 +2753,12 @@ export default function ReservasView({
 
                       <div className="flex items-center justify-between py-2 border-b border-zinc-800">
                         <span className="text-zinc-400">Costo Neto Mayorista (a Pagar)</span>
-                        <span className="font-bold text-zinc-200">{formatCurrency(totalNeto, "USD")}</span>
+                        <span className="font-bold text-zinc-200">{formatCurrency(totalNeto, getOperatingCurrency())}</span>
                       </div>
 
                       <div className="flex items-center justify-between py-2 border-b border-zinc-800">
                         <span className="text-zinc-400">Margen de Utilidad Propio</span>
-                        <span className="font-extrabold text-emerald-400">+{formatCurrency(nuestraGanancia, "USD")}</span>
+                        <span className="font-extrabold text-emerald-400">+{formatCurrency(nuestraGanancia, getOperatingCurrency())}</span>
                       </div>
 
                       <div className="flex items-center justify-between py-1 text-[9.5px] text-zinc-500 font-mono">
@@ -2801,12 +2801,12 @@ export default function ReservasView({
                             <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 mt-1 font-semibold">
                               <span>Monto Venta:</span>
                               <span className={`font-mono font-black ${isSupplement ? "text-amber-600" : "text-emerald-700"}`}>
-                                {isSupplement ? "+" : ""}${v.amountSale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                                {isSupplement ? "+" : ""}{formatCurrency(v.amountSale, getOperatingCurrency())}
                               </span>
                               <span className="text-zinc-300">|</span>
                               <span>Neto:</span>
                               <span className="font-mono font-bold text-zinc-600">
-                                {isSupplement ? "+" : ""}${v.amountNet.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                                {isSupplement ? "+" : ""}{formatCurrency(v.amountNet, getOperatingCurrency())}
                               </span>
                             </div>
                           </div>
@@ -3079,7 +3079,7 @@ export default function ReservasView({
                                   {hasBorradorOrRechazado && (
                                     <div className="flex justify-between text-[11px] text-zinc-700">
                                       <span>Pendientes de Enviar:</span>
-                                      <span className="text-amber-700 font-extrabold">{unsentServices.length + unsentFlights.length + unsentAdjustments.length} (${pendingTotal} USD)</span>
+                                      <span className="text-amber-700 font-extrabold">{unsentServices.length + unsentFlights.length + unsentAdjustments.length} ({formatCurrency(pendingTotal, getOperatingCurrency())})</span>
                                     </div>
                                   )}
                                 </div>
@@ -3161,7 +3161,7 @@ export default function ReservasView({
                             </div>
                             <div className="text-right flex items-center gap-2 shrink-0">
                               <span className="font-mono font-black text-xs text-zinc-900">
-                                ${v.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                                {formatCurrency(v.amount, getOperatingCurrency())}
                               </span>
                               <button
                                 type="button"
@@ -3255,12 +3255,12 @@ export default function ReservasView({
                       <div className="grid grid-cols-2 gap-3 text-xs">
                         <div className="bg-zinc-50 border border-zinc-100 rounded p-2.5 text-left">
                           <span className="text-[9px] uppercase font-bold text-zinc-400 block">Precio Original</span>
-                          <span className="font-mono text-zinc-700 font-bold block mt-0.5">${originalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                          <span className="font-mono text-zinc-700 font-bold block mt-0.5">{formatCurrency(originalPrice, getOperatingCurrency())}</span>
                         </div>
                         <div className="bg-zinc-50 border border-zinc-100 rounded p-2.5 text-left">
                           <span className="text-[9px] uppercase font-bold text-zinc-400 block">Ajustes (Modif.)</span>
                           <span className={`font-mono font-bold block mt-0.5 ${adjustments > 0 ? "text-amber-600" : adjustments < 0 ? "text-emerald-700" : "text-zinc-400"}`}>
-                            {adjustments >= 0 ? "+" : ""}${adjustments.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                            {adjustments >= 0 ? "+" : ""}{formatCurrency(adjustments, getOperatingCurrency())}
                           </span>
                         </div>
                       </div>
@@ -3268,7 +3268,7 @@ export default function ReservasView({
                       {/* Total a cobrar = Precio Original + Ajustes */}
                       <div className="flex justify-between items-center border-t border-dashed border-zinc-200 pt-2.5">
                         <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Total a Cobrar</span>
-                        <span className="font-mono font-black text-sm text-zinc-900">${billedTotal.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                        <span className="font-mono font-black text-sm text-zinc-900">{formatCurrency(billedTotal, getOperatingCurrency())}</span>
                       </div>
 
                       {/* Servicios nuevos por facturar (aún no incluidos en el Total a Cobrar) */}
@@ -3277,14 +3277,14 @@ export default function ReservasView({
                           <span className="text-[10px] font-bold text-indigo-700 leading-snug">Servicios nuevos por facturar
                             <span className="block text-[9px] font-medium text-indigo-600/80">Aún no incluidos en el Total a Cobrar; se agregan al facturarse.</span>
                           </span>
-                          <span className="font-mono font-black text-sm text-indigo-700 shrink-0">+${pendientesFacturar.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                          <span className="font-mono font-black text-sm text-indigo-700 shrink-0">+{formatCurrency(pendientesFacturar, getOperatingCurrency())}</span>
                         </div>
                       )}
 
                       {/* Progreso de cobro */}
                       <div className="space-y-1">
                         <div className="flex justify-between items-center text-[10px] font-bold text-zinc-600">
-                          <span>Cobrado: ${totalCobrado.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                          <span>Cobrado: {formatCurrency(totalCobrado, getOperatingCurrency())}</span>
                           <span>{pctCobrado}%</span>
                         </div>
                         <div className="w-full bg-zinc-100 h-2.5 rounded-full overflow-hidden border border-zinc-200">
@@ -3303,13 +3303,13 @@ export default function ReservasView({
                       ) : pendiente > 0.01 ? (
                         <div className="flex justify-between items-center bg-red-50 border border-red-200 rounded p-2.5">
                           <span className="text-[10px] font-bold text-red-700">Saldo Pendiente de Cobro</span>
-                          <span className="font-mono font-black text-sm text-red-600">${pendiente.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                          <span className="font-mono font-black text-sm text-red-600">{formatCurrency(pendiente, getOperatingCurrency())}</span>
                         </div>
                       ) : sobrepago > 0.01 ? (
                         <div className="bg-emerald-50 border border-emerald-200 rounded p-2.5 space-y-0.5">
                           <div className="flex justify-between items-center">
                             <span className="text-[10px] font-bold text-emerald-800">Saldo a Favor Generado</span>
-                            <span className="font-mono font-black text-sm text-emerald-700">+${sobrepago.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                            <span className="font-mono font-black text-sm text-emerald-700">+{formatCurrency(sobrepago, getOperatingCurrency())}</span>
                           </div>
                           <span className="text-[9px] text-emerald-700/80 font-medium block leading-snug">
                             El cliente pagó más de lo facturado. El excedente queda como saldo a favor (billetera) del cliente para aplicar a futuros cobros.
@@ -3318,7 +3318,7 @@ export default function ReservasView({
                       ) : (
                         <div className="flex justify-between items-center bg-emerald-50 border border-emerald-200 rounded p-2.5">
                           <span className="text-[10px] font-bold text-emerald-800">Cobro Completo</span>
-                          <span className="font-mono font-black text-sm text-emerald-700">$0.00 USD</span>
+                          <span className="font-mono font-black text-sm text-emerald-700">{formatCurrency(0, getOperatingCurrency())}</span>
                         </div>
                       )}
                     </div>
@@ -3369,16 +3369,16 @@ export default function ReservasView({
                                 <div className="grid grid-cols-3 gap-2 pt-1 font-mono text-[10.5px]">
                                   <div className="text-center">
                                     <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Costo Neto</span>
-                                    <span className="text-zinc-800 font-black">{formatCurrency(obl.netCost, obl.currency || "USD")}</span>
+                                    <span className="text-zinc-800 font-black">{formatCurrency(obl.netCost, obl.currency || getOperatingCurrency())}</span>
                                   </div>
                                   <div className="text-center">
                                     <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Abonado</span>
-                                    <span className="text-emerald-700 font-black">{formatCurrency(obl.paidAmount, obl.currency || "USD")}</span>
+                                    <span className="text-emerald-700 font-black">{formatCurrency(obl.paidAmount, obl.currency || getOperatingCurrency())}</span>
                                   </div>
                                   <div className="text-center">
                                     <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Pendiente</span>
                                     <span className={`font-black ${remaining > 0 ? "text-red-600" : remaining < 0 ? "text-emerald-700" : "text-zinc-400"}`}>
-                                      {remaining < 0 ? "-" : ""}{formatCurrency(Math.abs(remaining), obl.currency || "USD")}
+                                      {remaining < 0 ? "-" : ""}{formatCurrency(Math.abs(remaining), obl.currency || getOperatingCurrency())}
                                     </span>
                                   </div>
                                 </div>
@@ -3407,16 +3407,16 @@ export default function ReservasView({
                           <div className="border-t border-zinc-200 pt-2 grid grid-cols-3 gap-2 text-center font-mono text-[10.5px]">
                             <div>
                               <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Total Neto</span>
-                              <span className="text-zinc-800 font-black">{formatCurrency(totalNeto, "USD")}</span>
+                              <span className="text-zinc-800 font-black">{formatCurrency(totalNeto, getOperatingCurrency())}</span>
                             </div>
                             <div>
                               <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Total Abonado</span>
-                              <span className="text-emerald-700 font-black">{formatCurrency(totalAbonado, "USD")}</span>
+                              <span className="text-emerald-700 font-black">{formatCurrency(totalAbonado, getOperatingCurrency())}</span>
                             </div>
                             <div>
                               <span className="text-[8.5px] text-zinc-400 uppercase font-bold block">Total Pendiente</span>
                               <span className={`font-black ${totalPendiente > 0 ? "text-red-600" : totalPendiente < 0 ? "text-emerald-700" : "text-zinc-400"}`}>
-                                {totalPendiente < 0 ? "-" : ""}{formatCurrency(Math.abs(totalPendiente), "USD")}
+                                {totalPendiente < 0 ? "-" : ""}{formatCurrency(Math.abs(totalPendiente), getOperatingCurrency())}
                               </span>
                             </div>
                           </div>
@@ -3655,7 +3655,7 @@ export default function ReservasView({
                     {selectedDirectClient && selectedDirectClient.moroso && (
                       <div className="mt-2 p-2 bg-amber-50 border border-amber-250 text-amber-850 text-[10px] rounded font-bold flex items-center gap-1.5">
                         <AlertCircle className="w-3.5 h-3.5 text-amber-700" />
-                        <span>ALERTA DE MORA: Cliente con saldo vencido (${selectedDirectClient.saldoDeber.toLocaleString("es-ES")} USD).</span>
+                        <span>ALERTA DE MORA: Cliente con saldo vencido ({formatCurrency(selectedDirectClient.saldoDeber, getOperatingCurrency())}).</span>
                       </div>
                     )}
                     </>
@@ -3778,7 +3778,7 @@ export default function ReservasView({
                     {selectedClient && selectedClient.moroso && (
                       <div className="mt-2 p-2 bg-amber-50 border border-amber-250 text-amber-850 text-[10px] rounded font-bold flex items-center gap-1.5">
                         <AlertCircle className="w-3.5 h-3.5 text-amber-700" />
-                        <span>ALERTA DE MORA: Agencia con saldo vencido (${selectedClient.saldoDeber.toLocaleString("es-ES")} USD).</span>
+                        <span>ALERTA DE MORA: Agencia con saldo vencido ({formatCurrency(selectedClient.saldoDeber, getOperatingCurrency())}).</span>
                       </div>
                     )}
                     </>
@@ -3933,17 +3933,17 @@ export default function ReservasView({
                     <div className="space-y-3.5 text-xs">
                       <div className="flex items-center justify-between py-1 border-b border-zinc-800">
                         <span className="text-zinc-400 uppercase text-[9.5px]">Total Venta B2B PVP</span>
-                        <span className="font-black text-xl text-white">${totalVenta.toLocaleString("es-ES")} USD</span>
+                        <span className="font-black text-xl text-white">{formatCurrency(totalVenta, getOperatingCurrency())}</span>
                       </div>
 
                       <div className="flex items-center justify-between py-1 border-b border-zinc-800">
                         <span className="text-zinc-400">Total Costo Neto</span>
-                        <span className="font-bold text-zinc-300">${totalNeto.toLocaleString("es-ES")} USD</span>
+                        <span className="font-bold text-zinc-300">{formatCurrency(totalNeto, getOperatingCurrency())}</span>
                       </div>
 
                       <div className="flex items-center justify-between py-1 border-b border-zinc-800">
                         <span className="text-zinc-400">Margen Mayorista Directo</span>
-                        <span className="font-bold text-emerald-400">+${totalMargen.toLocaleString("es-ES")} USD</span>
+                        <span className="font-bold text-emerald-400">+{formatCurrency(totalMargen, getOperatingCurrency())}</span>
                       </div>
 
                       <div className="flex justify-between font-mono text-[9px] text-zinc-500">
@@ -4092,8 +4092,8 @@ export default function ReservasView({
                                           {guestsNames && <span className="block text-[10px] text-zinc-400 italic">Pasajeros: {guestsNames}</span>}
                                         </div>
                                         <div className="text-right flex-shrink-0 font-medium">
-                                          <span className="font-bold text-zinc-900">${rates.sale.toLocaleString("es-ES")} USD</span>
-                                          <span className="block text-[9.5px] text-zinc-400 font-normal">Neto: ${rates.net.toLocaleString("es-ES")} | PVP: ${rates.pvp.toLocaleString("es-ES")}</span>
+                                          <span className="font-bold text-zinc-900">{formatCurrency(rates.sale, getOperatingCurrency())}</span>
+                                          <span className="block text-[9.5px] text-zinc-400 font-normal">Neto: {formatCurrency(rates.net, getOperatingCurrency())} | PVP: {formatCurrency(rates.pvp, getOperatingCurrency())}</span>
                                         </div>
                                       </div>
                                     );
@@ -4106,8 +4106,8 @@ export default function ReservasView({
                           </div>
                           <div className="text-right flex-shrink-0 flex items-center gap-2">
                             <div>
-                              <p className="text-xs font-black text-zinc-950">${item.precioVenta.toLocaleString("es-ES")} USD</p>
-                              <p className="text-[9px] text-zinc-400 font-medium">Neto: ${item.precioNeto.toLocaleString("es-ES")} | Margen: +${sProfit.toLocaleString("es-ES")}</p>
+                              <p className="text-xs font-black text-zinc-950">{formatCurrency(item.precioVenta, getOperatingCurrency())}</p>
+                              <p className="text-[9px] text-zinc-400 font-medium">Neto: {formatCurrency(item.precioNeto, getOperatingCurrency())} | Margen: +{formatCurrency(sProfit, getOperatingCurrency())}</p>
                             </div>
                             <button
                               type="button"
@@ -4152,8 +4152,8 @@ export default function ReservasView({
                           </div>
                           <div className="text-right flex-shrink-0 flex flex-col items-end gap-1">
                             <p className="text-[9px] text-zinc-400 font-bold uppercase block">Neto B2B a Cobrar</p>
-                            <p className="text-sm font-black text-zinc-950">${vuelo.precioVenta.toLocaleString("es-ES")} USD</p>
-                            <p className="text-[9px] text-zinc-500 font-medium">PVP: ${(vuelo.precioPvp || vuelo.precioVenta).toLocaleString("es-ES")} | Margen: <span className="text-emerald-600 font-bold">+${vProfit.toLocaleString("es-ES")}</span></p>
+                            <p className="text-sm font-black text-zinc-950">{formatCurrency(vuelo.precioVenta, getOperatingCurrency())}</p>
+                            <p className="text-[9px] text-zinc-500 font-medium">PVP: {formatCurrency((vuelo.precioPvp || vuelo.precioVenta), getOperatingCurrency())} | Margen: <span className="text-emerald-600 font-bold">+{formatCurrency(vProfit, getOperatingCurrency())}</span></p>
                           </div>
                         </div>
                       );
@@ -4259,17 +4259,17 @@ export default function ReservasView({
                     <div className="space-y-3.5 text-xs">
                       <div className="flex items-center justify-between py-1 border-b border-zinc-800">
                         <span className="text-zinc-400 uppercase text-[9.5px]">Total Venta B2B PVP</span>
-                        <span className="font-black text-xl text-white">${totalVenta.toLocaleString("es-ES")} USD</span>
+                        <span className="font-black text-xl text-white">{formatCurrency(totalVenta, getOperatingCurrency())}</span>
                       </div>
 
                       <div className="flex items-center justify-between py-1 border-b border-zinc-800">
                         <span className="text-zinc-400">Total Costo Neto</span>
-                        <span className="font-bold text-zinc-300">${totalNeto.toLocaleString("es-ES")} USD</span>
+                        <span className="font-bold text-zinc-300">{formatCurrency(totalNeto, getOperatingCurrency())}</span>
                       </div>
 
                       <div className="flex items-center justify-between py-1 border-b border-zinc-800">
                         <span className="text-zinc-400">Margen Mayorista Directo</span>
-                        <span className="font-bold text-emerald-400">+${totalMargen.toLocaleString("es-ES")} USD</span>
+                        <span className="font-bold text-emerald-400">+{formatCurrency(totalMargen, getOperatingCurrency())}</span>
                       </div>
 
                       <div className="flex justify-between font-mono text-[9px] text-zinc-500">
@@ -4597,7 +4597,7 @@ export default function ReservasView({
                                 ) : (
                                   activeRoomTypes.map(rt => {
                                     const rp = promoPlans.find(plan => plan.roomType_id === rt.id);
-                                    const ratePrice = rp ? `($${rp.tarifaBase} / ${rp.tipoCobro})` : "";
+                                    const ratePrice = rp ? `(${formatCurrency(rp.tarifaBase, getOperatingCurrency())} / ${rp.tipoCobro})` : "";
                                     return (
                                       <option key={rt.id} value={rt.id}>
                                         {rt.nombre} {ratePrice}
@@ -5361,9 +5361,9 @@ export default function ReservasView({
                 {/* Inputs for Commissions and PVP */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">PVP Total de Tarifa ($)</label>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">PVP Total de Tarifa ({getCurrencySymbol()})</label>
                     <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">{getCurrencySymbol()}</span>
                       <input
                         type="text"
                         readOnly
@@ -5414,7 +5414,7 @@ export default function ReservasView({
                   <div className="space-y-1.5">
                     <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Costo Neto Mayorista (a Pagar)</label>
                     <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">{getCurrencySymbol()}</span>
                       <input
                         type="text"
                         readOnly
@@ -5430,7 +5430,7 @@ export default function ReservasView({
                   <div className="space-y-1.5">
                     <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Cobro B2B (A Pagar por Agencia)</label>
                     <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">{getCurrencySymbol()}</span>
                       <input
                         type="text"
                         readOnly
@@ -5446,7 +5446,7 @@ export default function ReservasView({
                   <div className="space-y-1.5">
                     <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Nuestra Ganancia Mayorista</label>
                     <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-[10px]">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-[10px]">{getCurrencySymbol()}</span>
                       <input
                         type="text"
                         readOnly
@@ -5466,10 +5466,10 @@ export default function ReservasView({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">
-                      {activeServiceType === ServiceType.SEGURO ? "PVP por Pax ($)" : "Precio Venta PVP ($)"}
+                      {activeServiceType === ServiceType.SEGURO ? "PVP por Pax ({getCurrencySymbol()})" : "Precio Venta PVP ({getCurrencySymbol()})"}
                     </label>
                     <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">{getCurrencySymbol()}</span>
                       <input
                         type="number"
                         step="0.01"
@@ -5483,7 +5483,7 @@ export default function ReservasView({
                     </div>
                     {activeServiceType === ServiceType.SEGURO && (
                       <span className="text-[9.5px] text-zinc-400 font-bold leading-tight block mt-1">
-                        PVP Total: ${((parseFloat(salePrice) || 0) * insPax).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD ({insPax} Pax)
+                        PVP Total: {formatCurrency(((parseFloat(salePrice) || 0) * insPax), getOperatingCurrency())} ({insPax} Pax)
                       </span>
                     )}
                   </div>
@@ -5538,7 +5538,7 @@ export default function ReservasView({
                       <div className="space-y-1.5">
                         <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Costo Neto Mayorista (a Pagar)</label>
                         <div className="relative">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">{getCurrencySymbol()}</span>
                           <input
                             type="text"
                             readOnly
@@ -5554,7 +5554,7 @@ export default function ReservasView({
                       <div className="space-y-1.5">
                         <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Cobro B2B (A Pagar por Agencia)</label>
                         <div className="relative">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">{getCurrencySymbol()}</span>
                           <input
                             type="text"
                             readOnly
@@ -5570,7 +5570,7 @@ export default function ReservasView({
                       <div className="space-y-1.5">
                         <label className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-widest block">Nuestra Ganancia Mayorista</label>
                         <div className="relative">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-[10px]">$</span>
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-emerald-500 font-bold text-[10px]">{getCurrencySymbol()}</span>
                           <input
                             type="text"
                             readOnly
@@ -5590,9 +5590,9 @@ export default function ReservasView({
               <>
                 <div className="border-t border-zinc-100 pt-4 grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-tight flex items-end min-h-[28px]">Costo Neto Mayorista ($)</label>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-tight flex items-end min-h-[28px]">Costo Neto Mayorista ({getCurrencySymbol()})</label>
                     <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">{getCurrencySymbol()}</span>
                       <input
                         type="number"
                         step="0.01"
@@ -5614,9 +5614,9 @@ export default function ReservasView({
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-tight flex items-end min-h-[28px]">Precio Venta PVP ($)</label>
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest leading-tight flex items-end min-h-[28px]">Precio Venta PVP ({getCurrencySymbol()})</label>
                     <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">{getCurrencySymbol()}</span>
                       <input
                         type="number"
                         step="0.01"
@@ -5693,13 +5693,13 @@ export default function ReservasView({
                     <div className="flex justify-between items-center">
                       <span>{cartCanalVenta === "Directo" ? "Importe a Pagar por el Cliente:" : "Importe Neto B2B (a Pagar por Agencia):"}</span>
                       <span className="text-zinc-950 font-black">
-                        ${((parseFloat(salePrice) || 0) * (1 - comisionB2B / 100)).toFixed(2)} USD
+                        {formatCurrency((parseFloat(salePrice) || 0) * (1 - comisionB2B / 100), getOperatingCurrency())}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-emerald-700 font-bold">
                       <span>Nuestra Ganancia Mayorista:</span>
                       <span>
-                        +${(((parseFloat(salePrice) || 0) * (1 - comisionB2B / 100)) - (parseFloat(netPrice) || 0)).toFixed(2)} USD
+                        +{formatCurrency(((parseFloat(salePrice) || 0) * (1 - comisionB2B / 100)) - (parseFloat(netPrice) || 0), getOperatingCurrency())}
                       </span>
                     </div>
                   </div>
@@ -5913,17 +5913,17 @@ export default function ReservasView({
                                           </span>
                                         </td>
                                         {isDirecto ? (
-                                          <td className="p-3 text-right font-bold text-zinc-950">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                          <td className="p-3 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
                                         ) : (
                                           <>
-                                            <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                            <td className="p-3 text-right font-bold text-zinc-900">{formatCurrency(pvp, getOperatingCurrency())}</td>
                                             <td className="p-3 text-center font-bold text-zinc-600">
                                               {comisionPct}%
                                               <span className="text-[10.5px] text-zinc-400 block font-normal">
-                                                (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
+                                                ({formatCurrency(Math.max(0, comisionAmt), getOperatingCurrency())})
                                               </span>
                                             </td>
-                                            <td className="p-3 text-right font-bold text-zinc-950">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                            <td className="p-3 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
                                           </>
                                         )}
                                       </tr>
@@ -5941,17 +5941,17 @@ export default function ReservasView({
                                               {guestsNames && <span className="block text-[10px] text-zinc-400 italic">Pasajeros: {guestsNames}</span>}
                                             </td>
                                             {isDirecto ? (
-                                              <td className="p-2.5 text-right text-zinc-800 font-bold text-xs">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                              <td className="p-2.5 text-right text-zinc-800 font-bold text-xs">{formatCurrency(rates.sale, getOperatingCurrency())}</td>
                                             ) : (
                                               <>
-                                                <td className="p-2.5 text-right text-zinc-700 text-xs font-semibold">${rates.pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                                <td className="p-2.5 text-right text-zinc-700 text-xs font-semibold">{formatCurrency(rates.pvp, getOperatingCurrency())}</td>
                                                 <td className="p-2.5 text-center text-zinc-500 text-[10.5px]">
                                                   {comisionPct}%
                                                   <span className="text-[9.5px] text-zinc-400 block font-normal">
-                                                    (${rates.comisionB2BVal.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
+                                                    ({formatCurrency(rates.comisionB2BVal, getOperatingCurrency())})
                                                   </span>
                                                 </td>
-                                                <td className="p-2.5 text-right text-zinc-800 font-bold text-xs">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                                <td className="p-2.5 text-right text-zinc-800 font-bold text-xs">{formatCurrency(rates.sale, getOperatingCurrency())}</td>
                                               </>
                                             )}
                                           </tr>
@@ -5967,17 +5967,17 @@ export default function ReservasView({
                                     <td className="p-3 font-bold text-zinc-900">{s.tipo}</td>
                                     <td className="p-3 font-medium text-zinc-700 leading-normal">{s.descripcion}</td>
                                     {isDirecto ? (
-                                      <td className="p-3 text-right font-bold text-zinc-950">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                      <td className="p-3 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
                                     ) : (
                                       <>
-                                        <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-3 text-right font-bold text-zinc-900">{formatCurrency(pvp, getOperatingCurrency())}</td>
                                         <td className="p-3 text-center font-bold text-zinc-600">
                                           {comisionPct}%
                                           <span className="text-[10.5px] text-zinc-400 block font-normal">
-                                            (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
+                                            ({formatCurrency(Math.max(0, comisionAmt), getOperatingCurrency())})
                                           </span>
                                         </td>
-                                        <td className="p-3 text-right font-bold text-zinc-950">${s.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-3 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
                                       </>
                                     )}
                                   </tr>
@@ -5996,17 +5996,17 @@ export default function ReservasView({
                                       {activeRes.hotelName} - 7 noches - {activeRes.pax} Pax - Check-in: {formatDate(activeRes.checkIn)} ➔ Out: {formatDate(activeRes.checkOut)}
                                     </td>
                                     {isDirecto ? (
-                                      <td className="p-3 text-right font-bold text-zinc-950">${activeRes.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                      <td className="p-3 text-right font-bold text-zinc-950">{formatCurrency(activeRes.totalPrice, getOperatingCurrency())}</td>
                                     ) : (
                                       <>
-                                        <td className="p-3 text-right font-bold text-zinc-900">${pvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-3 text-right font-bold text-zinc-900">{formatCurrency(pvp, getOperatingCurrency())}</td>
                                         <td className="p-3 text-center font-bold text-zinc-600">
                                           10%
                                           <span className="text-[10.5px] text-zinc-400 block font-normal">
-                                            (${Math.max(0, comisionAmt).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)
+                                            ({formatCurrency(Math.max(0, comisionAmt), getOperatingCurrency())})
                                           </span>
                                         </td>
-                                        <td className="p-3 text-right font-bold text-zinc-950">${activeRes.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-3 text-right font-bold text-zinc-950">{formatCurrency(activeRes.totalPrice, getOperatingCurrency())}</td>
                                       </>
                                     )}
                                   </tr>
@@ -6034,22 +6034,22 @@ export default function ReservasView({
                         {isDirecto ? (
                           <div className="flex justify-between items-end">
                             <span className="text-xs text-zinc-700 uppercase font-black tracking-wide">Total a Pagar:</span>
-                            <span className="text-lg font-black text-zinc-950 font-mono">${totalPvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                            <span className="text-lg font-black text-zinc-950 font-mono">{formatCurrency(totalPvp, getOperatingCurrency())}</span>
                           </div>
                         ) : (
                           <>
                             <div className="flex justify-between items-center text-xs text-zinc-500 uppercase font-bold tracking-wider">
                               <span>Total Venta Final (PVP):</span>
-                              <span className="text-zinc-900 font-bold">${totalPvp.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                              <span className="text-zinc-900 font-bold">{formatCurrency(totalPvp, getOperatingCurrency())}</span>
                             </div>
                             <div className="flex justify-between items-center text-xs text-zinc-500 uppercase font-bold tracking-wider">
                               <span>Comisión de Agencia B2B:</span>
-                              <span className="text-zinc-900 font-bold">-${totalComisionesB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                              <span className="text-zinc-900 font-bold">-{formatCurrency(totalComisionesB2B, getOperatingCurrency())}</span>
                             </div>
                             <div className="h-[1px] bg-zinc-200"></div>
                             <div className="flex justify-between items-end">
                               <span className="text-xs text-zinc-700 uppercase font-black tracking-wide">Neto a Pagar a Foratour:</span>
-                              <span className="text-lg font-black text-zinc-950 font-mono">${totalVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                              <span className="text-lg font-black text-zinc-950 font-mono">{formatCurrency(totalVenta, getOperatingCurrency())}</span>
                             </div>
                           </>
                         )}
@@ -6559,7 +6559,7 @@ export default function ReservasView({
                             </select>
                           </div>
                           <div>
-                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Monto Cobrado ($)</label>
+                            <label className="text-[10px] uppercase font-bold text-zinc-400 block mb-1">Monto Cobrado ({getCurrencySymbol()})</label>
                             <input
                               type="number"
                               value={billingMonto}
@@ -6677,7 +6677,7 @@ export default function ReservasView({
                   </div>
                   <div className="grid grid-cols-3">
                     <span className="text-zinc-500 text-[10px] uppercase">Importe Neto:</span>
-                    <span className="col-span-2 font-bold text-zinc-100 text-[11.5px]">${selectedObligationForReceipt.netCost.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                    <span className="col-span-2 font-bold text-zinc-100 text-[11.5px]">{formatCurrency(selectedObligationForReceipt.netCost, getOperatingCurrency())}</span>
                   </div>
                   <div className="grid grid-cols-3">
                     <span className="text-zinc-500 text-[10px] uppercase">Método Pago:</span>
@@ -6821,7 +6821,7 @@ export default function ReservasView({
                   </div>
                   <div className="grid grid-cols-3">
                     <span className="text-zinc-500 text-[10px] uppercase">Importe:</span>
-                    <span className="col-span-2 font-bold text-zinc-100 text-[11.5px]">${selectedVoucherForReceipt.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                    <span className="col-span-2 font-bold text-zinc-100 text-[11.5px]">{formatCurrency(selectedVoucherForReceipt.amount, getOperatingCurrency())}</span>
                   </div>
                   <div className="grid grid-cols-3">
                     <span className="text-zinc-500 text-[10px] uppercase">Método Pago:</span>
@@ -7317,10 +7317,10 @@ export default function ReservasView({
                           <div className="flex items-center justify-between text-[10px]">
                             <div className="flex gap-3">
                               <span className="text-zinc-400 font-medium">
-                                Neto: <strong className="text-zinc-700">${b.costoNeto.toLocaleString()}</strong>
+                                Neto: <strong className="text-zinc-700">{formatCurrency(b.costoNeto, getOperatingCurrency())}</strong>
                               </span>
                               <span className="text-zinc-400 font-medium">
-                                PVP: <strong className="text-zinc-900">${b.precioVenta.toLocaleString()}</strong>
+                                PVP: <strong className="text-zinc-900">{formatCurrency(b.precioVenta, getOperatingCurrency())}</strong>
                               </span>
                             </div>
                             {margen !== null && (

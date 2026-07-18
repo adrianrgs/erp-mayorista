@@ -1,4 +1,5 @@
 // Generic multi-country tax engine — Venezuela is the default preset but any jurisdiction works.
+import { round2 } from "./money";
 
 export interface TaxJurisdiction {
   id: string;
@@ -202,18 +203,19 @@ export function calculateTaxes(
   const totalInvoice  = amount + vatAmount + surchargeAmount;
   const totalReceived = totalInvoice - vatWithheld - incomeTaxWithheld;
 
+  // Redondeo a 2 decimales de todo valor monetario para evitar drift de float en documentos fiscales.
   return {
-    taxableBase,
-    exemptBase,
-    vatAmount,
-    vatWithheld,
-    vatNetPayable: vatAmount - vatWithheld,
-    surchargeAmount,
-    incomeTaxWithheld,
-    totalInvoice,
-    totalReceived,
+    taxableBase: round2(taxableBase),
+    exemptBase: round2(exemptBase),
+    vatAmount: round2(vatAmount),
+    vatWithheld: round2(vatWithheld),
+    vatNetPayable: round2(vatAmount - vatWithheld),
+    surchargeAmount: round2(surchargeAmount),
+    incomeTaxWithheld: round2(incomeTaxWithheld),
+    totalInvoice: round2(totalInvoice),
+    totalReceived: round2(totalReceived),
     exchangeRate,
-    localCurrencyAmount: totalInvoice * exchangeRate,
+    localCurrencyAmount: round2(totalInvoice * exchangeRate),
   };
 }
 
@@ -227,6 +229,25 @@ const CURRENCY_LOCALES: Record<string, string> = {
   VES: "es-VE", COP: "es-CO", PEN: "es-PE", PAB: "es-PA",
   MXN: "es-MX", CLP: "es-CL", EUR: "es-ES", USD: "en-US",
 };
+
+// Moneda de operación configurable (default "USD"). App la fija desde companyConfig.currency al
+// cargar. `getOperatingCurrency()` reemplaza los literales "USD" de las vistas (la moneda LOCAL
+// fiscal sigue derivándose de jurisdiction.localCurrency, no de esto).
+let _operatingCurrency = "USD";
+export function setOperatingCurrency(c?: string) { _operatingCurrency = c || "USD"; }
+export function getOperatingCurrency(): string { return _operatingCurrency; }
+
+// Símbolo de la moneda de operación (USD→"$", VES→"Bs.S", EUR→"€"). Para adornos de inputs y
+// labels donde se muestra solo el símbolo, no un monto formateado.
+export function getCurrencySymbol(currency: string = _operatingCurrency): string {
+  const locale = CURRENCY_LOCALES[currency] ?? "es-ES";
+  try {
+    const parts = new Intl.NumberFormat(locale, { style: "currency", currency }).formatToParts(0);
+    return parts.find(p => p.type === "currency")?.value ?? currency;
+  } catch {
+    return currency;
+  }
+}
 
 export function formatCurrency(amount: number, currency: string): string {
   const locale = CURRENCY_LOCALES[currency] ?? "es-ES";
@@ -246,8 +267,12 @@ export function formatDualCurrency(
   jurisdiction: TaxJurisdiction,
   exchangeRate?: number,
 ): string {
-  const usd = formatCurrency(usdAmount, "USD");
-  if (!exchangeRate || jurisdiction.localCurrency === "USD") return usd;
+  // La moneda primaria es la de OPERACIÓN configurada (antes fijo "USD"), para que el monto
+  // principal respete ConfiguracionView. La secundaria sigue siendo la LOCAL fiscal (× tasa).
+  const operating = getOperatingCurrency();
+  const primary = formatCurrency(usdAmount, operating);
+  // Si la moneda de operación ya es la local fiscal, el par es redundante: mostrar solo una.
+  if (!exchangeRate || jurisdiction.localCurrency === operating) return primary;
   const local = formatCurrency(usdAmount * exchangeRate, jurisdiction.localCurrency);
-  return `${usd} (${local})`;
+  return `${primary} (${local})`;
 }

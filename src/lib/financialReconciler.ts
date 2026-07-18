@@ -1,5 +1,6 @@
 import { Reservation, ServiceItem, B2BClient, DirectClient, PayableObligation, FinancialVariation, B2BWalletTransaction } from "../types";
 import { nextSequentialId } from "./idGenerator";
+import { getOperatingCurrency, formatCurrency } from "./taxEngine";
 
 export type UpdatedClientRef =
   | { kind: "B2B"; client: B2BClient }
@@ -68,7 +69,7 @@ export function reconcileDossierUpdate(
   // voucher data is available to correctly split debt-clearance vs. overpayment-refund.
   const applyCreditToClient = (amount: number, reason: string) => {
     if (!updatedClient) return;
-    log.push(`[Crédito Registrado] ${updatedClient.client.nombre}: $${amount.toFixed(2)} crédito pendiente de ajuste de saldo — ${reason}`);
+    log.push(`[Crédito Registrado] ${updatedClient.client.nombre}: ${formatCurrency(amount, getOperatingCurrency())} crédito pendiente de ajuste de saldo — ${reason}`);
   };
 
   // HELPER: Apply debit/supplement to client — auto-applies saldoFavor for all client types
@@ -81,7 +82,7 @@ export function reconcileDossierUpdate(
       const autoApply = Math.min(client.saldoFavor, amount);
       client.saldoFavor -= autoApply;
       amount -= autoApply;
-      log.push(`[Billetera Virtual] Se aplicaron $${autoApply.toFixed(2)} del saldo a favor de ${client.nombre} para pagar el suplemento.`);
+      log.push(`[Billetera Virtual] Se aplicaron ${formatCurrency(autoApply, getOperatingCurrency())} del saldo a favor de ${client.nombre} para pagar el suplemento.`);
       newWalletTransactions.push({
         id: genId("TX-WLT"),
         clientId: client.id,
@@ -97,7 +98,7 @@ export function reconcileDossierUpdate(
     if (amount > 0) {
       const previousDebt = client.saldoDeber;
       client.saldoDeber += amount;
-      log.push(`[Suplemento] ${client.nombre}: deuda $${previousDebt.toFixed(2)}→$${client.saldoDeber.toFixed(2)} (${reason})`);
+      log.push(`[Suplemento] ${client.nombre}: deuda ${formatCurrency(previousDebt, getOperatingCurrency())}→${formatCurrency(client.saldoDeber, getOperatingCurrency())} (${reason})`);
     }
   };
 
@@ -141,7 +142,7 @@ export function reconcileDossierUpdate(
         const isAlreadyPaid = obl.paidAmount > 0;
         const newStatus = isAlreadyPaid ? "Congelado" as const : "Congelado" as const;
         
-        log.push(`[Cuentas por Pagar] Obligación ${obl.id} (${obl.providerName}) congelada. (Monto pagado: $${obl.paidAmount.toFixed(2)})`);
+        log.push(`[Cuentas por Pagar] Obligación ${obl.id} (${obl.providerName}) congelada. (Monto pagado: ${formatCurrency(obl.paidAmount, getOperatingCurrency())})`);
         
         return {
           ...obl,
@@ -222,7 +223,7 @@ export function reconcileDossierUpdate(
         const deltaNet = sNew.precioNeto - sOld.precioNeto;
 
         if ((deltaSale !== 0 || deltaNet !== 0) && sOld.statusFacturacion === "Facturado") {
-          log.push(`[Modificación Tarifa] Servicio "${sNew.descripcion}" varió de precio. Delta venta: $${deltaSale.toFixed(2)}, Delta neto: $${deltaNet.toFixed(2)}`);
+          log.push(`[Modificación Tarifa] Servicio "${sNew.descripcion}" varió de precio. Delta venta: ${formatCurrency(deltaSale, getOperatingCurrency())}, Delta neto: ${formatCurrency(deltaNet, getOperatingCurrency())}`);
 
           // ── Impacto al CLIENTE: SOLO si cambió el PRECIO DE VENTA ──
           // Si únicamente cambió el costo neto (p.ej. se ajustó la comisión), el cliente paga
@@ -250,7 +251,7 @@ export function reconcileDossierUpdate(
 
             if (deltaSale > 0) {
               // Supplement: balance update deferred to FacturacionView when user approves billing
-              log.push(`[Suplemento Pendiente] $${deltaSale.toFixed(2)} sobre "${sNew.descripcion}" — pendiente de enviar a Facturación.`);
+              log.push(`[Suplemento Pendiente] ${formatCurrency(deltaSale, getOperatingCurrency())} sobre "${sNew.descripcion}" — pendiente de enviar a Facturación.`);
             } else {
               applyCreditToClient(Math.abs(deltaSale), `Crédito por rebaja tarifa: ${sNew.descripcion}`);
             }
@@ -268,7 +269,7 @@ export function reconcileDossierUpdate(
               ) {
                 matchedObligation = true;
                 const newNet = Math.max(0, obl.netCost + deltaNet);
-                log.push(`[Cuentas por Pagar] Obligación ${obl.id} ajustada neto de $${obl.netCost.toFixed(2)} a $${newNet.toFixed(2)}`);
+                log.push(`[Cuentas por Pagar] Obligación ${obl.id} ajustada neto de ${formatCurrency(obl.netCost, getOperatingCurrency())} a ${formatCurrency(newNet, getOperatingCurrency())}`);
                 return {
                   ...obl,
                   netCost: newNet,
@@ -291,10 +292,10 @@ export function reconcileDossierUpdate(
                 paidAmount: 0,
                 status: "Pendiente",
                 date: new Date().toISOString().split("T")[0],
-                currency: "USD",
+                currency: getOperatingCurrency(),
               };
               updatedPayableObligations = [...updatedPayableObligations, newObl];
-              log.push(`[Cuentas por Pagar] Nueva obligación ${newObl.id} creada para "${sNew.descripcion}" (${newObl.providerName}) por $${newObl.netCost.toFixed(2)} — el servicio pasó de costo neto 0 a costo real.`);
+              log.push(`[Cuentas por Pagar] Nueva obligación ${newObl.id} creada para "${sNew.descripcion}" (${newObl.providerName}) por ${formatCurrency(newObl.netCost, getOperatingCurrency())} — el servicio pasó de costo neto 0 a costo real.`);
             }
           }
         }
@@ -315,7 +316,7 @@ export function reconcileDossierUpdate(
   newRes.netPrice = activeConfirmedServices.reduce((sum, s) => sum + s.precioNeto, 0);
 
   // If reservation total has changed, log adjustment
-  log.push(`[Recálculo Reserva] Total expediente recalculado: $${newRes.totalPrice.toFixed(2)} (Neto: $${newRes.netPrice.toFixed(2)})`);
+  log.push(`[Recálculo Reserva] Total expediente recalculado: ${formatCurrency(newRes.totalPrice, getOperatingCurrency())} (Neto: ${formatCurrency(newRes.netPrice, getOperatingCurrency())})`);
 
   newRes.variaciones = currentVariations;
 

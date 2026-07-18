@@ -1,7 +1,7 @@
 import { FlightTicket } from "./types/aereos";
 import React, { useState } from "react";
 import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, OperationalTransfer, mapToOperationalTransfer, mapToTransferService, FinancialInvoice, B2BClient, DirectClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement, PaymentVoucher, CompanyConfig, ExchangeRate, WithholdingCertificate, JournalEntry } from "./types";
-import { TaxJurisdiction, DEFAULT_JURISDICTION } from "./lib/taxEngine";
+import { TaxJurisdiction, DEFAULT_JURISDICTION, setOperatingCurrency } from "./lib/taxEngine";
 import { Property, RoomType, RatePlan, StopSale, ExtraService, ServiceRate, Proveedor } from "./types/producto";
 
 import {
@@ -70,6 +70,7 @@ import ConfiguracionView from "./views/ConfiguracionView";
 import { reconcileDossierUpdate } from "./lib/financialReconciler";
 import { resolveSaleClient } from "./lib/clientResolver";
 import { nextSequentialId } from "./lib/idGenerator";
+import { round2 } from "./lib/money";
 
 import ServiciosView from "./views/ServiciosView";
 import BuscadorGlobalView from "./views/BuscadorGlobalView";
@@ -227,9 +228,13 @@ export default function App() {
       address: "Av. Francisco de Miranda, Edif. Parque Cristal, Piso 8",
       phone: "+58 (212) 285-4521",
       email: "administracion@foratour-erp.com",
-      logoLetter: "F"
+      logoLetter: "F",
+      currency: "USD"
     };
   });
+
+  // Fija la moneda de operación (usada por getOperatingCurrency en las vistas) desde la config.
+  React.useEffect(() => { setOperatingCurrency(companyConfig.currency); }, [companyConfig.currency]);
 
   const handleUpdateCompanyConfig = (updated: CompanyConfig) => {
     setCompanyConfig(updated);
@@ -446,6 +451,8 @@ export default function App() {
 
   const handleUpdateObligation = async (updated: any) => {
     updated.updatedAt = new Date().toISOString();
+    if (typeof updated.netCost === "number") updated.netCost = round2(updated.netCost);
+    if (typeof updated.paidAmount === "number") updated.paidAmount = round2(updated.paidAmount);
     setPayableObligations(prev => prev.map(o => o.id === updated.id ? updated : o));
     try {
       await updatePayableObligation(dataConnect, {
@@ -490,6 +497,8 @@ export default function App() {
 
   const handleAddPayableObligation = async (newObligation: any) => {
     newObligation.updatedAt = new Date().toISOString();
+    if (typeof newObligation.netCost === "number") newObligation.netCost = round2(newObligation.netCost);
+    if (typeof newObligation.paidAmount === "number") newObligation.paidAmount = round2(newObligation.paidAmount);
     setPayableObligations(prev => [newObligation, ...prev]);
     try {
       await insertPayableObligation(dataConnect, {
@@ -1104,11 +1113,6 @@ export default function App() {
         }
       }
 
-      // Print reconciler logs for audit trail
-      if (result.log.length > 0) {
-        console.log("--- HISTORIAL DE CONCILIACIÓN FINANCIERA ---");
-        result.log.forEach(l => console.log(l));
-      }
     }
 
     setReservations(prev => prev.map(r => r.id === finalRes.id ? finalRes : r));
@@ -1146,7 +1150,6 @@ export default function App() {
         localizadorProveedor: finalRes.localizadorProveedor,
         updatedAt: finalRes.updatedAt
       });
-      console.log(`[DB] Reservation ${finalRes.id} saved. facturacionTipo=${finalRes.facturacionTipo}, servicios statusList=[${(finalRes.servicios||[]).map((s:any)=>s.statusFacturacion).join(',')}]`);
     } catch (e) {
       console.error("[DB] Failed to update reservation:", e);
       alert(`Error al guardar expediente: ${(e as any)?.message || e}`);
@@ -1308,6 +1311,9 @@ export default function App() {
 
   const handleUpdateInvoice = async (updated: any) => {
     updated.updatedAt = new Date().toISOString();
+    for (const f of ["amount", "vatAmount", "taxableBase", "surchargeAmount", "vatWithheld", "incomeTaxWithheld", "localCurrencyAmount"]) {
+      if (typeof updated[f] === "number") updated[f] = round2(updated[f]);
+    }
     setInvoices(prev => prev.map(i => i.id === updated.id ? updated : i));
     try {
       await updateInvoice(dataConnect, {
@@ -1326,6 +1332,10 @@ export default function App() {
 
   const handleAddInvoice = async (newInv: any) => {
     newInv.updatedAt = new Date().toISOString();
+    // Redondeo a 2 decimales de todo monto fiscal antes de persistir.
+    for (const f of ["amount", "vatAmount", "taxableBase", "surchargeAmount", "vatWithheld", "incomeTaxWithheld", "localCurrencyAmount"]) {
+      if (typeof newInv[f] === "number") newInv[f] = round2(newInv[f]);
+    }
     setInvoices(prev => [newInv, ...prev]);
     try {
       await insertInvoice(dataConnect, {
@@ -1368,6 +1378,8 @@ export default function App() {
 
   const handleUpdateClient = async (updated: any) => {
     updated.updatedAt = new Date().toISOString();
+    updated.saldoFavor = round2(updated.saldoFavor || 0);
+    updated.saldoDeber = round2(updated.saldoDeber || 0);
     setClients(prev => prev.map(c => c.id === updated.id ? updated : c));
     try {
       await updateClient(dataConnect, {
@@ -1413,6 +1425,8 @@ export default function App() {
   // campos editables — se persiste el objeto completo, no solo saldo/status/moroso.
   const handleUpdateDirectClient = async (updated: DirectClient) => {
     updated.updatedAt = new Date().toISOString();
+    updated.saldoFavor = round2(updated.saldoFavor || 0);
+    updated.saldoDeber = round2(updated.saldoDeber || 0);
     setDirectClients(prev => prev.map(c => c.id === updated.id ? updated : c));
     try {
       await updateDirectClient(dataConnect, { ...updated });
@@ -1459,6 +1473,9 @@ export default function App() {
     const finalBol: FlightTicket = {
       ...newBol,
       id: nuevoId,
+      costoNeto: round2(newBol.costoNeto || 0),
+      precioVenta: round2(newBol.precioVenta || 0),
+      precioPvp: newBol.precioPvp != null ? round2(newBol.precioPvp) : newBol.precioPvp,
       segmentos,
       // Expediente aéreo creado eager con el MISMO id (antes se creaba lazy en la vista).
       expedienteAereo: newBol.expedienteAereo

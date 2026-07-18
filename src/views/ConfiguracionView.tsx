@@ -247,6 +247,22 @@ function EmpresaTab({ formData, onChange, onSubmit }: { formData: CompanyConfig;
               className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-900 font-semibold" />
           </div>
 
+          <div>
+            <label htmlFor="currency" className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Moneda de Operación</label>
+            <select id="currency" name="currency" value={formData.currency || "USD"} onChange={onChange as any}
+              className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-900 font-semibold">
+              <option value="USD">Dólar estadounidense (USD)</option>
+              <option value="EUR">Euro (EUR)</option>
+              <option value="VES">Bolívar (VES)</option>
+              <option value="COP">Peso colombiano (COP)</option>
+              <option value="PEN">Sol peruano (PEN)</option>
+              <option value="MXN">Peso mexicano (MXN)</option>
+              <option value="CLP">Peso chileno (CLP)</option>
+              <option value="PAB">Balboa (PAB)</option>
+            </select>
+            <p className="text-[9px] text-zinc-400 mt-1">Moneda de las operaciones mayoristas. Lo fiscal local se deriva por tipo de cambio.</p>
+          </div>
+
           <div className="pt-2">
             <Button type="submit" className="w-full uppercase tracking-wider">
               <Save className="w-4 h-4 text-zinc-300" /> Guardar Ajustes

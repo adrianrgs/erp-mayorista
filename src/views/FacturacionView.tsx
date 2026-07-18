@@ -6,7 +6,7 @@ import { useAutorizacion } from "../hooks/useAutorizacion";
 import { resolveSaleClient, isCreditEligible, SaleClientRef } from "../lib/clientResolver";
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
-import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile } from "../lib/taxEngine";
+import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile, getOperatingCurrency, formatCurrency } from "../lib/taxEngine";
 import { nextSequentialId } from "../lib/idGenerator";
 import { formatGDSDate } from "../lib/parsers/pnrParser";
 import { 
@@ -221,7 +221,7 @@ export default function FacturacionView({
                 <div className="font-semibold text-zinc-800 leading-tight">
                   <p>Plan: {ratePlanName}</p>
                   {ratePlan && (
-                    <p className="text-[9.5px] text-zinc-500 font-medium">Cobro: {ratePlan.tipoCobro} | Tarifa base: ${ratePlan.tarifaBase} USD/noche</p>
+                    <p className="text-[9.5px] text-zinc-500 font-medium">Cobro: {ratePlan.tipoCobro} | Tarifa base: {formatCurrency(ratePlan.tarifaBase, getOperatingCurrency())}/noche</p>
                   )}
                 </div>
               </div>
@@ -310,7 +310,7 @@ export default function FacturacionView({
                 <span className="text-[8px] uppercase tracking-wider text-zinc-400 font-bold block mb-1">Estado de Tarifas</span>
                 <p>Tipo de Cobertura: Internacional</p>
                 {det.salePrice && (
-                  <p>PVP Unitario: ${(parseFloat(det.salePrice) || 0).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</p>
+                  <p>PVP Unitario: {formatCurrency((parseFloat(det.salePrice) || 0), getOperatingCurrency())}</p>
                 )}
               </div>
             </div>
@@ -405,9 +405,9 @@ export default function FacturacionView({
             {ratePlan && (
               <div className="bg-white p-2 rounded border border-zinc-200 text-[9px] text-zinc-600 space-y-1 text-left">
                 <span className="font-black text-zinc-800 uppercase block text-[8px] tracking-wider">Reglas del Contrato Extranet:</span>
-                <div>Cobro: <span className="font-bold text-zinc-700">{ratePlan.tipoCobro}</span> | Tarifa Base: <span className="font-bold text-zinc-700">${ratePlan.tarifaBase} USD/noche</span></div>
+                <div>Cobro: <span className="font-bold text-zinc-700">{ratePlan.tipoCobro}</span> | Tarifa Base: <span className="font-bold text-zinc-700">{formatCurrency(ratePlan.tarifaBase, getOperatingCurrency())}/noche</span></div>
                 {ratePlan.tipoCobro === TipoCobro.POR_PERSONA && (
-                  <div>Extra Adulto: <span className="font-bold text-zinc-700">${ratePlan.tarifaExtraAdulto} USD</span> | Extra Niño: <span className="font-bold text-zinc-700">${ratePlan.tarifaExtraNino} USD</span></div>
+                  <div>Extra Adulto: <span className="font-bold text-zinc-700">{formatCurrency(ratePlan.tarifaExtraAdulto, getOperatingCurrency())}</span> | Extra Niño: <span className="font-bold text-zinc-700">{formatCurrency(ratePlan.tarifaExtraNino, getOperatingCurrency())}</span></div>
                 )}
                 <div className="text-zinc-500 italic truncate" title={ratePlan.politicasCancelacion}>Pol. Cancelación: {ratePlan.politicasCancelacion}</div>
               </div>
@@ -482,7 +482,7 @@ export default function FacturacionView({
               <div><span className="text-zinc-400">Vigencia:</span> <span className="font-bold text-zinc-800">{days} días de cobertura</span></div>
               <div><span className="text-zinc-400">Pasajeros:</span> <span className="font-bold text-zinc-800">{pax} Pax</span></div>
               {det.salePrice && (
-                <div className="col-span-2"><span className="text-zinc-400">PVP Unitario:</span> <span className="font-bold text-zinc-800">${(parseFloat(det.salePrice) || 0).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span></div>
+                <div className="col-span-2"><span className="text-zinc-400">PVP Unitario:</span> <span className="font-bold text-zinc-800">{formatCurrency((parseFloat(det.salePrice) || 0), getOperatingCurrency())}</span></div>
               )}
             </div>
           </div>
@@ -900,7 +900,7 @@ export default function FacturacionView({
 
     setStatusMessage(
       pendingExcessAmount > 0
-        ? `✓ Nota de Crédito emitida. Documento: ${creditNote.id} — Excedente de $${pendingExcessAmount.toFixed(2)} pendiente de verificar con el proveedor antes de acreditar saldo a favor.`
+        ? `✓ Nota de Crédito emitida. Documento: ${creditNote.id} — Excedente de ${formatCurrency(pendingExcessAmount, getOperatingCurrency())} pendiente de verificar con el proveedor antes de acreditar saldo a favor.`
         : `✓ Nota de Crédito emitida con éxito. Documento: ${creditNote.id}`
     );
     setTimeout(() => setStatusMessage(""), 5000);
@@ -996,7 +996,7 @@ export default function FacturacionView({
     if (obl && onUpdateObligation) {
       if (fullyRefunded) {
         if (provPagado > 0) {
-          onUpdateObligation({ ...obl, netCost: provPagado, status: "Congelado", isFrozen: true, notes: `${obl.notes || ""}\n[Bloqueado] Boleto reembolsado (aprobado) — pagado ${provPagado.toFixed(2)} al proveedor; saldo restante cancelado; reclamar a la aerolínea.` });
+          onUpdateObligation({ ...obl, netCost: provPagado, status: "Congelado", isFrozen: true, notes: `${obl.notes || ""}\n[Bloqueado] Boleto reembolsado (aprobado) — pagado ${formatCurrency(provPagado, getOperatingCurrency())} al proveedor; saldo restante cancelado; reclamar a la aerolínea.` });
         } else {
           onUpdateObligation({ ...obl, status: "Anulado", isFrozen: true, notes: `${obl.notes || ""}\n[Anulado] Boleto reembolsado (aprobado) sin pago al proveedor — deuda cancelada.` });
         }
@@ -1006,7 +1006,7 @@ export default function FacturacionView({
         const refundedCost = fraccion * obl.netCost;
         const newNet = Math.max(0, obl.netCost - refundedCost);
         const newStatus = provPagado >= newNet ? "Pagado Total" : provPagado > 0 ? "Pagado Parcial" : "Pendiente";
-        onUpdateObligation({ ...obl, netCost: newNet, status: newStatus as any, notes: `${obl.notes || ""}\n[Parcial] Reembolso aprobado: costo al proveedor reducido en ${refundedCost.toFixed(2)} (${(fraccion * 100).toFixed(0)}%).` });
+        onUpdateObligation({ ...obl, netCost: newNet, status: newStatus as any, notes: `${obl.notes || ""}\n[Parcial] Reembolso aprobado: costo al proveedor reducido en ${formatCurrency(refundedCost, getOperatingCurrency())} (${(fraccion * 100).toFixed(0)}%).` });
       }
     }
 
@@ -1021,7 +1021,7 @@ export default function FacturacionView({
     }
 
     const alcanceMsg = alcance === "todo" ? "expediente completo" : alcance === "tramos" ? `${(plan.itemsTramos || []).length} tramo(s)` : alcance === "pasajeros" ? `${(plan.itemsPasajeros || []).length} pasajero(s)` : `${(plan.itemsCeldas || []).length} celda(s) pasajero×tramo`;
-    setStatusMessage(`✓ Reembolso aprobado (${alcanceMsg}). Nota de crédito ${ncId ?? ""} por $${montoNC.toFixed(2)}${saldoFavorGenerado > 0 ? ` · saldo a favor $${saldoFavorGenerado.toFixed(2)}` : ""}.${fullyRefunded ? " Expediente reembolsado." : " Expediente sigue activo por el resto."}`);
+    setStatusMessage(`✓ Reembolso aprobado (${alcanceMsg}). Nota de crédito ${ncId ?? ""} por ${formatCurrency(montoNC, getOperatingCurrency())}${saldoFavorGenerado > 0 ? ` · saldo a favor ${formatCurrency(saldoFavorGenerado, getOperatingCurrency())}` : ""}.${fullyRefunded ? " Expediente reembolsado." : " Expediente sigue activo por el resto."}`);
     setTimeout(() => setStatusMessage(""), 6000);
     setSelectedResId(null);
   };
@@ -1050,9 +1050,9 @@ export default function FacturacionView({
     const notCredited = excessAmount - creditedAmount;
     setStatusMessage(
       creditedAmount > 0
-        ? `✓ Se acreditaron $${creditedAmount.toFixed(2)} de saldo a favor al cliente.` +
-          (notCredited > 0 ? ` Los $${notCredited.toFixed(2)} restantes no reembolsados quedan a cargo de la empresa.` : "")
-        : `✓ Excedente descartado — la empresa asume los $${excessAmount.toFixed(2)}, no se acreditó saldo a favor.`
+        ? `✓ Se acreditaron ${formatCurrency(creditedAmount, getOperatingCurrency())} de saldo a favor al cliente.` +
+          (notCredited > 0 ? ` Los ${formatCurrency(notCredited, getOperatingCurrency())} restantes no reembolsados quedan a cargo de la empresa.` : "")
+        : `✓ Excedente descartado — la empresa asume los ${formatCurrency(excessAmount, getOperatingCurrency())}, no se acreditó saldo a favor.`
     );
     setTimeout(() => setStatusMessage(""), 5000);
   };
@@ -1082,7 +1082,7 @@ export default function FacturacionView({
     if (remainingToPay > 0 && !isCredit) {
       const receiptAmount = activeRes.comprobanteMonto || 0;
       if (receiptAmount < remainingToPay) {
-        showAlert({ title: "Pago insuficiente", message: `Pago insuficiente. El comprobante adjunto ($${receiptAmount} USD) más el saldo a favor usado ($${appliedSaldoFavor} USD) no cubren el total ($${pendingTotal} USD).`, type: "danger" });
+        showAlert({ title: "Pago insuficiente", message: `Pago insuficiente. El comprobante adjunto (${formatCurrency(receiptAmount, getOperatingCurrency())}) más el saldo a favor usado (${formatCurrency(appliedSaldoFavor, getOperatingCurrency())}) no cubren el total (${formatCurrency(pendingTotal, getOperatingCurrency())}).`, type: "danger" });
         return;
       }
     }
@@ -1175,7 +1175,7 @@ export default function FacturacionView({
             paidAmount: 0.00,
             status: "Pendiente",
             date: new Date().toISOString().split("T")[0],
-            currency: "USD"
+            currency: getOperatingCurrency()
           };
           onAddPayableObligation(newObligation);
         }
@@ -1216,7 +1216,7 @@ export default function FacturacionView({
             paidAmount: 0.00,
             status: "Pendiente",
             date: new Date().toISOString().split("T")[0],
-            currency: "USD"
+            currency: getOperatingCurrency()
           };
           onAddPayableObligation(newObligation);
         }
@@ -1259,7 +1259,7 @@ export default function FacturacionView({
             paidAmount: 0.00,
             status: "Pendiente",
             date: new Date().toISOString().split("T")[0],
-            currency: "USD"
+            currency: getOperatingCurrency()
           };
           onAddPayableObligation(newObligation);
         }
@@ -1410,23 +1410,23 @@ export default function FacturacionView({
 
     let modeMessage = "";
     if (appliedSaldoFavor > 0) {
-      modeMessage += `usando $${appliedSaldoFavor.toLocaleString("es-ES")} USD de Saldo a Favor`;
+      modeMessage += `usando ${formatCurrency(appliedSaldoFavor, getOperatingCurrency())} de Saldo a Favor`;
     }
     if (remainingToPay > 0) {
       if (modeMessage) modeMessage += " y ";
       modeMessage += isCredit
-        ? `cargando $${remainingToPay.toLocaleString("es-ES")} USD a Crédito Contra Reporte`
-        : `confirmando pago de $${remainingToPay.toLocaleString("es-ES")} USD con el comprobante adjunto`;
+        ? `cargando ${formatCurrency(remainingToPay, getOperatingCurrency())} a Crédito Contra Reporte`
+        : `confirmando pago de ${formatCurrency(remainingToPay, getOperatingCurrency())} con el comprobante adjunto`;
     } else if (pendingTotal > 0 && remainingToPay === 0) {
       modeMessage = "cubierto en su totalidad con Saldo a Favor";
     }
 
     const isOverpaid = !isCredit && receiptAmount > remainingToPay;
     const overpaidText = isOverpaid
-      ? ` Se han abonado $${(receiptAmount - remainingToPay).toLocaleString("es-ES")} USD de excedente al Saldo a Favor de la agencia.`
+      ? ` Se han abonado ${formatCurrency((receiptAmount - remainingToPay), getOperatingCurrency())} de excedente al Saldo a Favor de la agencia.`
       : "";
 
-    setStatusMessage(`✓ ¡Facturación aprobada con éxito (${modeMessage}) para el Expediente ${activeRes.id}! Se ha emitido la factura por $${pendingTotal.toLocaleString("es-ES")} USD.${overpaidText}`);
+    setStatusMessage(`✓ ¡Facturación aprobada con éxito (${modeMessage}) para el Expediente ${activeRes.id}! Se ha emitido la factura por ${formatCurrency(pendingTotal, getOperatingCurrency())}.${overpaidText}`);
     setTimeout(() => setStatusMessage(""), 6000);
     setOverrideExempt(false);
   };
@@ -1618,12 +1618,12 @@ export default function FacturacionView({
     }
 
     const typeMsg = paidInvoicedAmount > 0 && unpaidInvoicedAmount > 0
-      ? `reintegrando $${paidInvoicedAmount.toLocaleString("es-ES")} USD a Saldo a Favor y anulando $${unpaidInvoicedAmount.toLocaleString("es-ES")} USD de Saldo Deudor`
+      ? `reintegrando ${formatCurrency(paidInvoicedAmount, getOperatingCurrency())} a Saldo a Favor y anulando ${formatCurrency(unpaidInvoicedAmount, getOperatingCurrency())} de Saldo Deudor`
       : paidInvoicedAmount > 0
-        ? `reintegrando $${paidInvoicedAmount.toLocaleString("es-ES")} USD a Saldo a Favor`
-        : `anulando $${unpaidInvoicedAmount.toLocaleString("es-ES")} USD de Saldo Deudor`;
+        ? `reintegrando ${formatCurrency(paidInvoicedAmount, getOperatingCurrency())} a Saldo a Favor`
+        : `anulando ${formatCurrency(unpaidInvoicedAmount, getOperatingCurrency())} de Saldo Deudor`;
 
-    setStatusMessage(`✓ ¡Anulación de facturación confirmada para el Expediente ${activeRes.id}! Se ha emitido la Nota de Crédito por -$${invoicedTotal.toLocaleString("es-ES")} USD (${typeMsg}).`);
+    setStatusMessage(`✓ ¡Anulación de facturación confirmada para el Expediente ${activeRes.id}! Se ha emitido la Nota de Crédito por -${formatCurrency(invoicedTotal, getOperatingCurrency())} (${typeMsg}).`);
     setTimeout(() => setStatusMessage(""), 6000);
 
     // Go back to Level 1
@@ -1644,7 +1644,7 @@ export default function FacturacionView({
             <div className="bg-white p-5 rounded border border-zinc-200 flex items-center justify-between shadow-xs">
               <div>
                 <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400">Total Facturado Acumulado</span>
-                <h3 className="font-extrabold text-xl text-zinc-900 mt-1">${totalBilledVal.toLocaleString("es-ES")} USD</h3>
+                <h3 className="font-extrabold text-xl text-zinc-900 mt-1">{formatCurrency(totalBilledVal, getOperatingCurrency())}</h3>
                 <p className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1 font-semibold">
                   <TrendingUp className="w-3.5 h-3.5" />
                   Conciliado en ERP
@@ -1658,7 +1658,7 @@ export default function FacturacionView({
             <div className="bg-white p-5 rounded border border-zinc-200 flex items-center justify-between shadow-xs">
               <div>
                 <span className="text-[9px] uppercase font-bold tracking-wider text-zinc-400">Solicitado en Revisión</span>
-                <h3 className="font-extrabold text-xl text-amber-700 mt-1">${totalPendingVal.toLocaleString("es-ES")} USD</h3>
+                <h3 className="font-extrabold text-xl text-amber-700 mt-1">{formatCurrency(totalPendingVal, getOperatingCurrency())}</h3>
                 <p className="text-[10px] text-zinc-500 mt-1 flex items-center gap-1 font-semibold uppercase">
                   <Clock className="w-3.5 h-3.5 text-zinc-500" />
                   Por Aprobar o Rechazar
@@ -1819,7 +1819,7 @@ export default function FacturacionView({
                               </div>
                             </div>
                           </td>
-                          <td className="p-3 text-right font-bold text-zinc-900">${r.totalPrice.toLocaleString("es-ES")} USD</td>
+                          <td className="p-3 text-right font-bold text-zinc-900">{formatCurrency(r.totalPrice, getOperatingCurrency())}</td>
                           <td className="p-3 text-center">
                             <button
                               onClick={(e) => {
@@ -1913,7 +1913,7 @@ export default function FacturacionView({
                     {agencyRecord ? (
                       <div className="flex items-center gap-2">
                         <span className="text-[9.5px] text-emerald-850 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
-                          Saldo Favor: ${agencyRecord.saldoFavor.toLocaleString("es-ES")} USD
+                          Saldo Favor: {formatCurrency(agencyRecord.saldoFavor, getOperatingCurrency())}
                         </span>
                         <span className={`px-1.5 py-0.25 rounded text-[8.5px] font-black uppercase border ${
                           agencyRecord.moroso 
@@ -1955,7 +1955,7 @@ export default function FacturacionView({
                         <div>
                           <span className="text-zinc-400 block text-[9.5px] uppercase font-bold">Crédito Dispo / Límite</span>
                           <span className={`font-bold ${agencyRecord.saldoDeber > (agencyRecord.limiteCredito || 0) ? "text-red-650" : "text-zinc-900"}`}>
-                            ${((agencyRecord.limiteCredito || 0) - agencyRecord.saldoDeber).toLocaleString("es-ES")} / ${(agencyRecord.limiteCredito || 0).toLocaleString("es-ES")} USD
+                            {formatCurrency(((agencyRecord.limiteCredito || 0) - agencyRecord.saldoDeber), getOperatingCurrency())} / {formatCurrency((agencyRecord.limiteCredito || 0), getOperatingCurrency())}
                           </span>
                         </div>
                       </>
@@ -1995,7 +1995,7 @@ export default function FacturacionView({
                   </div>
                   <div>
                     <span className="text-zinc-500 block text-[9px] uppercase font-bold">Monto Declarado</span>
-                    <span className="text-zinc-900 font-extrabold font-mono">${activeRes.comprobanteMonto?.toLocaleString("es-ES")} USD</span>
+                    <span className="text-zinc-900 font-extrabold font-mono">{formatCurrency((activeRes.comprobanteMonto ?? 0), getOperatingCurrency())}</span>
                   </div>
                   <div>
                     <span className="text-zinc-500 block text-[9px] uppercase font-bold">Archivo Adjunto</span>
@@ -2027,7 +2027,7 @@ export default function FacturacionView({
                           <span className="text-[9px] font-mono text-zinc-400">{s.id}</span>
                         </div>
                         <p className="text-xs font-bold text-zinc-900 leading-snug mt-1">{s.descripcion}</p>
-                        <span className="text-zinc-950 text-xs font-black block mt-0.5">${s.precioVenta.toLocaleString("es-ES")} USD</span>
+                        <span className="text-zinc-950 text-xs font-black block mt-0.5">{formatCurrency(s.precioVenta, getOperatingCurrency())}</span>
                         {renderServiceDetails(s)}
                       </div>
                       
@@ -2067,7 +2067,7 @@ export default function FacturacionView({
                           <span className="text-[9px] font-mono text-zinc-400">PNR: {vuelo.pnr}</span>
                         </div>
                         <p className="text-xs font-bold text-zinc-900 leading-snug mt-1">Boleto Aéreo GDS - Ruta: {origin}-{dest}</p>
-                        <span className="text-zinc-950 text-xs font-black block mt-0.5">${vuelo.precioVenta.toLocaleString("es-ES")} USD</span>
+                        <span className="text-zinc-950 text-xs font-black block mt-0.5">{formatCurrency(vuelo.precioVenta, getOperatingCurrency())}</span>
                       </div>
                       
                       <div className="flex-shrink-0">
@@ -2120,7 +2120,7 @@ export default function FacturacionView({
                         <p className="text-xs font-bold text-zinc-950">{v.reason}</p>
                         <div className="flex items-center justify-between gap-3 pt-0.5">
                           <span className={`text-xs font-black ${isPositive ? "text-emerald-700" : "text-red-750"}`}>
-                            {isPositive ? "+" : ""}${v.amountSale.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                            {isPositive ? "+" : ""}{formatCurrency(v.amountSale, getOperatingCurrency())}
                           </span>
                           {isPositive ? (
                             <button
@@ -2173,7 +2173,7 @@ export default function FacturacionView({
                       </div>
                       <p className="text-xs font-bold text-zinc-950">{v.reason}</p>
                       <p className="text-[10.5px] text-zinc-500 leading-relaxed">
-                        El cliente pagó ${v.excessPendingVerification.toFixed(2)} de más y el proveedor de este servicio ya había sido pagado.
+                        El cliente pagó {formatCurrency(v.excessPendingVerification, getOperatingCurrency())} de más y el proveedor de este servicio ya había sido pagado.
                         Verifica con el proveedor cuánto reembolsará (puede ser total, parcial o nada) e ingresa ese monto exacto.
                       </p>
                       <div className="flex items-center justify-between gap-2 pt-0.5 flex-wrap">
@@ -2188,7 +2188,7 @@ export default function FacturacionView({
                             onChange={(e) => setRefundInputs(prev => ({ ...prev, [v.id]: e.target.value }))}
                             className="w-24 px-2 py-1 border border-zinc-200 rounded text-[11px] font-mono font-bold text-right focus:outline-none focus:border-zinc-500"
                           />
-                          <span className="text-[9px] text-zinc-400 font-bold">/ ${v.excessPendingVerification.toFixed(2)} USD</span>
+                          <span className="text-[9px] text-zinc-400 font-bold">/ {formatCurrency(v.excessPendingVerification, getOperatingCurrency())}</span>
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -2258,15 +2258,15 @@ export default function FacturacionView({
                     <div className="space-y-2 text-xs font-semibold text-zinc-700">
                       <div className="flex justify-between">
                         <span>Total Emitido en Facturas:</span>
-                        <span className="font-bold text-zinc-900">${invoicedTotal.toLocaleString("es-ES")} USD</span>
+                        <span className="font-bold text-zinc-900">{formatCurrency(invoicedTotal, getOperatingCurrency())}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Total Cobrado (Ya Pagado):</span>
-                        <span className="font-bold text-emerald-800">${paidInvoicedAmount.toLocaleString("es-ES")} USD</span>
+                        <span className="font-bold text-emerald-800">{formatCurrency(paidInvoicedAmount, getOperatingCurrency())}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Total Pendiente (A Crédito):</span>
-                        <span className="font-bold text-zinc-900">${unpaidInvoicedAmount.toLocaleString("es-ES")} USD</span>
+                        <span className="font-bold text-zinc-900">{formatCurrency(unpaidInvoicedAmount, getOperatingCurrency())}</span>
                       </div>
                     </div>
 
@@ -2274,13 +2274,13 @@ export default function FacturacionView({
                       {paidInvoicedAmount > 0 && (
                         <p className="text-emerald-900 flex items-start gap-1.5 leading-snug">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                          <span>Se reintegrarán <strong>${paidInvoicedAmount.toLocaleString("es-ES")} USD</strong> como saldo a favor de <strong>{activeRes.agenciaName || "Canal Directo"}</strong>.</span>
+                          <span>Se reintegrarán <strong>{formatCurrency(paidInvoicedAmount, getOperatingCurrency())}</strong> como saldo a favor de <strong>{activeRes.agenciaName || "Canal Directo"}</strong>.</span>
                         </p>
                       )}
                       {unpaidInvoicedAmount > 0 && (
                         <p className="text-zinc-700 flex items-start gap-1.5 leading-snug">
                           <CheckCircle2 className="w-4 h-4 text-zinc-500 flex-shrink-0 mt-0.5" />
-                          <span>Se anulará la deuda por cobrar de <strong>${unpaidInvoicedAmount.toLocaleString("es-ES")} USD</strong> de la cuenta de <strong>{activeRes.agenciaName || "Canal Directo"}</strong> (reduciendo su saldo deudor).</span>
+                          <span>Se anulará la deuda por cobrar de <strong>{formatCurrency(unpaidInvoicedAmount, getOperatingCurrency())}</strong> de la cuenta de <strong>{activeRes.agenciaName || "Canal Directo"}</strong> (reduciendo su saldo deudor).</span>
                         </p>
                       )}
                       {invoicedTotal === 0 && (
@@ -2336,13 +2336,13 @@ export default function FacturacionView({
                       <div>
                         <p className="font-bold uppercase text-[9px] tracking-wider text-red-750">Pago Restante Insuficiente</p>
                         <p className="text-[11px] leading-snug mt-0.5">
-                          El saldo neto a liquidar es de <strong>${remainingToPay.toLocaleString("es-ES")} USD</strong> (Total: ${requestedTotal.toLocaleString("es-ES")} USD
-                          {appliedSaldoFavor > 0 && ` - Saldo Favor: $${appliedSaldoFavor.toLocaleString("es-ES")} USD`}).
+                          El saldo neto a liquidar es de <strong>{formatCurrency(remainingToPay, getOperatingCurrency())}</strong> (Total: {formatCurrency(requestedTotal, getOperatingCurrency())}
+                          {appliedSaldoFavor > 0 && ` - Saldo Favor: ${formatCurrency(appliedSaldoFavor, getOperatingCurrency())}`}).
                         </p>
                         <p className="text-[11px] leading-snug mt-1 font-medium text-red-900">
-                          El comprobante adjunto es de <strong>${receiptAmount.toLocaleString("es-ES")} USD</strong>. 
+                          El comprobante adjunto es de <strong>{formatCurrency(receiptAmount, getOperatingCurrency())}</strong>. 
                           {receiptAmount > 0 
-                            ? ` Se requiere una diferencia de $${(remainingToPay - receiptAmount).toLocaleString("es-ES")} USD adicionales en un comprobante.`
+                            ? ` Se requiere una diferencia de ${formatCurrency((remainingToPay - receiptAmount), getOperatingCurrency())} adicionales en un comprobante.`
                             : " Se requiere adjuntar el comprobante del pago restante para procesar la transacción de contado."
                           }
                         </p>
@@ -2357,10 +2357,10 @@ export default function FacturacionView({
                       <div>
                         <p className="font-bold uppercase text-[9px] tracking-wider text-blue-700">Excedente de Pago</p>
                         <p className="text-[11px] leading-snug mt-0.5">
-                          El comprobante adjunto ($${receiptAmount.toLocaleString("es-ES")} USD) supera el neto a liquidar ($${remainingToPay.toLocaleString("es-ES")} USD).
+                          El comprobante adjunto (${formatCurrency(receiptAmount, getOperatingCurrency())}) supera el neto a liquidar (${formatCurrency(remainingToPay, getOperatingCurrency())}).
                         </p>
                         <p className="text-[11px] leading-snug mt-1 font-medium text-blue-900">
-                          Al aprobar, el saldo excedente de <strong>${excess.toLocaleString("es-ES")} USD</strong> será abonado automáticamente al Saldo a Favor del cliente.
+                          Al aprobar, el saldo excedente de <strong>{formatCurrency(excess, getOperatingCurrency())}</strong> será abonado automáticamente al Saldo a Favor del cliente.
                         </p>
                       </div>
                     </div>
@@ -2401,9 +2401,9 @@ export default function FacturacionView({
                         <div>
                           <span className="text-xs font-bold text-emerald-900 block">Aplicar Saldo a Favor del Cliente</span>
                           <span className="text-[10.5px] text-emerald-700 font-semibold leading-tight block mt-0.5">
-                            Disponible: <span className="font-extrabold">${agencyRecord.saldoFavor.toLocaleString("es-ES")} USD</span>. 
+                            Disponible: <span className="font-extrabold">{formatCurrency(agencyRecord.saldoFavor, getOperatingCurrency())}</span>. 
                             {useSaldoFavor && (
-                              <span> Se debitarán <span className="font-black text-emerald-850">${appliedSaldoFavor.toLocaleString("es-ES")} USD</span>.</span>
+                              <span> Se debitarán <span className="font-black text-emerald-850">{formatCurrency(appliedSaldoFavor, getOperatingCurrency())}</span>.</span>
                             )}
                           </span>
                         </div>
@@ -2415,11 +2415,11 @@ export default function FacturacionView({
                     <div className="space-y-1 text-xs font-semibold text-zinc-500 border-b border-zinc-200/50 pb-2 text-left">
                       <div className="flex justify-between">
                         <span>Importe Solicitado:</span>
-                        <span className="text-zinc-900">${requestedTotal.toLocaleString("es-ES")} USD</span>
+                        <span className="text-zinc-900">{formatCurrency(requestedTotal, getOperatingCurrency())}</span>
                       </div>
                       <div className="flex justify-between text-emerald-750 font-bold">
                         <span>Debitar de Saldo a Favor:</span>
-                        <span>-${appliedSaldoFavor.toLocaleString("es-ES")} USD</span>
+                        <span>-{formatCurrency(appliedSaldoFavor, getOperatingCurrency())}</span>
                       </div>
                     </div>
                   )}
@@ -2429,7 +2429,7 @@ export default function FacturacionView({
                       {useSaldoFavor ? "Monto Neto a Liquidar:" : "Importe por Facturación Solicitada:"}
                     </span>
                     <span className={`font-black text-base ${hasRequests ? "text-amber-700" : "text-zinc-500"}`}>
-                      ${remainingToPay.toLocaleString("es-ES")} USD
+                      {formatCurrency(remainingToPay, getOperatingCurrency())}
                     </span>
                   </div>
 
@@ -2532,7 +2532,7 @@ export default function FacturacionView({
                         <span className="text-zinc-400">({inv.date})</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-zinc-900">${inv.amount.toLocaleString("es-ES")} USD</span>
+                        <span className="font-extrabold text-zinc-900">{formatCurrency(inv.amount, getOperatingCurrency())}</span>
                         <span className={`px-1.5 py-0.25 rounded text-[8px] font-bold uppercase border ${
                           inv.status === "Pagado" ? "bg-emerald-50 border-emerald-250 text-emerald-700" : "bg-amber-50 border-amber-250 text-amber-700"
                         }`}>
@@ -2691,9 +2691,9 @@ export default function FacturacionView({
                                 {renderDossierServiceDetailsPrint(s, activeRes)}
                               </div>
                             </td>
-                            <td className="p-3 text-right font-mono text-zinc-500">${s.precioNeto.toLocaleString("es-ES")} USD</td>
-                            <td className="p-3 text-right font-mono text-zinc-900 font-bold">${s.precioVenta.toLocaleString("es-ES")} USD</td>
-                            <td className="p-3 text-right font-mono text-emerald-700 font-extrabold">+${margin.toLocaleString("es-ES")} USD</td>
+                            <td className="p-3 text-right font-mono text-zinc-500">{formatCurrency(s.precioNeto, getOperatingCurrency())}</td>
+                            <td className="p-3 text-right font-mono text-zinc-900 font-bold">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
+                            <td className="p-3 text-right font-mono text-emerald-700 font-extrabold">+{formatCurrency(margin, getOperatingCurrency())}</td>
                             <td className="p-3 text-center">
                               <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase ${
                                 s.statusFacturacion === "Facturado" 
@@ -2736,9 +2736,9 @@ export default function FacturacionView({
                                   </div>
                                 </div>
                               </td>
-                              <td className="p-3 text-right font-mono text-zinc-500">${vuelo.costoNeto.toLocaleString("es-ES")} USD</td>
-                              <td className="p-3 text-right font-mono text-zinc-900 font-bold">${vuelo.precioVenta.toLocaleString("es-ES")} USD</td>
-                              <td className="p-3 text-right font-mono text-emerald-700 font-extrabold">+${margin.toLocaleString("es-ES")} USD</td>
+                              <td className="p-3 text-right font-mono text-zinc-500">{formatCurrency(vuelo.costoNeto, getOperatingCurrency())}</td>
+                              <td className="p-3 text-right font-mono text-zinc-900 font-bold">{formatCurrency(vuelo.precioVenta, getOperatingCurrency())}</td>
+                              <td className="p-3 text-right font-mono text-emerald-700 font-extrabold">+{formatCurrency(margin, getOperatingCurrency())}</td>
                               <td className="p-3 text-center">
                                 <span className={`px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase ${
                                   vuelo.expedienteAereo?.status === "Facturado" || vuelo.expedienteAereo?.status === "PagadoAerolinea"
@@ -2770,11 +2770,11 @@ export default function FacturacionView({
                 <div className="w-64 space-y-1.5 text-xs font-semibold text-zinc-700">
                   <div className="flex justify-between">
                     <span>Total Costo Proveedores:</span>
-                    <span className="font-mono text-zinc-900">${activeRes.netPrice.toLocaleString("es-ES")} USD</span>
+                    <span className="font-mono text-zinc-900">{formatCurrency(activeRes.netPrice, getOperatingCurrency())}</span>
                   </div>
                   <div className="flex justify-between text-zinc-950 font-black text-sm pt-1.5 border-t border-zinc-200">
                     <span>Total Expediente B2B:</span>
-                    <span>${activeRes.totalPrice.toLocaleString("es-ES")} USD</span>
+                    <span>{formatCurrency(activeRes.totalPrice, getOperatingCurrency())}</span>
                   </div>
                 </div>
               </div>
@@ -3240,9 +3240,9 @@ export default function FacturacionView({
                       <thead>
                         <tr className="bg-zinc-950 text-white font-bold uppercase tracking-wider text-[9px]">
                           <th className="p-3">Concepto / Descripción</th>
-                          <th className="p-3 text-right w-24">Subtotal (USD)</th>
-                          <th className="p-3 text-right w-24">{taxLabel} (USD)</th>
-                          <th className="p-3 text-right w-24">Total (USD)</th>
+                          <th className="p-3 text-right w-24">Subtotal ({getCurrencySymbol()})</th>
+                          <th className="p-3 text-right w-24">{taxLabel} ({getCurrencySymbol()})</th>
+                          <th className="p-3 text-right w-24">Total ({getCurrencySymbol()})</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-200 font-medium text-zinc-800">
@@ -3261,13 +3261,13 @@ export default function FacturacionView({
                             )}
                           </td>
                           <td className="p-3.5 text-right font-mono">
-                            ${subtotal.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                            {formatCurrency(subtotal, getOperatingCurrency())}
                           </td>
                           <td className={`p-3.5 text-right font-mono ${isExemptInv ? "text-emerald-700 font-bold" : "text-zinc-600"}`}>
-                            {isExemptInv ? "Exento" : `$${inv.vatAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}`}
+                            {isExemptInv ? "Exento" : `${formatCurrency(inv.vatAmount, getOperatingCurrency())}`}
                           </td>
                           <td className="p-3.5 text-right font-mono font-bold text-zinc-950">
-                            ${inv.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                            {formatCurrency(inv.amount, getOperatingCurrency())}
                           </td>
                         </tr>
                       </tbody>
@@ -3293,7 +3293,7 @@ export default function FacturacionView({
                           <p className="text-zinc-500 mt-0.5">{srv.descripcion}</p>
                         </div>
                         <span className="font-mono text-zinc-800 font-bold">
-                          ${srv.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                          {formatCurrency(srv.precioVenta, getOperatingCurrency())}
                         </span>
                       </div>
                     ))}

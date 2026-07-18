@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { getCurrencySymbol } from "../lib/taxEngine";
 import { ExtraService, ServiceRate, ServiceCategory, PricingModel, Proveedor, HISTORICAL_MIN_DATE } from "../types/producto";
 import { nextSequentialId } from "../lib/idGenerator";
 import DateRangePicker from "../components/ui/DateRangePicker";
@@ -561,7 +562,7 @@ export default function ServiciosView({
                       {rateForm.pricingModel === PricingModel.POR_PERSONA ? (
                         <div className="grid grid-cols-4 gap-4">
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-blue-600 uppercase tracking-widest block">Neto Adulto ($)</label>
+                            <label className="text-[10px] font-bold text-blue-600 uppercase tracking-widest block">Neto Adulto ({getCurrencySymbol()})</label>
                             <input 
                               type="number" 
                               value={rateForm.netoAdulto || ""} 
@@ -573,7 +574,7 @@ export default function ServiciosView({
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-green-600 uppercase tracking-widest block">Venta Adulto ($)</label>
+                            <label className="text-[10px] font-bold text-green-600 uppercase tracking-widest block">Venta Adulto ({getCurrencySymbol()})</label>
                             <input
                               type="number"
                               value={rateForm.ventaAdulto || ""}
@@ -585,7 +586,7 @@ export default function ServiciosView({
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-blue-600 uppercase tracking-widest block">Neto Niño ($)</label>
+                            <label className="text-[10px] font-bold text-blue-600 uppercase tracking-widest block">Neto Niño ({getCurrencySymbol()})</label>
                             <input 
                               type="number" 
                               value={rateForm.netoNino || ""} 
@@ -597,7 +598,7 @@ export default function ServiciosView({
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-green-600 uppercase tracking-widest block">Venta Niño ($)</label>
+                            <label className="text-[10px] font-bold text-green-600 uppercase tracking-widest block">Venta Niño ({getCurrencySymbol()})</label>
                             <input
                               type="number"
                               value={rateForm.ventaNino || ""}
@@ -616,7 +617,7 @@ export default function ServiciosView({
                             <input type="number" value={rateForm.capacidadMaxima || ""} onChange={e => setRateForm({...rateForm, capacidadMaxima: parseInt(e.target.value)})} className="w-full px-3 py-2 border border-zinc-300 rounded text-sm font-mono" />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-blue-600 uppercase tracking-widest block">Costo Neto Total ($)</label>
+                            <label className="text-[10px] font-bold text-blue-600 uppercase tracking-widest block">Costo Neto Total ({getCurrencySymbol()})</label>
                             <input 
                               type="number" 
                               value={rateForm.netoTotal || ""} 
@@ -628,7 +629,7 @@ export default function ServiciosView({
                             />
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-[10px] font-bold text-green-600 uppercase tracking-widest block">Venta Total (PVP) ($)</label>
+                            <label className="text-[10px] font-bold text-green-600 uppercase tracking-widest block">Venta Total (PVP) ({getCurrencySymbol()})</label>
                             <input
                               type="number"
                               value={rateForm.ventaTotal || ""}

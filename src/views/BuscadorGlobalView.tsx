@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Search, Plane, Building2, Calendar, FileText, CheckCircle2, AlertTriangle, X, DollarSign, ExternalLink, CalendarDays, Users } from "lucide-react";
 import type { Reservation, FinancialInvoice, PayableObligation } from "../types";
+import { formatCurrency, getOperatingCurrency } from "../lib/taxEngine";
 import type { FlightTicket } from "../types/aereos";
 import { ProjectView } from "../types";
 
@@ -371,14 +372,14 @@ export default function BuscadorGlobalView({
                     <div className="grid grid-cols-2 gap-4">
                        <div className="flex flex-col">
                          <span className="text-[10px] text-zinc-500 uppercase font-bold">Venta Total</span>
-                         <span className="text-lg font-black text-zinc-900">${selectedItem.data.totalPrice.toLocaleString()}</span>
+                         <span className="text-lg font-black text-zinc-900">{formatCurrency(selectedItem.data.totalPrice, getOperatingCurrency())}</span>
                          <span className={`mt-1 inline-block px-2 py-0.5 rounded w-max text-[10px] font-bold uppercase ${getClientPaymentStatus(selectedItem.data.id).color}`}>
                            COBRO: {getClientPaymentStatus(selectedItem.data.id).status}
                          </span>
                        </div>
                        <div className="flex flex-col">
                          <span className="text-[10px] text-zinc-500 uppercase font-bold">Costo Neto</span>
-                         <span className="text-lg font-black text-zinc-900">${selectedItem.data.netPrice.toLocaleString()}</span>
+                         <span className="text-lg font-black text-zinc-900">{formatCurrency(selectedItem.data.netPrice, getOperatingCurrency())}</span>
                          <span className={`mt-1 inline-block px-2 py-0.5 rounded w-max text-[10px] font-bold uppercase ${getProviderPaymentStatus(selectedItem.data.id).color}`}>
                            PAGO: {getProviderPaymentStatus(selectedItem.data.id).status}
                          </span>

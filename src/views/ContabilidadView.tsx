@@ -20,6 +20,8 @@ import {
   TaxJurisdiction,
   JURISDICTION_PRESETS,
   DEFAULT_JURISDICTION,
+  getOperatingCurrency,
+  formatCurrency,
 } from "../lib/taxEngine";
 import { nextSequentialId } from "../lib/idGenerator";
 import {
@@ -139,7 +141,7 @@ export default function ContabilidadView({
               {jurisdiction.hasWithholding && ` · ${jurisdiction.withholdingLabel}`}
             </p>
           </div>
-          {!todayRate && jurisdiction.localCurrency !== "USD" && (
+          {!todayRate && jurisdiction.localCurrency !== getOperatingCurrency() && (
             <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-amber-700 text-[10px] font-bold">
               <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
               Sin tasa {jurisdiction.exchangeRateLabel} hoy — facturas pendientes pueden no calcular monto en {jurisdiction.localCurrency}
@@ -379,7 +381,7 @@ export default function ContabilidadView({
                       const newRate: ExchangeRate = {
                         id: nextSequentialId("ER", exchangeRates.map(r => r.id)),
                         date: rateForm.date,
-                        fromCurrency: "USD",
+                        fromCurrency: getOperatingCurrency(),
                         toCurrency: jurisdiction.localCurrency,
                         rate: Number(rateForm.rate),
                         source: jurisdiction.exchangeRateLabel,
@@ -486,7 +488,7 @@ export default function ContabilidadView({
                       String(inv.vatAmount),
                       String(inv.surchargeAmount ?? 0),
                       String(inv.amount + inv.vatAmount),
-                      jurisdiction.localCurrency !== "USD" ? String(inv.localCurrencyAmount ?? "") : "",
+                      jurisdiction.localCurrency !== getOperatingCurrency() ? String(inv.localCurrencyAmount ?? "") : "",
                     ]);
                     exportCSV(
                       [["Fecha", "N° Doc", "Cliente", `Base ${jurisdiction.taxName}`, jurisdiction.taxName, jurisdiction.surchargeName ?? "", "Total USD", `Total ${jurisdiction.localCurrency}`], ...rows],
@@ -510,8 +512,8 @@ export default function ContabilidadView({
                         <th className="px-4 py-3 text-right">Base {jurisdiction.taxName}</th>
                         <th className="px-4 py-3 text-right">{jurisdiction.taxName}</th>
                         {jurisdiction.hasSurcharge && <th className="px-4 py-3 text-right">{jurisdiction.surchargeName}</th>}
-                        <th className="px-4 py-3 text-right">Total USD</th>
-                        {jurisdiction.localCurrency !== "USD" && <th className="px-4 py-3 text-right">Total {jurisdiction.localCurrency}</th>}
+                        <th className="px-4 py-3 text-right">Total {getOperatingCurrency()}</th>
+                        {jurisdiction.localCurrency !== getOperatingCurrency() && <th className="px-4 py-3 text-right">Total {jurisdiction.localCurrency}</th>}
                         <th className="px-4 py-3 text-center">Estado</th>
                       </tr>
                     </thead>
@@ -521,11 +523,11 @@ export default function ContabilidadView({
                           <td className="px-4 py-2.5 font-mono text-zinc-700">{inv.date}</td>
                           <td className="px-4 py-2.5 font-mono text-zinc-600 text-[10px]">{inv.fiscalDocNumber ?? inv.id}</td>
                           <td className="px-4 py-2.5 text-zinc-800 max-w-[200px] truncate">{inv.clientName}</td>
-                          <td className="px-4 py-2.5 text-right font-mono">${(inv.taxableBase ?? inv.amount).toFixed(2)}</td>
-                          <td className="px-4 py-2.5 text-right font-mono">${(inv.vatAmount ?? 0).toFixed(2)}</td>
-                          {jurisdiction.hasSurcharge && <td className="px-4 py-2.5 text-right font-mono">${(inv.surchargeAmount ?? 0).toFixed(2)}</td>}
-                          <td className="px-4 py-2.5 text-right font-mono font-bold">${inv.amount.toFixed(2)}</td>
-                          {jurisdiction.localCurrency !== "USD" && (
+                          <td className="px-4 py-2.5 text-right font-mono">{formatCurrency((inv.taxableBase ?? inv.amount), getOperatingCurrency())}</td>
+                          <td className="px-4 py-2.5 text-right font-mono">{formatCurrency((inv.vatAmount ?? 0), getOperatingCurrency())}</td>
+                          {jurisdiction.hasSurcharge && <td className="px-4 py-2.5 text-right font-mono">{formatCurrency((inv.surchargeAmount ?? 0), getOperatingCurrency())}</td>}
+                          <td className="px-4 py-2.5 text-right font-mono font-bold">{formatCurrency(inv.amount, getOperatingCurrency())}</td>
+                          {jurisdiction.localCurrency !== getOperatingCurrency() && (
                             <td className="px-4 py-2.5 text-right font-mono text-indigo-700">
                               {inv.localCurrencyAmount ? inv.localCurrencyAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 }) : "—"}
                             </td>
@@ -547,11 +549,11 @@ export default function ContabilidadView({
                         <td colSpan={3} className="px-4 py-3 text-zinc-600 uppercase text-[9px] tracking-wider">
                           Totales del período {periodFilter}
                         </td>
-                        <td className="px-4 py-3 text-right font-mono">${totalBase.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-mono">${totalVAT.toFixed(2)}</td>
-                        {jurisdiction.hasSurcharge && <td className="px-4 py-3 text-right font-mono">${totalSurcharge.toFixed(2)}</td>}
-                        <td className="px-4 py-3 text-right font-mono">${(totalBase + totalVAT + totalSurcharge).toFixed(2)}</td>
-                        {jurisdiction.localCurrency !== "USD" && (
+                        <td className="px-4 py-3 text-right font-mono">{formatCurrency(totalBase, getOperatingCurrency())}</td>
+                        <td className="px-4 py-3 text-right font-mono">{formatCurrency(totalVAT, getOperatingCurrency())}</td>
+                        {jurisdiction.hasSurcharge && <td className="px-4 py-3 text-right font-mono">{formatCurrency(totalSurcharge, getOperatingCurrency())}</td>}
+                        <td className="px-4 py-3 text-right font-mono">{formatCurrency((totalBase + totalVAT + totalSurcharge), getOperatingCurrency())}</td>
+                        {jurisdiction.localCurrency !== getOperatingCurrency() && (
                           <td className="px-4 py-3 text-right font-mono text-indigo-700">
                             {totalLocal.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
                           </td>
@@ -622,7 +624,7 @@ export default function ContabilidadView({
                     <th className="px-4 py-3">Fecha</th>
                     <th className="px-4 py-3">Proveedor</th>
                     <th className="px-4 py-3">Concepto / Localizador</th>
-                    <th className="px-4 py-3 text-right">Neto USD</th>
+                    <th className="px-4 py-3 text-right">Neto {getOperatingCurrency()}</th>
                     <th className="px-4 py-3 text-right">{jurisdiction.taxName} Crédito</th>
                     <th className="px-4 py-3 text-right">Total</th>
                     <th className="px-4 py-3 text-center">Estado</th>
@@ -639,9 +641,9 @@ export default function ContabilidadView({
                           {o.serviceDetail}
                           {o.locatorId && <span className="ml-1 text-[9px] text-zinc-400 font-mono">· {o.locatorId}</span>}
                         </td>
-                        <td className="px-4 py-2.5 text-right font-mono">${o.netCost.toFixed(2)}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-emerald-700">${ivaCredito.toFixed(2)}</td>
-                        <td className="px-4 py-2.5 text-right font-mono font-bold">${(o.netCost + ivaCredito).toFixed(2)}</td>
+                        <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(o.netCost, getOperatingCurrency())}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-emerald-700">{formatCurrency(ivaCredito, getOperatingCurrency())}</td>
+                        <td className="px-4 py-2.5 text-right font-mono font-bold">{formatCurrency((o.netCost + ivaCredito), getOperatingCurrency())}</td>
                         <td className="px-4 py-2.5 text-center">
                           <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
                             o.status === "Pagado Total" ? "bg-emerald-100 text-emerald-700" :
@@ -661,9 +663,9 @@ export default function ContabilidadView({
                     <td colSpan={3} className="px-4 py-3 text-zinc-600 uppercase text-[9px] tracking-wider">
                       Totales del período {periodFilter}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono">${totalNeto.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-mono text-emerald-700">${totalIVACredito.toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right font-mono">${(totalNeto + totalIVACredito).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono">{formatCurrency(totalNeto, getOperatingCurrency())}</td>
+                    <td className="px-4 py-3 text-right font-mono text-emerald-700">{formatCurrency(totalIVACredito, getOperatingCurrency())}</td>
+                    <td className="px-4 py-3 text-right font-mono">{formatCurrency((totalNeto + totalIVACredito), getOperatingCurrency())}</td>
                     <td />
                   </tr>
                 </tfoot>
@@ -734,8 +736,8 @@ export default function ContabilidadView({
                             </span>
                           </td>
                           <td className="px-4 py-2.5 text-right font-mono">{c.percentage}%</td>
-                          <td className="px-4 py-2.5 text-right font-mono">${c.taxableBase.toFixed(2)}</td>
-                          <td className="px-4 py-2.5 text-right font-mono font-bold text-red-650">${c.amountWithheld.toFixed(2)}</td>
+                          <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(c.taxableBase, getOperatingCurrency())}</td>
+                          <td className="px-4 py-2.5 text-right font-mono font-bold text-red-650">{formatCurrency(c.amountWithheld, getOperatingCurrency())}</td>
                           <td className="px-4 py-2.5 text-zinc-500 text-[10px]">{c.invoiceId ?? "—"}</td>
                         </tr>
                       ))}
@@ -746,7 +748,7 @@ export default function ContabilidadView({
                           <td colSpan={7} className="px-4 py-3 text-zinc-600 uppercase text-[9px] tracking-wider">
                             Total retenido período {periodFilter}
                           </td>
-                          <td className="px-4 py-3 text-right font-mono text-red-700">${totalWithheld.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-red-700">{formatCurrency(totalWithheld, getOperatingCurrency())}</td>
                           <td />
                         </tr>
                       </tfoot>
@@ -805,8 +807,8 @@ export default function ContabilidadView({
                           <td className="px-4 py-2.5 font-mono text-zinc-600 text-[10px]">{inv.id}</td>
                           <td className="px-4 py-2.5 text-zinc-800 max-w-[180px] truncate">{inv.clientName}</td>
                           <td className="px-4 py-2.5 text-zinc-600">{inv.paymentMethod ?? "—"}</td>
-                          <td className="px-4 py-2.5 text-right font-mono">${inv.amount.toFixed(2)}</td>
-                          <td className="px-4 py-2.5 text-right font-mono font-bold text-amber-700">${(inv.surchargeAmount ?? 0).toFixed(2)}</td>
+                          <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(inv.amount, getOperatingCurrency())}</td>
+                          <td className="px-4 py-2.5 text-right font-mono font-bold text-amber-700">{formatCurrency((inv.surchargeAmount ?? 0), getOperatingCurrency())}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -816,7 +818,7 @@ export default function ContabilidadView({
                           <td colSpan={5} className="px-4 py-3 text-zinc-600 uppercase text-[9px] tracking-wider">
                             Total {jurisdiction.surchargeName} período {periodFilter}
                           </td>
-                          <td className="px-4 py-3 text-right font-mono text-amber-700">${totalSurcharge.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-amber-700">{formatCurrency(totalSurcharge, getOperatingCurrency())}</td>
                         </tr>
                       </tfoot>
                     )}
@@ -875,8 +877,8 @@ export default function ContabilidadView({
                           <tr className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold border-b border-zinc-100">
                             <th className="px-4 py-2">Cuenta</th>
                             <th className="px-4 py-2">Nombre</th>
-                            <th className="px-4 py-2 text-right">Débito USD</th>
-                            <th className="px-4 py-2 text-right">Crédito USD</th>
+                            <th className="px-4 py-2 text-right">Débito {getOperatingCurrency()}</th>
+                            <th className="px-4 py-2 text-right">Crédito {getOperatingCurrency()}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-50">
@@ -884,8 +886,8 @@ export default function ContabilidadView({
                             <tr key={i} className="hover:bg-zinc-50">
                               <td className="px-4 py-2 font-mono text-zinc-600">{line.account}</td>
                               <td className="px-4 py-2 text-zinc-800">{line.name}</td>
-                              <td className="px-4 py-2 text-right font-mono">{line.debit > 0 ? `$${line.debit.toFixed(2)}` : "—"}</td>
-                              <td className="px-4 py-2 text-right font-mono">{line.credit > 0 ? `$${line.credit.toFixed(2)}` : "—"}</td>
+                              <td className="px-4 py-2 text-right font-mono">{line.debit > 0 ? `${formatCurrency(line.debit, getOperatingCurrency())}` : "—"}</td>
+                              <td className="px-4 py-2 text-right font-mono">{line.credit > 0 ? `${formatCurrency(line.credit, getOperatingCurrency())}` : "—"}</td>
                             </tr>
                           ))}
                         </tbody>

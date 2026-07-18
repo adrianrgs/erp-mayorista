@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { PayableObligation, ProviderStatement } from "../types";
-import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
+import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency, getOperatingCurrency } from "../lib/taxEngine";
 import { nextSequentialId } from "../lib/idGenerator";
 import { parseAttachment, packAttachment, readFileAsDataURL, downloadAttachment, hasDownloadableFile, MAX_ATTACHMENT_BYTES } from "../lib/attachments";
 import {
@@ -87,7 +87,7 @@ export default function CuentasPorPagarView({
   const [activeObligationForPayment, setActiveObligationForPayment] = useState<PayableObligation | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     method: "Transferencia Bancaria",
-    currency: "USD",
+    currency: getOperatingCurrency(),
     amount: "",
     reference: "",
     notes: "",
@@ -103,7 +103,7 @@ export default function CuentasPorPagarView({
     dueDate: new Date().toISOString().slice(0, 10),
     date: new Date().toISOString().slice(0, 10),
     netCost: "",
-    currency: "USD",
+    currency: getOperatingCurrency(),
     paymentMethod: "Transferencia Bancaria",
     notes: "",
     isExempt: false,
@@ -145,7 +145,7 @@ export default function CuentasPorPagarView({
     };
     onAddObligation(newObl);
     setShowNewObligationForm(false);
-    setNewObligationForm({ providerName: "", serviceDetail: "", locatorId: "", dueDate: new Date().toISOString().slice(0, 10), date: new Date().toISOString().slice(0, 10), netCost: "", currency: "USD", paymentMethod: "Transferencia Bancaria", notes: "", isExempt: false, vatWithheldPct: "" });
+    setNewObligationForm({ providerName: "", serviceDetail: "", locatorId: "", dueDate: new Date().toISOString().slice(0, 10), date: new Date().toISOString().slice(0, 10), netCost: "", currency: getOperatingCurrency(), paymentMethod: "Transferencia Bancaria", notes: "", isExempt: false, vatWithheldPct: "" });
   };
 
   // Frozen obligation resolution modal
@@ -170,19 +170,19 @@ export default function CuentasPorPagarView({
     if (resolveForm.outcome === "full") {
       refund = base;
       resolutionNote = isOverpayment
-        ? `[Overpago Recuperado] Proveedor reembolsó $${refund.toFixed(2)} USD de excedente pagado.`
-        : `[Resuelto] Proveedor reembolsó $${refund.toFixed(2)} USD completos.`;
+        ? `[Overpago Recuperado] Proveedor reembolsó ${formatCurrency(refund, getOperatingCurrency())} de excedente pagado.`
+        : `[Resuelto] Proveedor reembolsó ${formatCurrency(refund, getOperatingCurrency())} completos.`;
     } else if (resolveForm.outcome === "partial") {
       refund = parseFloat(resolveForm.refundAmount) || 0;
       resolutionNote = isOverpayment
-        ? `[Overpago Parcial] Proveedor reembolsó $${refund.toFixed(2)} de $${base.toFixed(2)} USD. Diferencia absorbida: $${(base - refund).toFixed(2)} USD.`
-        : `[Resuelto Parcial] Proveedor reembolsó $${refund.toFixed(2)} de $${base.toFixed(2)} USD. Pérdida absorbida: $${(base - refund).toFixed(2)} USD.`;
+        ? `[Overpago Parcial] Proveedor reembolsó ${formatCurrency(refund, getOperatingCurrency())} de ${formatCurrency(base, getOperatingCurrency())}. Diferencia absorbida: ${formatCurrency((base - refund), getOperatingCurrency())}.`
+        : `[Resuelto Parcial] Proveedor reembolsó ${formatCurrency(refund, getOperatingCurrency())} de ${formatCurrency(base, getOperatingCurrency())}. Pérdida absorbida: ${formatCurrency((base - refund), getOperatingCurrency())}.`;
     } else {
       // No refund: for overpayment we write off the excess (set paidAmount = netCost so obligation balances)
       refund = isOverpayment ? base : 0;
       resolutionNote = isOverpayment
-        ? `[Overpago Absorbido] Excedente de $${base.toFixed(2)} USD dado de baja. Proveedor no reembolsará.`
-        : `[Sin Reembolso] Proveedor no reembolsará. Pérdida absorbida: $${base.toFixed(2)} USD.`;
+        ? `[Overpago Absorbido] Excedente de ${formatCurrency(base, getOperatingCurrency())} dado de baja. Proveedor no reembolsará.`
+        : `[Sin Reembolso] Proveedor no reembolsará. Pérdida absorbida: ${formatCurrency(base, getOperatingCurrency())}.`;
     }
 
     const resolved: PayableObligation = {
@@ -421,7 +421,7 @@ export default function CuentasPorPagarView({
 
     setShowConsolidatedPay(false);
     setSelectedPayableIds([]);
-    triggerNotification(`✓ Pago consolidado de ${toPay.length} factura(s) por ${formatCurrency(Number(total.toFixed(2)), "USD")} registrado a ${selectedProvider}.`);
+    triggerNotification(`✓ Pago consolidado de ${toPay.length} factura(s) por ${formatCurrency(Number(total.toFixed(2)), getOperatingCurrency())} registrado a ${selectedProvider}.`);
   };
 
   // Abrir el detalle de un pago desde el Libro Mayor (statement "Pago Emitido").
@@ -461,7 +461,7 @@ export default function CuentasPorPagarView({
     const remaining = calcTotalToPay(obligation) - obligation.paidAmount;
     setPaymentForm({
       method: "Transferencia Bancaria",
-      currency: obligation.currency || "USD",
+      currency: obligation.currency || getOperatingCurrency(),
       amount: Math.max(0, remaining).toFixed(2),
       reference: "",
       notes: "",
@@ -483,7 +483,7 @@ export default function CuentasPorPagarView({
     }
 
     if (payVal > remaining + 0.01) {
-      showAlert({ title: "Monto excedido", message: `Monto excedido. El saldo pendiente de esta obligación es ${formatCurrency(remaining, activeObligationForPayment.currency || "USD")}.`, type: "danger" });
+      showAlert({ title: "Monto excedido", message: `Monto excedido. El saldo pendiente de esta obligación es ${formatCurrency(remaining, activeObligationForPayment.currency || getOperatingCurrency())}.`, type: "danger" });
       return;
     }
 
@@ -523,7 +523,7 @@ export default function CuentasPorPagarView({
       triggerNotification(`✓ ¡Pago total registrado con éxito! Obligación ${updated.id} saldada por completo.`);
     } else {
       const saldoRestante = calcTotalToPay(updated) - updated.paidAmount;
-      triggerNotification(`✓ Pago parcial de ${formatCurrency(payVal, updated.currency || "USD")} registrado. Saldo restante: ${formatCurrency(Math.max(0, saldoRestante), updated.currency || "USD")}.`);
+      triggerNotification(`✓ Pago parcial de ${formatCurrency(payVal, updated.currency || getOperatingCurrency())} registrado. Saldo restante: ${formatCurrency(Math.max(0, saldoRestante), updated.currency || getOperatingCurrency())}.`);
     }
   };
 
@@ -735,9 +735,9 @@ export default function CuentasPorPagarView({
                               )}
                               {!ob.isExempt && ob.vatAmount != null && ob.vatAmount > 0 && (
                                 <div className="mt-1 text-[9px] font-mono text-zinc-500 space-y-0.5">
-                                  <span className="block">{jur.taxName}: {formatCurrency(ob.vatAmount, ob.currency || "USD")}</span>
+                                  <span className="block">{jur.taxName}: {formatCurrency(ob.vatAmount, ob.currency || getOperatingCurrency())}</span>
                                   {ob.vatWithheld != null && ob.vatWithheld > 0 && (
-                                    <span className="block text-red-600">Ret. {ob.vatWithheldPct}%: -{formatCurrency(ob.vatWithheld, ob.currency || "USD")}</span>
+                                    <span className="block text-red-600">Ret. {ob.vatWithheldPct}%: -{formatCurrency(ob.vatWithheld, ob.currency || getOperatingCurrency())}</span>
                                   )}
                                 </div>
                               )}
@@ -750,7 +750,7 @@ export default function CuentasPorPagarView({
                                     El servicio fue cancelado o modificado en el expediente.
                                   </p>
                                   <p className="text-[9.5px] text-amber-705 font-extrabold leading-normal">
-                                    Acción: Reclamar reembolso de ${(ob.netCost - ob.paidAmount).toFixed(2)} USD a {ob.providerName} o conciliar con Nota de Crédito.
+                                    Acción: Reclamar reembolso de {formatCurrency(ob.netCost - ob.paidAmount, getOperatingCurrency())} a {ob.providerName} o conciliar con Nota de Crédito.
                                   </p>
                                 </div>
                               )}
@@ -762,13 +762,13 @@ export default function CuentasPorPagarView({
                             </div>
                           </td>
                           <td className="p-4 text-right font-bold text-zinc-900">
-                            {formatCurrency(ob.netCost, ob.currency || "USD")}
+                            {formatCurrency(ob.netCost, ob.currency || getOperatingCurrency())}
                           </td>
                           <td className="p-4 text-right font-bold text-emerald-700">
-                            {formatCurrency(ob.paidAmount, ob.currency || "USD")}
+                            {formatCurrency(ob.paidAmount, ob.currency || getOperatingCurrency())}
                           </td>
                           <td className={`p-4 text-right font-black font-mono ${remaining > 0 ? "text-red-650" : remaining < 0 ? "text-emerald-700" : "text-zinc-400"}`}>
-                            {remaining < 0 ? "-" : ""}{formatCurrency(Math.abs(remaining), ob.currency || "USD")}
+                            {remaining < 0 ? "-" : ""}{formatCurrency(Math.abs(remaining), ob.currency || getOperatingCurrency())}
                           </td>
                           <td className="p-4 text-center font-mono text-[10.5px] text-zinc-600">
                             {formatDate(ob.dueDate)}
@@ -807,7 +807,7 @@ export default function CuentasPorPagarView({
                                 }}
                                 className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs"
                               >
-                                Recuperar ${(ob.paidAmount - ob.netCost).toFixed(2)}
+                                Recuperar {formatCurrency(ob.paidAmount - ob.netCost, getOperatingCurrency())}
                               </button>
                             ) : ob.status !== "Pagado Total" ? (
                               <button
@@ -1003,7 +1003,7 @@ export default function CuentasPorPagarView({
                               <td className="p-3 font-mono text-zinc-500">{o.locatorId}</td>
                               <td className="p-3 text-zinc-700 max-w-[220px] truncate" title={o.serviceDetail}>{o.serviceDetail}</td>
                               <td className="p-3 font-mono text-zinc-500">{formatDate(o.dueDate)}</td>
-                              <td className="p-3 text-right font-mono font-black text-red-650">{formatCurrency(remainingOf(o), o.currency || "USD")}</td>
+                              <td className="p-3 text-right font-mono font-black text-red-650">{formatCurrency(remainingOf(o), o.currency || getOperatingCurrency())}</td>
                               <td className="p-3 text-center">
                                 <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${o.status === "Pagado Parcial" ? "bg-blue-50 text-blue-700 border-blue-200" : o.status === "Vencido" ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-250"}`}>{o.status}</span>
                               </td>
@@ -1018,7 +1018,7 @@ export default function CuentasPorPagarView({
                   <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border p-3.5 transition-all ${selectedPayables.length > 0 ? "bg-zinc-950 border-zinc-950" : "bg-zinc-50 border-zinc-200"}`}>
                     <div className={selectedPayables.length > 0 ? "text-white" : "text-zinc-500"}>
                       <span className="text-[10px] uppercase font-bold tracking-wider block">{selectedPayables.length} factura(s) seleccionada(s) · total a pagar</span>
-                      <span className="text-lg font-black font-mono">{formatCurrency(Number(consolidatedTotal.toFixed(2)), "USD")}</span>
+                      <span className="text-lg font-black font-mono">{formatCurrency(Number(consolidatedTotal.toFixed(2)), getOperatingCurrency())}</span>
                     </div>
                     <button
                       type="button"
@@ -1100,7 +1100,7 @@ export default function CuentasPorPagarView({
                             </td>
                             <td className="p-3 font-mono text-zinc-900 font-semibold">{stm.reference}</td>
                             <td className="p-3 text-right font-black font-mono text-xs text-emerald-700">
-                              -${stm.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                              -{formatCurrency(stm.amount, getOperatingCurrency())}
                             </td>
                             <td className="p-3 text-center">
                               <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${
@@ -1167,29 +1167,29 @@ export default function CuentasPorPagarView({
                 <div className="pt-1 font-mono space-y-1">
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Costo base:</span>
-                    <span className="font-bold text-zinc-900">{formatCurrency(activeObligationForPayment.netCost, activeObligationForPayment.currency || "USD")}</span>
+                    <span className="font-bold text-zinc-900">{formatCurrency(activeObligationForPayment.netCost, activeObligationForPayment.currency || getOperatingCurrency())}</span>
                   </div>
                   {activeObligationForPayment.vatAmount != null && activeObligationForPayment.vatAmount > 0 && (
                     <div className="flex justify-between">
                       <span className="text-zinc-500">{jur.taxName}:</span>
-                      <span className="font-bold text-zinc-700">+{formatCurrency(activeObligationForPayment.vatAmount, activeObligationForPayment.currency || "USD")}</span>
+                      <span className="font-bold text-zinc-700">+{formatCurrency(activeObligationForPayment.vatAmount, activeObligationForPayment.currency || getOperatingCurrency())}</span>
                     </div>
                   )}
                   {activeObligationForPayment.vatWithheld != null && activeObligationForPayment.vatWithheld > 0 && (
                     <div className="flex justify-between">
                       <span className="text-zinc-500">Retención {activeObligationForPayment.vatWithheldPct}%:</span>
-                      <span className="font-bold text-red-600">-{formatCurrency(activeObligationForPayment.vatWithheld, activeObligationForPayment.currency || "USD")}</span>
+                      <span className="font-bold text-red-600">-{formatCurrency(activeObligationForPayment.vatWithheld, activeObligationForPayment.currency || getOperatingCurrency())}</span>
                     </div>
                   )}
                   {(activeObligationForPayment.vatAmount ?? 0) > 0 && (
                     <div className="flex justify-between border-t border-zinc-100 pt-1">
                       <span className="text-zinc-600 font-semibold">Total a pagar:</span>
-                      <span className="font-bold text-zinc-900">{formatCurrency(calcTotalToPay(activeObligationForPayment), activeObligationForPayment.currency || "USD")}</span>
+                      <span className="font-bold text-zinc-900">{formatCurrency(calcTotalToPay(activeObligationForPayment), activeObligationForPayment.currency || getOperatingCurrency())}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
                     <span className="text-zinc-500">Ya abonado:</span>
-                    <span className="font-bold text-emerald-700">{formatCurrency(activeObligationForPayment.paidAmount, activeObligationForPayment.currency || "USD")}</span>
+                    <span className="font-bold text-emerald-700">{formatCurrency(activeObligationForPayment.paidAmount, activeObligationForPayment.currency || getOperatingCurrency())}</span>
                   </div>
                 </div>
               </div>
@@ -1197,7 +1197,7 @@ export default function CuentasPorPagarView({
               <div className="flex justify-between items-center bg-red-50 border border-red-200 text-red-750 px-3.5 py-2.5 rounded">
                 <span className="text-[10px] font-bold uppercase tracking-wider">Saldo Pendiente</span>
                 <span className="text-sm font-black font-mono">
-                  {formatCurrency(Math.max(0, calcTotalToPay(activeObligationForPayment) - activeObligationForPayment.paidAmount), activeObligationForPayment.currency || "USD")}
+                  {formatCurrency(Math.max(0, calcTotalToPay(activeObligationForPayment) - activeObligationForPayment.paidAmount), activeObligationForPayment.currency || getOperatingCurrency())}
                 </span>
               </div>
             </div>
@@ -1262,7 +1262,7 @@ export default function CuentasPorPagarView({
                       ?? parseFloat((activeObligationForPayment.netCost * jur.taxRate).toFixed(2));
                     const pct = activeObligationForPayment.vatWithheldPct ?? 0;
                     const withheld = parseFloat((vatAmt * pct / 100).toFixed(2));
-                    const cur = activeObligationForPayment.currency || "USD";
+                    const cur = activeObligationForPayment.currency || getOperatingCurrency();
                     return (
                       <div className="space-y-3 pt-2 border-t border-zinc-200">
                         {jur.hasWithholding && (
@@ -1465,13 +1465,13 @@ export default function CuentasPorPagarView({
                     <li key={o.id} className="flex justify-between items-center gap-2 py-1.5 text-[11px]">
                       <span className="font-mono font-bold text-zinc-600 shrink-0">{o.id}</span>
                       <span className="text-zinc-500 truncate flex-1" title={o.serviceDetail}>{o.serviceDetail}</span>
-                      <span className="font-mono font-bold text-zinc-900 shrink-0">{formatCurrency(remainingOf(o), o.currency || "USD")}</span>
+                      <span className="font-mono font-bold text-zinc-900 shrink-0">{formatCurrency(remainingOf(o), o.currency || getOperatingCurrency())}</span>
                     </li>
                   ))}
                 </ul>
                 <div className="flex justify-between items-center border-t border-zinc-300 pt-2">
                   <span className="text-xs font-black uppercase tracking-wider text-zinc-700">Total a pagar</span>
-                  <span className="text-lg font-black font-mono text-emerald-700">{formatCurrency(Number(consolidatedTotal.toFixed(2)), "USD")}</span>
+                  <span className="text-lg font-black font-mono text-emerald-700">{formatCurrency(Number(consolidatedTotal.toFixed(2)), getOperatingCurrency())}</span>
                 </div>
               </div>
 
@@ -1577,7 +1577,7 @@ export default function CuentasPorPagarView({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-zinc-50 border border-zinc-200 rounded p-2.5">
                     <span className="text-[9px] uppercase font-bold text-zinc-400 block">Total pagado</span>
-                    <span className="font-mono font-black text-emerald-700 text-base">{formatCurrency(paymentDetail.total, "USD")}</span>
+                    <span className="font-mono font-black text-emerald-700 text-base">{formatCurrency(paymentDetail.total, getOperatingCurrency())}</span>
                   </div>
                   <div className="bg-zinc-50 border border-zinc-200 rounded p-2.5">
                     <span className="text-[9px] uppercase font-bold text-zinc-400 block">Fecha</span>
@@ -1607,7 +1607,7 @@ export default function CuentasPorPagarView({
                             <span className="text-zinc-500 block truncate" title={o.serviceDetail}>{o.serviceDetail}</span>
                             <span className="text-[9px] text-zinc-400 font-mono">Exp. {o.locatorId}</span>
                           </div>
-                          <span className="font-mono font-bold text-zinc-900 shrink-0">{formatCurrency(o.paidAmount, o.currency || "USD")}</span>
+                          <span className="font-mono font-bold text-zinc-900 shrink-0">{formatCurrency(o.paidAmount, o.currency || getOperatingCurrency())}</span>
                         </li>
                       ))}
                     </ul>
@@ -1673,16 +1673,16 @@ export default function CuentasPorPagarView({
                 <div className={`${isOverpayment ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"} border rounded-lg p-3 text-xs space-y-1`}>
                   <div className="flex justify-between">
                     <span className={`${isOverpayment ? "text-emerald-700" : "text-amber-700"} font-bold`}>Monto neto del servicio:</span>
-                    <span className="font-mono font-black">${resolveObligation.netCost.toFixed(2)} USD</span>
+                    <span className="font-mono font-black">{formatCurrency(resolveObligation.netCost, getOperatingCurrency())}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className={`${isOverpayment ? "text-emerald-700" : "text-amber-700"} font-bold`}>Total abonado al proveedor:</span>
-                    <span className="font-mono font-black">${resolveObligation.paidAmount.toFixed(2)} USD</span>
+                    <span className="font-mono font-black">{formatCurrency(resolveObligation.paidAmount, getOperatingCurrency())}</span>
                   </div>
                   {isOverpayment && (
                     <div className="flex justify-between pt-1 border-t border-emerald-200">
                       <span className="text-emerald-800 font-black">Excedente a recuperar:</span>
-                      <span className="font-mono font-black text-emerald-800">${excess.toFixed(2)} USD</span>
+                      <span className="font-mono font-black text-emerald-800">{formatCurrency(excess, getOperatingCurrency())}</span>
                     </div>
                   )}
                 </div>
@@ -1698,16 +1698,16 @@ export default function CuentasPorPagarView({
                     {
                       value: "full",
                       label: isOverpayment
-                        ? `Proveedor devuelve el excedente completo ($${excess.toFixed(2)} USD recuperados)`
-                        : `Proveedor reembolsó completo ($${base.toFixed(2)} USD recuperados)`,
+                        ? `Proveedor devuelve el excedente completo (${formatCurrency(excess, getOperatingCurrency())} recuperados)`
+                        : `Proveedor reembolsó completo (${formatCurrency(base, getOperatingCurrency())} recuperados)`,
                       color: "emerald"
                     },
                     { value: "partial", label: "Reembolso parcial (ingresar monto recuperado)", color: "blue" },
                     {
                       value: "none",
                       label: isOverpayment
-                        ? `Sin reembolso — excedente de $${excess.toFixed(2)} USD dado de baja`
-                        : `Sin reembolso — pérdida absorbida ($${base.toFixed(2)} USD)`,
+                        ? `Sin reembolso — excedente de ${formatCurrency(excess, getOperatingCurrency())} dado de baja`
+                        : `Sin reembolso — pérdida absorbida (${formatCurrency(base, getOperatingCurrency())})`,
                       color: "red"
                     }
                   ].map(opt => (
@@ -1727,7 +1727,7 @@ export default function CuentasPorPagarView({
 
                 {resolveForm.outcome === "partial" && (
                   <div>
-                    <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Monto recuperado (USD)</label>
+                    <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Monto recuperado ({getCurrencySymbol()})</label>
                     <input
                       type="number"
                       step="0.01"

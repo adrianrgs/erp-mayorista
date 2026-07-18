@@ -1,49 +1,61 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Patch } from '@nestjs/common';
 import { FinancesService } from './finances.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/permissions.guard';
+import { RequierePermiso } from '../auth/requiere-permiso.decorator';
+import { Modulo, Accion } from '../auth/permisos';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('finances')
 export class FinancesController {
   constructor(private readonly service: FinancesService) {}
 
-  // ── Existing: Invoices ────────────────────────────────────────────────────
+  // ── Existing: Invoices (facturas/NC/abonos → facturación o cobranzas) ──────
   @Get('invoices')
   findAllInvoices() { return this.service.findAllInvoices(); }
 
   @Post('invoices')
+  @RequierePermiso(Accion.CREAR, Modulo.FACTURACION, Modulo.COBRANZAS)
   createInvoice(@Body() dto: any) { return this.service.createInvoice(dto); }
 
   @Patch('invoices/:id')
+  @RequierePermiso(Accion.EDITAR, Modulo.FACTURACION, Modulo.COBRANZAS)
   updateInvoice(@Param('id') id: string, @Body() dto: any) { return this.service.updateInvoice(id, dto); }
 
   @Delete('invoices/:id')
+  @RequierePermiso(Accion.ELIMINAR, Modulo.FACTURACION, Modulo.COBRANZAS)
   deleteInvoice(@Param('id') id: string) { return this.service.deleteInvoice(id); }
 
-  // ── Existing: Vouchers ────────────────────────────────────────────────────
+  // ── Existing: Vouchers (comprobantes de cobro → cobranzas) ─────────────────
   @Get('vouchers')
   findAllVouchers() { return this.service.findAllVouchers(); }
 
   @Post('vouchers')
+  @RequierePermiso(Accion.CREAR, Modulo.COBRANZAS)
   createVoucher(@Body() dto: any) { return this.service.createVoucher(dto); }
 
   @Patch('vouchers/:id')
+  @RequierePermiso(Accion.EDITAR, Modulo.COBRANZAS)
   updateVoucher(@Param('id') id: string, @Body() dto: any) { return this.service.updateVoucher(id, dto); }
 
   @Delete('vouchers/:id')
+  @RequierePermiso(Accion.ELIMINAR, Modulo.COBRANZAS)
   deleteVoucher(@Param('id') id: string) { return this.service.deleteVoucher(id); }
 
-  // ── Existing: Payable Obligations ─────────────────────────────────────────
+  // ── Existing: Payable Obligations (cuentas por pagar) ──────────────────────
   @Get('obligations')
   findAllObligations() { return this.service.findAllObligations(); }
 
   @Post('obligations')
+  @RequierePermiso(Accion.CREAR, Modulo.CUENTAS_PAGAR, Modulo.FACTURACION)
   createObligation(@Body() dto: any) { return this.service.createObligation(dto); }
 
   @Patch('obligations/:id')
+  @RequierePermiso(Accion.EDITAR, Modulo.CUENTAS_PAGAR, Modulo.FACTURACION)
   updateObligation(@Param('id') id: string, @Body() dto: any) { return this.service.updateObligation(id, dto); }
 
   @Delete('obligations/:id')
+  @RequierePermiso(Accion.ELIMINAR, Modulo.CUENTAS_PAGAR)
   deleteObligation(@Param('id') id: string) { return this.service.deleteObligation(id); }
 
   // ── Existing: Provider Statements ────────────────────────────────────────
@@ -51,16 +63,19 @@ export class FinancesController {
   findAllStatements() { return this.service.findAllStatements(); }
 
   @Post('statements')
+  @RequierePermiso(Accion.CREAR, Modulo.CUENTAS_PAGAR)
   createStatement(@Body() dto: any) { return this.service.createStatement(dto); }
 
   @Delete('statements/:id')
+  @RequierePermiso(Accion.ELIMINAR, Modulo.CUENTAS_PAGAR)
   deleteStatement(@Param('id') id: string) { return this.service.deleteStatement(id); }
 
-  // ── Tax Jurisdiction (multi-country config) ───────────────────────────────
+  // ── Tax Jurisdiction (config multi-país → solo administrador) ──────────────
   @Get('jurisdiction')
   getJurisdiction() { return this.service.getJurisdiction(); }
 
   @Post('jurisdiction')
+  @RequierePermiso(Accion.EDITAR, Modulo.CONFIGURACION)
   upsertJurisdiction(@Body() dto: any) { return this.service.upsertJurisdiction(dto); }
 
   // ── Exchange Rates ────────────────────────────────────────────────────────
@@ -73,6 +88,7 @@ export class FinancesController {
   }
 
   @Post('exchange-rates')
+  @RequierePermiso(Accion.CREAR, Modulo.CONTABILIDAD, Modulo.ADMINISTRACION)
   createExchangeRate(@Body() dto: any) { return this.service.createExchangeRate(dto); }
 
   // ── Withholding Certificates ──────────────────────────────────────────────
@@ -80,9 +96,11 @@ export class FinancesController {
   findAllWithholding() { return this.service.findAllWithholdingCertificates(); }
 
   @Post('withholding-certificates')
+  @RequierePermiso(Accion.CREAR, Modulo.CONTABILIDAD, Modulo.FACTURACION)
   createWithholding(@Body() dto: any) { return this.service.createWithholdingCertificate(dto); }
 
   @Delete('withholding-certificates/:id')
+  @RequierePermiso(Accion.ELIMINAR, Modulo.CONTABILIDAD)
   deleteWithholding(@Param('id') id: string) { return this.service.deleteWithholdingCertificate(id); }
 
   // ── Journal Entries ───────────────────────────────────────────────────────
@@ -90,6 +108,7 @@ export class FinancesController {
   findAllJournalEntries() { return this.service.findAllJournalEntries(); }
 
   @Post('journal-entries')
+  @RequierePermiso(Accion.CREAR, Modulo.CONTABILIDAD)
   createJournalEntry(@Body() dto: any) { return this.service.createJournalEntry(dto); }
 
   // ── Fiscal Registers (reports) ────────────────────────────────────────────

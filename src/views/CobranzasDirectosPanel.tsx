@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { formatCurrency, getOperatingCurrency } from "../lib/taxEngine";
 import { Reservation, FinancialInvoice, DirectClient, PaymentVoucher, CompanyConfig } from "../types";
 import type { FlightTicket } from "../types/aereos";
 import { nextSequentialId } from "../lib/idGenerator";
@@ -343,9 +344,9 @@ export default function CobranzasDirectosPanel({
 
     setShowPaymentModal(false);
     if (isPartialPayment) {
-      setStatusMessage(`✓ Pago parcial de $${amountPaid.toLocaleString("es-ES")} USD registrado. Saldo restante: $${remainingAmount.toLocaleString("es-ES")} USD.`);
+      setStatusMessage(`✓ Pago parcial de ${formatCurrency(amountPaid, getOperatingCurrency())} registrado. Saldo restante: ${formatCurrency(remainingAmount, getOperatingCurrency())}.`);
     } else {
-      setStatusMessage(`✓ Cobro de $${amountPaid.toLocaleString("es-ES")} USD registrado y conciliado exitosamente para ${activeClient.nombre}.`);
+      setStatusMessage(`✓ Cobro de ${formatCurrency(amountPaid, getOperatingCurrency())} registrado y conciliado exitosamente para ${activeClient.nombre}.`);
     }
     setTimeout(() => setStatusMessage(""), 5000);
   };
@@ -372,7 +373,7 @@ export default function CobranzasDirectosPanel({
       });
     }
 
-    setStatusMessage(`✓ Reintegro de $${amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD procesado para ${activeClient.nombre}.`);
+    setStatusMessage(`✓ Reintegro de ${formatCurrency(amount, getOperatingCurrency())} procesado para ${activeClient.nombre}.`);
     setTimeout(() => setStatusMessage(""), 5000);
     setShowWithdrawModal(false);
     setWithdrawForm({ amount: "", method: "Transferencia Bancaria", reference: "", notes: "" });
@@ -419,7 +420,7 @@ export default function CobranzasDirectosPanel({
         <div className="bg-white p-4.5 border border-zinc-200 rounded-lg flex items-center justify-between shadow-xs">
           <div className="space-y-1">
             <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 block">Cuentas por Cobrar (CXC)</span>
-            <span className="text-2xl font-black block text-zinc-900">${accountsReceivable.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+            <span className="text-2xl font-black block text-zinc-900">{formatCurrency(accountsReceivable, getOperatingCurrency())}</span>
             <span className="text-[9.5px] text-zinc-400 font-semibold block">Deuda total activa de clientes directos</span>
           </div>
           <div className="p-2.5 rounded-md border bg-red-50 border-red-100 text-red-650">
@@ -431,7 +432,7 @@ export default function CobranzasDirectosPanel({
         <div className="bg-white p-4.5 border border-zinc-200 rounded-lg flex items-center justify-between shadow-xs">
           <div className="space-y-1">
             <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400 block">Cobros Conciliados MTD</span>
-            <span className="text-2xl font-black block text-emerald-700">${collectionsMtd.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+            <span className="text-2xl font-black block text-emerald-700">{formatCurrency(collectionsMtd, getOperatingCurrency())}</span>
             <span className="text-[9.5px] text-emerald-600 font-semibold block">Recaudación total conciliada</span>
           </div>
           <div className="p-2.5 rounded-md border bg-emerald-50 border-emerald-100 text-emerald-700">
@@ -521,7 +522,7 @@ export default function CobranzasDirectosPanel({
                           ? "text-red-650" 
                           : "text-zinc-400"
                     }`}>
-                      ${client.saldoDeber.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                      {formatCurrency(client.saldoDeber, getOperatingCurrency())}
                     </span>
                     <span className={`text-[8.5px] font-bold uppercase tracking-wider block ${
                       isSelected 
@@ -568,14 +569,14 @@ export default function CobranzasDirectosPanel({
                   <div className="bg-zinc-50 p-3.5 rounded-md border border-zinc-200 text-left">
                     <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Saldo Deudor Acumulado</span>
                     <p className="font-black text-red-650 text-base mt-1 font-mono">
-                      ${activeClient.saldoDeber.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                      {formatCurrency(activeClient.saldoDeber, getOperatingCurrency())}
                     </p>
                   </div>
                   
                   <div className="bg-zinc-50 p-3.5 rounded-md border border-zinc-200 text-left">
                     <span className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider block">Límite de Crédito</span>
                     <p className="font-bold text-zinc-800 text-sm mt-1 font-mono">
-                      ${(activeClient.limiteCredito || 0).toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                      {formatCurrency((activeClient.limiteCredito || 0), getOperatingCurrency())}
                     </p>
                   </div>
 
@@ -583,7 +584,7 @@ export default function CobranzasDirectosPanel({
                     <span className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider block">Saldo a Favor (Abonos)</span>
                     <div className="flex items-end justify-between mt-1">
                       <p className="font-black text-emerald-700 text-sm font-mono">
-                        +${activeClient.saldoFavor.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                        +{formatCurrency(activeClient.saldoFavor, getOperatingCurrency())}
                       </p>
                       {activeClient.saldoFavor > 0 && (
                         <button
@@ -735,12 +736,12 @@ export default function CobranzasDirectosPanel({
                                           const remaining = info?.remaining ?? Math.max(0, inv.amount - paid);
                                           return (
                                             <div>
-                                              <span className="text-zinc-950 font-bold block">${remaining.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</span>
+                                              <span className="text-zinc-950 font-bold block">{formatCurrency(remaining, getOperatingCurrency())}</span>
                                               {(paid > 0 || ncApplied > 0) && (
                                                 <span className="text-[9px] text-zinc-400 font-medium block">
-                                                  Orig: ${inv.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
-                                                  {paid > 0 ? ` (Abono: $${paid.toFixed(2)}` : " ("}
-                                                  {ncApplied > 0 ? `${paid > 0 ? " · " : ""}NC: $${ncApplied.toFixed(2)}` : ""})
+                                                  Orig: {formatCurrency(inv.amount, getOperatingCurrency())}
+                                                  {paid > 0 ? ` (Abono: ${formatCurrency(paid, getOperatingCurrency())}` : " ("}
+                                                  {ncApplied > 0 ? `${paid > 0 ? " · " : ""}NC: ${formatCurrency(ncApplied, getOperatingCurrency())}` : ""})
                                                 </span>
                                               )}
                                             </div>
@@ -811,7 +812,7 @@ export default function CobranzasDirectosPanel({
                                         <p className="font-bold font-mono">{vou.reference}</p>
                                         <p className="text-[9.5px] text-zinc-500">{vou.method} {vou.bankName ? `(${vou.bankName})` : ""}</p>
                                       </td>
-                                      <td className="p-3 text-right font-mono font-black text-zinc-900">${vou.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                      <td className="p-3 text-right font-mono font-black text-zinc-900">{formatCurrency(vou.amount, getOperatingCurrency())}</td>
                                       <td className="p-3 font-mono text-[10.5px]">{formatDate(vou.date)}</td>
                                       <td className="p-3 text-center">
                                         <span className={`text-[8.5px] uppercase tracking-wider px-2.5 py-0.5 rounded-full border font-bold ${
@@ -920,7 +921,7 @@ export default function CobranzasDirectosPanel({
                 </div>
                 
                 <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Monto a Cobrar ($ USD)</label>
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Monto a Cobrar ({getCurrencySymbol()})</label>
                   <input
                     type="number"
                     step="0.01"
@@ -954,7 +955,7 @@ export default function CobranzasDirectosPanel({
                     <option value="Tarjeta de Crédito">Tarjeta de Crédito</option>
                     <option value="Efectivo USD">Efectivo USD</option>
                     <option value="Billetera Virtual Directo" disabled={activeClient.saldoFavor <= 0}>
-                      Billetera Virtual Directo (Disp: ${activeClient.saldoFavor.toFixed(2)})
+                      Billetera Virtual Directo (Disp: {formatCurrency(activeClient.saldoFavor, getOperatingCurrency())})
                     </option>
                   </select>
                 </div>
@@ -1145,7 +1146,7 @@ export default function CobranzasDirectosPanel({
                 <div className="border-t border-b border-dashed border-zinc-300 py-3 flex justify-between items-center font-sans">
                   <span className="font-bold text-zinc-900 uppercase tracking-wider text-[10px]">Monto Transferido</span>
                   <span className="text-base font-black text-zinc-950 font-mono">
-                    ${selectedVoucherForPreview.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                    {formatCurrency(selectedVoucherForPreview.amount, getOperatingCurrency())}
                   </span>
                 </div>
 
@@ -1242,11 +1243,11 @@ export default function CobranzasDirectosPanel({
                           <div>
                             <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-1">Valor Total del Expediente</p>
                             <p className="text-lg font-black text-blue-900">
-                              ${(modalReservation.totalPrice + boletos
+                              {formatCurrency((modalReservation.totalPrice + boletos
                                 .filter(b => b.expedienteId === modalReservation.id && b.facturarConjunto &&
                                   (b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea"))
                                 .reduce((sum, b) => sum + b.precioVenta, 0)
-                              ).toLocaleString('es-ES', { minimumFractionDigits: 2 })} USD
+                              ), getOperatingCurrency())}
                             </p>
                           </div>
                           <div className="text-right">
@@ -1260,7 +1261,7 @@ export default function CobranzasDirectosPanel({
                         <div className="bg-purple-50 border border-purple-100 rounded-lg p-3 flex justify-between items-center">
                           <div>
                             <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-1">Valor Total de Factura</p>
-                            <p className="text-lg font-black text-purple-900">${targetInvoiceForModal.amount.toLocaleString('es-ES', { minimumFractionDigits: 2 })} USD</p>
+                            <p className="text-lg font-black text-purple-900">{formatCurrency(targetInvoiceForModal.amount, getOperatingCurrency())}</p>
                           </div>
                           <div className="text-right">
                             <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-1">Código Factura</p>
@@ -1294,7 +1295,7 @@ export default function CobranzasDirectosPanel({
                 <div className="bg-zinc-50 rounded-lg p-4 mb-5 flex justify-between items-center border border-zinc-100">
                   <div className="text-zinc-500 font-bold uppercase tracking-wider text-xs">Monto Total Recibido</div>
                   <div className="text-3xl font-black text-emerald-600">
-                    ${selectedReceiptVoucher.voucher.amount.toLocaleString('es-ES', { minimumFractionDigits: 2 })} USD
+                    {formatCurrency(selectedReceiptVoucher.voucher.amount, getOperatingCurrency())}
                   </div>
                 </div>
 
@@ -1307,10 +1308,10 @@ export default function CobranzasDirectosPanel({
                        if (match) {
                          return (
                            <div className="bg-zinc-50 rounded p-3 text-sm font-mono space-y-1.5 border border-zinc-200">
-                             <div className="flex justify-between"><span className="text-zinc-500">Saldo Anterior:</span> <span className="font-bold text-zinc-900">${Number(match[1]).toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span></div>
-                             <div className="flex justify-between"><span className="text-zinc-500">Monto Pagado:</span> <span className="font-bold text-zinc-900">${Number(match[2]).toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span></div>
-                             <div className="flex justify-between"><span className="text-zinc-500">Nuevo Saldo:</span> <span className="font-bold text-zinc-900">${Number(match[3]).toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span></div>
-                             <div className="flex justify-between pt-2 border-t border-zinc-200 mt-2"><span className="text-emerald-600 font-bold">Saldo a Favor Generado:</span> <span className="font-black text-emerald-600">${Number(match[4]).toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span></div>
+                             <div className="flex justify-between"><span className="text-zinc-500">Saldo Anterior:</span> <span className="font-bold text-zinc-900">{formatCurrency(Number(match[1]), getOperatingCurrency())}</span></div>
+                             <div className="flex justify-between"><span className="text-zinc-500">Monto Pagado:</span> <span className="font-bold text-zinc-900">{formatCurrency(Number(match[2]), getOperatingCurrency())}</span></div>
+                             <div className="flex justify-between"><span className="text-zinc-500">Nuevo Saldo:</span> <span className="font-bold text-zinc-900">{formatCurrency(Number(match[3]), getOperatingCurrency())}</span></div>
+                             <div className="flex justify-between pt-2 border-t border-zinc-200 mt-2"><span className="text-emerald-600 font-bold">Saldo a Favor Generado:</span> <span className="font-black text-emerald-600">{formatCurrency(Number(match[4]), getOperatingCurrency())}</span></div>
                            </div>
                          );
                        }
@@ -1345,7 +1346,7 @@ export default function CobranzasDirectosPanel({
                                 {v.id === selectedReceiptVoucher.voucher.id && <span className="ml-2 text-[9px] bg-emerald-100 text-emerald-700 px-1 rounded-sm uppercase tracking-wider font-bold">Actual</span>}
                               </td>
                               <td className="p-1 text-zinc-600">{v.method}</td>
-                              <td className="p-1 text-right font-bold text-emerald-600">${v.amount.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</td>
+                              <td className="p-1 text-right font-bold text-emerald-600">{formatCurrency(v.amount, getOperatingCurrency())}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1409,13 +1410,13 @@ export default function CobranzasDirectosPanel({
               <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm">
                 <span className="text-[9px] text-emerald-700 font-bold uppercase tracking-wider block">Saldo disponible</span>
                 <p className="font-black text-emerald-800 text-base font-mono">
-                  +${activeClient.saldoFavor.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                  +{formatCurrency(activeClient.saldoFavor, getOperatingCurrency())}
                 </p>
                 <p className="text-[9.5px] text-emerald-700 mt-0.5">Cliente: {activeClient.nombre}</p>
               </div>
 
               <div>
-                <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Monto a retirar (USD)</label>
+                <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Monto a retirar ({getCurrencySymbol()})</label>
                 <input
                   type="number"
                   step="0.01"

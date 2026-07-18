@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { HotelProperty } from "../types";
 import { nextSequentialId } from "../lib/idGenerator";
 import {
@@ -1089,14 +1090,14 @@ export default function PropiedadesView({
                   <div className="p-4 border border-zinc-200 rounded bg-zinc-50/50">
                     <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Tarifa de Venta Promedio (ADR)</p>
                     <div className="flex items-baseline gap-2 mt-1">
-                      <h4 className="font-extrabold text-2xl text-zinc-900">$0.00</h4>
+                      <h4 className="font-extrabold text-2xl text-zinc-900">{formatCurrency(0, getOperatingCurrency())}</h4>
                       <span className="text-[10px] text-zinc-400 font-semibold font-mono">FIT Wholesale NET</span>
                     </div>
                   </div>
                   <div className="p-4 border border-zinc-200 rounded bg-zinc-50/50">
                     <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Ingresos Emitidos Estimados (MTD)</p>
                     <div className="flex items-baseline gap-2 mt-1">
-                      <h4 className="font-extrabold text-2xl text-zinc-900">$0.00</h4>
+                      <h4 className="font-extrabold text-2xl text-zinc-900">{formatCurrency(0, getOperatingCurrency())}</h4>
                       <span className="text-[10px] text-zinc-400 font-semibold font-mono">0 Cuentas Emitidas</span>
                     </div>
                   </div>
@@ -1696,7 +1697,7 @@ export default function PropiedadesView({
                         <div className="grid bg-zinc-50 border-b border-zinc-200 px-3 py-2" style={{ gridTemplateColumns: '1.5rem 1fr 5rem 5rem 5rem' }}>
                           <div></div>
                           <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Habitación</span>
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider text-center">Base (USD)</span>
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider text-center">Base ({getCurrencySymbol()})</span>
                           <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider text-center">+Adulto</span>
                           <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider text-center">+Niño</span>
                         </div>
@@ -1726,7 +1727,7 @@ export default function PropiedadesView({
                               </label>
                               {/* Price inputs — only enabled when checked */}
                               <div className="relative">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">{getCurrencySymbol()}</span>
                                 <input
                                   id={`room-price-base-${rt.id}`}
                                   type="number"
@@ -1740,7 +1741,7 @@ export default function PropiedadesView({
                                 />
                               </div>
                               <div className="relative">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">{getCurrencySymbol()}</span>
                                 <input
                                   id={`room-price-adult-${rt.id}`}
                                   type="number"
@@ -1754,7 +1755,7 @@ export default function PropiedadesView({
                                 />
                               </div>
                               <div className="relative">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">$</span>
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">{getCurrencySymbol()}</span>
                                 <input
                                   id={`room-price-child-${rt.id}`}
                                   type="number"
@@ -1974,9 +1975,9 @@ export default function PropiedadesView({
                                           {roomObj ? roomObj.regimenAlimentacion : ""}
                                         </span>
                                       </div>
-                                      <span className="text-xs font-extrabold text-zinc-900 text-right">${rp.tarifaBase.toFixed(2)}</span>
-                                      <span className="text-xs font-semibold text-zinc-600 text-right">${rp.tarifaExtraAdulto.toFixed(2)}</span>
-                                      <span className="text-xs font-semibold text-zinc-500 text-right">${rp.tarifaExtraNino.toFixed(2)}</span>
+                                      <span className="text-xs font-extrabold text-zinc-900 text-right">{formatCurrency(rp.tarifaBase, getOperatingCurrency())}</span>
+                                      <span className="text-xs font-semibold text-zinc-600 text-right">{formatCurrency(rp.tarifaExtraAdulto, getOperatingCurrency())}</span>
+                                      <span className="text-xs font-semibold text-zinc-500 text-right">{formatCurrency(rp.tarifaExtraNino, getOperatingCurrency())}</span>
                                       <div className="flex justify-end">
                                         {puede(ProjectView.PROPIEDADES, AccionPermiso.ELIMINAR) && (
                                           <button

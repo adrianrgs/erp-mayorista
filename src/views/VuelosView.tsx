@@ -37,7 +37,7 @@ import { ProjectView } from "../types";
 import type { FlightTicket, Passenger, FlightSegment } from "../types/aereos";
 import { AccionPermiso } from "../types/usuarios";
 import { usePermissions } from "../hooks/usePermissions";
-import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency } from "../lib/taxEngine";
+import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { parseGDS, buildRoute, formatGDSDate, SAMPLE_GDS_TEXT } from "../lib/parsers/pnrParser";
 import { useDialog } from "../components/ui/DialogProvider";
 import Button from "../components/ui/Button";
@@ -1298,13 +1298,13 @@ function NuevoBoletoView({
             {(tarifaBase != null || (impuestos && impuestos.length > 0)) && (
               <div className="px-4 pb-4">
                 <div className="bg-zinc-50 border border-zinc-100 rounded p-3 text-[11px] font-mono space-y-1">
-                  <div className="flex justify-between text-zinc-600"><span>Tarifa base</span><span>${(tarifaBase ?? 0).toFixed(2)}</span></div>
+                  <div className="flex justify-between text-zinc-600"><span>Tarifa base</span><span>{formatCurrency((tarifaBase ?? 0), getOperatingCurrency())}</span></div>
                   {(impuestos || []).map((imp, i) => (
-                    <div key={i} className="flex justify-between text-zinc-500"><span>Impuesto {imp.codigo}</span><span>+${imp.monto.toFixed(2)}</span></div>
+                    <div key={i} className="flex justify-between text-zinc-500"><span>Impuesto {imp.codigo}</span><span>+{formatCurrency(imp.monto, getOperatingCurrency())}</span></div>
                   ))}
                   <div className="flex justify-between font-bold text-zinc-800 border-t border-zinc-200 pt-1">
                     <span>Neto (tarifa + impuestos)</span>
-                    <span>${((tarifaBase ?? 0) + (impuestos || []).reduce((s, i) => s + i.monto, 0)).toFixed(2)}</span>
+                    <span>{formatCurrency(((tarifaBase ?? 0) + (impuestos || []).reduce((s, i) => s + i.monto, 0)), getOperatingCurrency())}</span>
                   </div>
                 </div>
               </div>
@@ -1334,7 +1334,7 @@ function NuevoBoletoView({
                     onClick={() => tipoComision !== 'Fee' && handleTipoComisionToggle()}
                     className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${tipoComision === 'Fee' ? 'bg-white shadow-sm text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}
                   >
-                    Fee Fijo ($)
+                    Fee Fijo ({getCurrencySymbol()})
                   </button>
                 </div>
                 <button
@@ -1359,9 +1359,7 @@ function NuevoBoletoView({
                     Costo Neto *
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 font-bold">
-                      $
-                    </span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 font-bold">{getCurrencySymbol()}</span>
                     <input
                       id="field-costo-neto"
                       type="number"
@@ -1380,9 +1378,7 @@ function NuevoBoletoView({
                     Precio Venta (PVP) *
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 font-bold">
-                      $
-                    </span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400 font-bold">{getCurrencySymbol()}</span>
                     <input
                       id="field-precio-pvp"
                       type="number"
@@ -1439,10 +1435,10 @@ function NuevoBoletoView({
                   <>
                     <div>
                       <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block mb-1">
-                        Fee Fijo Agencia ($)
+                        Fee Fijo Agencia ({getCurrencySymbol()})
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-500 font-bold">$</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-500 font-bold">{getCurrencySymbol()}</span>
                         <input
                           id="field-fee-agencia"
                           type="number"
@@ -1456,10 +1452,10 @@ function NuevoBoletoView({
                     </div>
                     <div>
                       <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block mb-1">
-                        Fee Fijo Foratour ($)
+                        Fee Fijo Foratour ({getCurrencySymbol()})
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-500 font-bold">$</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-500 font-bold">{getCurrencySymbol()}</span>
                         <input
                           id="field-fee-mayorista"
                           type="number"
@@ -1481,7 +1477,7 @@ function NuevoBoletoView({
                   <div className="flex justify-between items-center text-zinc-500">
                     <span>Costo Neto (Calculado a pagar a aerolínea):</span>
                     <span className="font-bold">
-                      ${costoNetoFinal.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                      {formatCurrency(costoNetoFinal, getOperatingCurrency())}
                     </span>
                   </div>
                   {tipoComision === 'Porcentaje' ? (
@@ -1489,13 +1485,13 @@ function NuevoBoletoView({
                       <div className="flex justify-between items-center">
                         <span>Neto B2B (a Cobrar por Agencia):</span>
                         <span className="text-zinc-950 font-black">
-                          ${netoB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                          {formatCurrency(netoB2B, getOperatingCurrency())}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-emerald-700 font-bold border-t border-zinc-200 pt-1.5 mt-1">
                         <span>Nuestra Ganancia Mayorista ({comisionMayorista}%):</span>
                         <span>
-                          +${gananciaForatour.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                          +{formatCurrency(gananciaForatour, getOperatingCurrency())}
                         </span>
                       </div>
                     </>
@@ -1504,13 +1500,13 @@ function NuevoBoletoView({
                       <div className="flex justify-between items-center">
                         <span>Neto B2B (a Cobrar por Agencia):</span>
                         <span className="text-zinc-950 font-black">
-                          ${netoB2B.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                          {formatCurrency(netoB2B, getOperatingCurrency())}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-emerald-700 font-bold border-t border-zinc-200 pt-1.5 mt-1">
                         <span>Nuestra Ganancia (Fee Fijo):</span>
                         <span>
-                          +${gananciaForatour.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                          +{formatCurrency(gananciaForatour, getOperatingCurrency())}
                         </span>
                       </div>
                     </>
@@ -1518,7 +1514,7 @@ function NuevoBoletoView({
                   <div className="flex justify-between items-center font-bold text-zinc-900 border-t border-zinc-200 pt-1.5 mt-1">
                     <span>Precio Venta (PVP):</span>
                     <span className="text-sm">
-                      ${pvpFinal.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                      {formatCurrency(pvpFinal, getOperatingCurrency())}
                     </span>
                   </div>
                 </div>
@@ -1746,7 +1742,7 @@ function ExpedienteAereoView({
     const alcanceMsg = alcance === "todo" ? "todo el expediente" : alcance === "tramos" ? `${itemsTramos!.length} tramo(s)` : alcance === "pasajeros" ? `${itemsPasajeros!.length} pasajero(s)` : `${itemsCeldas!.length} celda(s) pasajero×tramo`;
     showAlert({
       title: "Reembolso solicitado",
-      message: `Solicitud (${alcanceMsg}) enviada al operador de Facturación. La nota de crédito por ${formatCurrency(montoNC, "USD")}, el saldo a favor y la cancelación de la deuda al proveedor se aplicarán cuando el operador la apruebe.`,
+      message: `Solicitud (${alcanceMsg}) enviada al operador de Facturación. La nota de crédito por ${formatCurrency(montoNC, getOperatingCurrency())}, el saldo a favor y la cancelación de la deuda al proveedor se aplicarán cuando el operador la apruebe.`,
       type: "info",
     });
   };
@@ -1810,7 +1806,7 @@ function ExpedienteAereoView({
     setExpediente(updated);
     onUpdateBoleto({ ...nb, expedienteAereo: updated });
     setShowReemision(false);
-    showAlert({ title: "Reemisión procesada", message: `Se cobró ${formatCurrency(total, "USD")} al cliente (dif. tarifa ${formatCurrency(adc, "USD")} + penalidad ${formatCurrency(penalidad, "USD")}) y se ajustó la cuenta por pagar a la aerolínea.`, type: "success" });
+    showAlert({ title: "Reemisión procesada", message: `Se cobró ${formatCurrency(total, getOperatingCurrency())} al cliente (dif. tarifa ${formatCurrency(adc, getOperatingCurrency())} + penalidad ${formatCurrency(penalidad, getOperatingCurrency())}) y se ajustó la cuenta por pagar a la aerolínea.`, type: "success" });
   };
 
   // ── EMD: servicios/ancillaries (equipaje, asiento, etc.) sobre el boleto ──
@@ -1874,7 +1870,7 @@ function ExpedienteAereoView({
     setExpediente(updated);
     onUpdateBoleto({ ...nb, expedienteAereo: updated });
     setShowEmd(false);
-    showAlert({ title: "EMD emitido", message: `Se emitió el EMD "${emdForm.concepto}" y se cobró ${formatCurrency(montoVenta, "USD")} al cliente.`, type: "success" });
+    showAlert({ title: "EMD emitido", message: `Se emitió el EMD "${emdForm.concepto}" y se cobró ${formatCurrency(montoVenta, getOperatingCurrency())} al cliente.`, type: "success" });
   };
 
   // Elegir/limpiar el cliente facturable (B2B o Directo), fijando el tipo de facturación.
@@ -1968,7 +1964,7 @@ function ExpedienteAereoView({
                         if (oblAnular && onUpdateObligation) {
                           const pagadoAnular = oblAnular.paidAmount || 0;
                           if (pagadoAnular > 0) {
-                            onUpdateObligation({ ...oblAnular, netCost: pagadoAnular, status: "Congelado", isFrozen: true, notes: `${oblAnular.notes || ""}\n[Bloqueado] Expediente anulado — pagado ${formatCurrency(pagadoAnular, "USD")}; saldo restante cancelado; reclamar a la aerolínea.` });
+                            onUpdateObligation({ ...oblAnular, netCost: pagadoAnular, status: "Congelado", isFrozen: true, notes: `${oblAnular.notes || ""}\n[Bloqueado] Expediente anulado — pagado ${formatCurrency(pagadoAnular, getOperatingCurrency())}; saldo restante cancelado; reclamar a la aerolínea.` });
                           } else {
                             onUpdateObligation({ ...oblAnular, status: "Anulado", isFrozen: true, notes: `${oblAnular.notes || ""}\n[Anulado] Expediente anulado sin pago al proveedor — deuda cancelada.` });
                           }
@@ -2034,7 +2030,7 @@ function ExpedienteAereoView({
             <>
               <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 border border-purple-200 text-purple-700 text-xs font-bold rounded">
                 <Info className="w-3.5 h-3.5" />
-                Reembolsado: {formatCurrency(expediente.reembolso.montoReembolsado, "USD")} · penalidad {formatCurrency(expediente.reembolso.penalidad, "USD")}
+                Reembolsado: {formatCurrency(expediente.reembolso.montoReembolsado, getOperatingCurrency())} · penalidad {formatCurrency(expediente.reembolso.penalidad, getOperatingCurrency())}
               </div>
               <Button variant="secondary" size="sm" onClick={() => onShowVoucher(boleto)}>
                 <Download className="w-3.5 h-3.5" /> Constancia
@@ -2229,15 +2225,15 @@ function ExpedienteAereoView({
 
                 {/* Resumen financiero */}
                 <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3.5 space-y-1.5 text-[11px] font-mono">
-                  <div className="flex justify-between text-zinc-600"><span>{alcance === "todo" ? "Venta al cliente" : "Monto a reembolsar (R)"}</span><span>{formatCurrency(R, "USD")}</span></div>
-                  <div className="flex justify-between text-zinc-600"><span>Pagado por el cliente</span><span>{formatCurrency(totalPagado, "USD")}</span></div>
-                  <div className="flex justify-between text-red-600"><span>Penalidad retenida</span><span>-{formatCurrency(penalidad, "USD")}</span></div>
-                  <div className="flex justify-between text-zinc-500 border-t border-zinc-200 pt-1"><span>Nota de crédito</span><span>-{formatCurrency(montoNC, "USD")}</span></div>
-                  {saldoFavor > 0 && <div className="flex justify-between font-black text-emerald-700"><span>Saldo a favor al cliente</span><span>{formatCurrency(saldoFavor, "USD")}</span></div>}
+                  <div className="flex justify-between text-zinc-600"><span>{alcance === "todo" ? "Venta al cliente" : "Monto a reembolsar (R)"}</span><span>{formatCurrency(R, getOperatingCurrency())}</span></div>
+                  <div className="flex justify-between text-zinc-600"><span>Pagado por el cliente</span><span>{formatCurrency(totalPagado, getOperatingCurrency())}</span></div>
+                  <div className="flex justify-between text-red-600"><span>Penalidad retenida</span><span>-{formatCurrency(penalidad, getOperatingCurrency())}</span></div>
+                  <div className="flex justify-between text-zinc-500 border-t border-zinc-200 pt-1"><span>Nota de crédito</span><span>-{formatCurrency(montoNC, getOperatingCurrency())}</span></div>
+                  {saldoFavor > 0 && <div className="flex justify-between font-black text-emerald-700"><span>Saldo a favor al cliente</span><span>{formatCurrency(saldoFavor, getOperatingCurrency())}</span></div>}
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Penalidad de la aerolínea (USD)</label>
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Penalidad de la aerolínea ({getCurrencySymbol()})</label>
                   <input type="number" step="0.01" min="0" value={reembolsoForm.penalidad}
                     onChange={e => setReembolsoForm(f => ({ ...f, penalidad: e.target.value }))}
                     placeholder="0.00"
@@ -2297,7 +2293,7 @@ function ExpedienteAereoView({
                 </div>
                 <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 flex justify-between items-center text-[11px] font-mono">
                   <span className="font-bold text-zinc-700 uppercase tracking-wider text-[10px]">Total a cobrar al cliente</span>
-                  <span className="font-black text-zinc-900 text-sm">{formatCurrency(total, "USD")}</span>
+                  <span className="font-black text-zinc-900 text-sm">{formatCurrency(total, getOperatingCurrency())}</span>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Nuevo nº de e-ticket (opcional)</label>
@@ -2369,7 +2365,7 @@ function ExpedienteAereoView({
                 </div>
                 <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 flex justify-between items-center text-[11px] font-mono">
                   <span className="font-bold text-zinc-700 uppercase tracking-wider text-[10px]">Margen del EMD</span>
-                  <span className={`font-black text-sm ${margen >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatCurrency(margen, "USD")}</span>
+                  <span className={`font-black text-sm ${margen >= 0 ? "text-emerald-700" : "text-red-600"}`}>{formatCurrency(margen, getOperatingCurrency())}</span>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Notas (opcional)</label>
@@ -2490,22 +2486,22 @@ function ExpedienteAereoView({
               <div className="pt-4 border-t border-zinc-200 space-y-1.5">
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Costo Neto</span>
-                  <span className="text-xs font-bold text-zinc-700">{formatCurrency(boleto.costoNeto, "USD")}</span>
+                  <span className="text-xs font-bold text-zinc-700">{formatCurrency(boleto.costoNeto, getOperatingCurrency())}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Precio Venta (PVP)</span>
-                  <span className="text-xs font-bold text-zinc-700">{formatCurrency(boleto.precioPvp || boleto.precioVenta, "USD")}</span>
+                  <span className="text-xs font-bold text-zinc-700">{formatCurrency(boleto.precioPvp || boleto.precioVenta, getOperatingCurrency())}</span>
                 </div>
                 {boleto.comisionB2B !== undefined && boleto.comisionB2B > 0 && (
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Comisión B2B</span>
-                    <span className="text-xs font-bold text-amber-600">-{boleto.comisionB2B}% ({formatCurrency((boleto.precioPvp || 0) - boleto.precioVenta, "USD")})</span>
+                    <span className="text-xs font-bold text-amber-600">-{boleto.comisionB2B}% ({formatCurrency((boleto.precioPvp || 0) - boleto.precioVenta, getOperatingCurrency())})</span>
                   </div>
                 )}
                 {boleto.comisionMayorista !== undefined && boleto.comisionMayorista > 0 && (
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Comisión Foratour</span>
-                    <span className="text-xs font-bold text-amber-600">-{boleto.comisionMayorista}% ({formatCurrency(boleto.precioVenta - boleto.costoNeto, "USD")})</span>
+                    <span className="text-xs font-bold text-amber-600">-{boleto.comisionMayorista}% ({formatCurrency(boleto.precioVenta - boleto.costoNeto, getOperatingCurrency())})</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center pt-1 border-t border-zinc-100">
@@ -2515,7 +2511,7 @@ function ExpedienteAereoView({
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Ganancia Foratour</span>
                   <span className="text-xs font-bold text-emerald-600">
-                    +{formatCurrency(boleto.precioVenta - boleto.costoNeto, "USD")}
+                    +{formatCurrency(boleto.precioVenta - boleto.costoNeto, getOperatingCurrency())}
                   </span>
                 </div>
               </div>
@@ -2694,7 +2690,7 @@ function ExpedienteAereoView({
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Monto Pagado</label>
                   <div className="relative">
-                    <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400">{getCurrencySymbol()}</span>
                     <input
                       type="number"
                       className="w-full pl-8 p-2 border border-zinc-200 rounded text-xs font-bold"
@@ -2739,7 +2735,7 @@ function ExpedienteAereoView({
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Monto Pagado a Aerolínea</label>
                 <div className="relative">
-                  <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400">{getCurrencySymbol()}</span>
                   <input
                     type="number"
                     className="w-full pl-8 p-2 border border-zinc-200 rounded text-xs font-bold"
@@ -2821,7 +2817,7 @@ function ExpedienteAereoView({
                       netCost: boleto.costoNeto,
                       paidAmount: 0,
                       status: "Pendiente",
-                      currency: "USD",
+                      currency: getOperatingCurrency(),
                     });
                   }
 
@@ -3141,7 +3137,7 @@ function FlightLiquidacionModal({
   const emdsTotal = emds.reduce((s, e) => s + e.montoVenta, 0);
   const baseTicket = Math.max(0, totalActual - reemTotal - emdsTotal);
   const totalNeto = totalActual - (reembolso?.montoReembolsado ?? 0);
-  const fmt = (n: number) => formatCurrency(n, "USD");
+  const fmt = (n: number) => formatCurrency(n, getOperatingCurrency());
   const ruta = buildRoute(boleto.segmentos || []);
   const hoy = new Date().toLocaleDateString("es-ES");
 
@@ -3275,7 +3271,7 @@ function FlightLiquidacionModal({
                   <span className="text-base font-black font-mono text-zinc-900">{fmt(totalNeto)}</span>
                 </div>
               </div>
-              <p className="text-[10px] text-zinc-500 font-semibold mt-3">Condición de pago: <b>{exp?.facturacionTipo || "Pago Contado"}</b>. Montos expresados en USD.{esB2B ? " El neto a pagar es el monto que la agencia abona a Foratour, ya descontada su comisión." : ""}</p>
+              <p className="text-[10px] text-zinc-500 font-semibold mt-3">Condición de pago: <b>{exp?.facturacionTipo || "Pago Contado"}</b>. Montos expresados en {getOperatingCurrency()}.{esB2B ? " El neto a pagar es el monto que la agencia abona a Foratour, ya descontada su comisión." : ""}</p>
             </div>
 
             {/* Pie */}

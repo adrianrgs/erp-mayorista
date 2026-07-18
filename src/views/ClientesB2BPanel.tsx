@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { B2BClient, ClientType, ClientStatus, FinancialInvoice, Reservation, ServiceType } from "../types";
 import { FlightTicket } from "../types/aereos";
 import { RoomType, RatePlan, TipoCobro, Property } from "../types/producto";
@@ -610,8 +611,8 @@ export default function ClientesB2BPanel({
                             ● {c.status}
                           </span>
                         </td>
-                        <td className="p-4 text-right font-bold text-zinc-900">${c.saldoFavor.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                        <td className="p-4 text-right font-bold text-zinc-900">${calculatedDeuda.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                        <td className="p-4 text-right font-bold text-zinc-900">{formatCurrency(c.saldoFavor, getOperatingCurrency())}</td>
+                        <td className="p-4 text-right font-bold text-zinc-900">{formatCurrency(calculatedDeuda, getOperatingCurrency())}</td>
                         <td className="p-4 text-center">
                           {c.moroso ? (
                             <span className="px-2 py-0.5 rounded bg-red-50 border border-red-200 text-red-650 text-[9px] font-bold uppercase inline-flex items-center gap-1">
@@ -696,7 +697,7 @@ export default function ClientesB2BPanel({
                 <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Saldo a Favor (B2B)</span>
                 <div className="flex items-center gap-1 text-emerald-700">
                   <DollarSign className="w-4 h-4" />
-                  <span className="text-xl font-black">${activeClient.saldoFavor.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                  <span className="text-xl font-black">{formatCurrency(activeClient.saldoFavor, getOperatingCurrency())}</span>
                 </div>
                 <span className="text-[9.5px] text-zinc-400 block font-medium">Fondos prepagados o notas de crédito</span>
               </div>
@@ -713,7 +714,7 @@ export default function ClientesB2BPanel({
                     <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Deuda por Cobrar</span>
                     <div className="flex items-center gap-1 text-zinc-900">
                       <DollarSign className="w-4 h-4" />
-                      <span className="text-xl font-black">${calculatedDeuda.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                      <span className="text-xl font-black">{formatCurrency(calculatedDeuda, getOperatingCurrency())}</span>
                     </div>
                     <span className="text-[9.5px] text-zinc-400 block font-medium">Vouchers y reservas facturadas</span>
                   </div>
@@ -725,7 +726,7 @@ export default function ClientesB2BPanel({
                 <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-400">Límite Otorgado</span>
                 <div className="flex items-center gap-1 text-zinc-950">
                   <DollarSign className="w-4 h-4" />
-                  <span className="text-xl font-black">${(activeClient.limiteCredito || 0).toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                  <span className="text-xl font-black">{formatCurrency((activeClient.limiteCredito || 0), getOperatingCurrency())}</span>
                 </div>
                 <span className="text-[9.5px] text-zinc-400 block font-medium">Cupo financiero: {activeClient.diasCredito || 0} días de gracia</span>
               </div>
@@ -904,7 +905,7 @@ export default function ClientesB2BPanel({
                   {/* 3. Balances + Límite + Gracia */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Saldo a Favor ($)</label>
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Saldo a Favor ({getCurrencySymbol()})</label>
                       <input
                         type="number"
                         step="0.01"
@@ -916,7 +917,7 @@ export default function ClientesB2BPanel({
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Saldo Deudor / Cobros ($)</label>
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Saldo Deudor / Cobros ({getCurrencySymbol()})</label>
                       <input
                         type="number"
                         step="0.01"
@@ -928,7 +929,7 @@ export default function ClientesB2BPanel({
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Límite de Crédito ($)</label>
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Límite de Crédito ({getCurrencySymbol()})</label>
                       <input
                         type="number"
                         step="0.01"
@@ -1073,7 +1074,7 @@ export default function ClientesB2BPanel({
                               <td className="p-3 text-zinc-900 font-bold">{inv.clientName}</td>
                               <td className="p-3 text-zinc-500 font-mono">{inv.date}</td>
                               <td className={`p-3 text-right font-black font-mono text-xs ${isCreditNote ? "text-red-650" : isExcess ? "text-emerald-700 font-extrabold" : "text-zinc-900"}`}>
-                                {isCreditNote ? "" : "+"}${inv.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                                {isCreditNote ? "" : "+"}{formatCurrency(inv.amount, getOperatingCurrency())}
                               </td>
                               <td className="p-3 text-center">
                                 <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${
@@ -1194,7 +1195,7 @@ export default function ClientesB2BPanel({
                               <td className="p-3 text-zinc-900 font-bold">{res.holder}</td>
                               <td className="p-3 text-zinc-600 font-semibold">{res.hotelName}</td>
                               <td className="p-3 text-center text-zinc-500 font-mono">{res.checkIn}</td>
-                              <td className="p-3 text-right font-black font-mono text-zinc-900">${res.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</td>
+                              <td className="p-3 text-right font-black font-mono text-zinc-900">{formatCurrency(res.totalPrice, getOperatingCurrency())}</td>
                               <td className="p-3 text-center">
                                 <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${
                                   res.status === "Confirmada" ? "bg-emerald-50 text-emerald-700 border-emerald-250 font-bold" :
@@ -1208,7 +1209,7 @@ export default function ClientesB2BPanel({
                                 {hasDebt ? (
                                   <span className="px-2 py-0.5 rounded bg-red-50 border border-red-200 text-red-650 text-[9px] font-black uppercase inline-flex items-center gap-1 animate-pulse" title="Existe saldo pendiente de pago para este expediente">
                                     <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
-                                    Deuda: ${debtAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                                    Deuda: {formatCurrency(debtAmount, getOperatingCurrency())}
                                   </span>
                                 ) : (
                                   <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700 text-[9px] font-black uppercase inline-flex items-center gap-1">
@@ -1313,7 +1314,7 @@ export default function ClientesB2BPanel({
                     <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Total Venta (PVP)</span>
                     <div className="flex items-center gap-1 text-zinc-900">
                       <DollarSign className="w-4 h-4" />
-                      <span className="text-xl font-black">${(selectedRes?.totalPrice || 0).toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                      <span className="text-xl font-black">{formatCurrency((selectedRes?.totalPrice || 0), getOperatingCurrency())}</span>
                     </div>
                     <span className="text-[9.5px] text-zinc-400 block font-medium">Monto total facturado a la agencia B2B</span>
                   </div>
@@ -1323,7 +1324,7 @@ export default function ClientesB2BPanel({
                     <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Costo Neto (Net Price)</span>
                     <div className="flex items-center gap-1 text-zinc-700">
                       <DollarSign className="w-4 h-4" />
-                      <span className="text-xl font-black">${(selectedRes?.netPrice || 0).toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                      <span className="text-xl font-black">{formatCurrency((selectedRes?.netPrice || 0), getOperatingCurrency())}</span>
                     </div>
                     <span className="text-[9.5px] text-zinc-400 block font-medium">Importe liquidación a proveedores</span>
                   </div>
@@ -1333,7 +1334,7 @@ export default function ClientesB2BPanel({
                     <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Comisión / Utilidad Mayorista</span>
                     <div className="flex items-center gap-1 text-emerald-700">
                       <DollarSign className="w-4 h-4" />
-                      <span className="text-xl font-black">${profitMargin.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                      <span className="text-xl font-black">{formatCurrency(profitMargin, getOperatingCurrency())}</span>
                     </div>
                     <span className="text-[9.5px] text-emerald-600 block font-bold">Rentabilidad: {profitMarginPct.toFixed(1)}%</span>
                   </div>
@@ -1345,7 +1346,7 @@ export default function ClientesB2BPanel({
                       {totalPendiente > 0 ? (
                         <div className="flex items-center gap-1 text-red-650">
                           <DollarSign className="w-4 h-4" />
-                          <span className="text-xl font-black">${totalPendiente.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</span>
+                          <span className="text-xl font-black">{formatCurrency(totalPendiente, getOperatingCurrency())}</span>
                         </div>
                       ) : (
                         <span className="px-2.5 py-0.5 rounded bg-emerald-50 border border-emerald-250 text-emerald-700 text-xs font-black uppercase inline-flex items-center gap-1 mt-1">
@@ -1354,7 +1355,7 @@ export default function ClientesB2BPanel({
                       )}
                     </div>
                     <span className="text-[9.5px] text-zinc-500 block font-medium">
-                      {totalPendiente > 0 ? `Pagado: $${totalPagado.toLocaleString("es-ES", { minimumFractionDigits: 2 })}` : "Sin deudas activas"}
+                      {totalPendiente > 0 ? `Pagado: ${formatCurrency(totalPagado, getOperatingCurrency())}` : "Sin deudas activas"}
                     </span>
                   </div>
                 </div>
@@ -1367,7 +1368,7 @@ export default function ClientesB2BPanel({
                       <div className="space-y-1">
                         <h5 className="font-extrabold text-[13px] uppercase">Expediente con Deuda Activa</h5>
                         <p className="font-semibold leading-relaxed">
-                          Este expediente posee una deuda pendiente de <strong>${totalPendiente.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</strong>. Se han cobrado <strong>${totalPagado.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</strong> de un total facturado de <strong>${totalFacturado.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD</strong>. Por favor, gestione el cobro o concilie con el saldo a favor de la agencia.
+                          Este expediente posee una deuda pendiente de <strong>{formatCurrency(totalPendiente, getOperatingCurrency())}</strong>. Se han cobrado <strong>{formatCurrency(totalPagado, getOperatingCurrency())}</strong> de un total facturado de <strong>{formatCurrency(totalFacturado, getOperatingCurrency())}</strong>. Por favor, gestione el cobro o concilie con el saldo a favor de la agencia.
                         </p>
                       </div>
                     </div>
@@ -1425,9 +1426,9 @@ export default function ClientesB2BPanel({
                                         IN: {formatDate(srv.detalles.checkInDate)} / OUT: {formatDate(srv.detalles.checkOutDate)} ({srv.detalles.selectedPromoName || "Tarifa Directa"})
                                       </span>
                                     </td>
-                                    <td className="p-3 text-right font-mono font-bold text-zinc-600">${srv.precioNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                    <td className="p-3 text-right font-mono font-black text-zinc-900">${srv.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                    <td className="p-3 text-right font-mono text-zinc-500">${b2bCom.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                    <td className="p-3 text-right font-mono font-bold text-zinc-600">{formatCurrency(srv.precioNeto, getOperatingCurrency())}</td>
+                                    <td className="p-3 text-right font-mono font-black text-zinc-900">{formatCurrency(srv.precioVenta, getOperatingCurrency())}</td>
+                                    <td className="p-3 text-right font-mono text-zinc-500">{formatCurrency(b2bCom, getOperatingCurrency())}</td>
                                     <td className="p-3 text-center">
                                       <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-bold ${
                                         srv.statusFacturacion === "Facturado" ? "bg-emerald-50 text-emerald-700 border-emerald-250" :
@@ -1453,9 +1454,9 @@ export default function ClientesB2BPanel({
                                           <span className="font-semibold text-zinc-800 text-xs">{roomTypeName}</span>
                                           {guestsNames && <span className="block text-[10px] text-zinc-400 italic">Pasajeros: {guestsNames}</span>}
                                         </td>
-                                        <td className="p-2.5 text-right text-zinc-500 text-xs font-mono">${rates.net.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                        <td className="p-2.5 text-right text-zinc-800 font-bold text-xs font-mono">${rates.sale.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                        <td className="p-2.5 text-right text-zinc-500 font-mono text-[10.5px]">${roomB2bCom.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                        <td className="p-2.5 text-right text-zinc-500 text-xs font-mono">{formatCurrency(rates.net, getOperatingCurrency())}</td>
+                                        <td className="p-2.5 text-right text-zinc-800 font-bold text-xs font-mono">{formatCurrency(rates.sale, getOperatingCurrency())}</td>
+                                        <td className="p-2.5 text-right text-zinc-500 font-mono text-[10.5px]">{formatCurrency(roomB2bCom, getOperatingCurrency())}</td>
                                         <td className="p-2.5"></td>
                                       </tr>
                                     );
@@ -1473,9 +1474,9 @@ export default function ClientesB2BPanel({
                                   </span>
                                 </td>
                                 <td className="p-3 text-zinc-900 font-semibold">{srv.descripcion}</td>
-                                <td className="p-3 text-right font-mono font-bold text-zinc-600">${srv.precioNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                <td className="p-3 text-right font-mono font-black text-zinc-900">${srv.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                                <td className="p-3 text-right font-mono text-zinc-500">${b2bCom.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                                <td className="p-3 text-right font-mono font-bold text-zinc-600">{formatCurrency(srv.precioNeto, getOperatingCurrency())}</td>
+                                <td className="p-3 text-right font-mono font-black text-zinc-900">{formatCurrency(srv.precioVenta, getOperatingCurrency())}</td>
+                                <td className="p-3 text-right font-mono text-zinc-500">{formatCurrency(b2bCom, getOperatingCurrency())}</td>
                                 <td className="p-3 text-center">
                                   <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-bold ${
                                     srv.statusFacturacion === "Facturado" ? "bg-emerald-50 text-emerald-700 border-emerald-250" :
@@ -1498,9 +1499,9 @@ export default function ClientesB2BPanel({
                               </span>
                             </td>
                             <td className="p-3 text-zinc-900 font-semibold">{selectedRes.hotelName} (Servicio Base)</td>
-                            <td className="p-3 text-right font-mono font-bold text-zinc-600">${selectedRes.netPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                            <td className="p-3 text-right font-mono font-black text-zinc-900">${selectedRes.totalPrice.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                            <td className="p-3 text-right font-mono text-zinc-500">${(selectedRes.totalPrice - selectedRes.netPrice).toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                            <td className="p-3 text-right font-mono font-bold text-zinc-600">{formatCurrency(selectedRes.netPrice, getOperatingCurrency())}</td>
+                            <td className="p-3 text-right font-mono font-black text-zinc-900">{formatCurrency(selectedRes.totalPrice, getOperatingCurrency())}</td>
+                            <td className="p-3 text-right font-mono text-zinc-500">{formatCurrency((selectedRes.totalPrice - selectedRes.netPrice), getOperatingCurrency())}</td>
                             <td className="p-3 text-center">
                               <span className="text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-bold bg-emerald-50 text-emerald-700 border-emerald-250">
                                 Facturado
@@ -1526,9 +1527,9 @@ export default function ClientesB2BPanel({
                                 </span>
                               </td>
                               <td className="p-3 text-zinc-900 font-semibold">Boleto Aéreo GDS - Ruta: {rutaStr}</td>
-                              <td className="p-3 text-right font-mono font-bold text-zinc-600">${vuelo.costoNeto.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                              <td className="p-3 text-right font-mono font-black text-zinc-900">${vuelo.precioVenta.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
-                              <td className="p-3 text-right font-mono text-zinc-500">${b2bCom.toLocaleString("es-ES", { minimumFractionDigits: 2 })}</td>
+                              <td className="p-3 text-right font-mono font-bold text-zinc-600">{formatCurrency(vuelo.costoNeto, getOperatingCurrency())}</td>
+                              <td className="p-3 text-right font-mono font-black text-zinc-900">{formatCurrency(vuelo.precioVenta, getOperatingCurrency())}</td>
+                              <td className="p-3 text-right font-mono text-zinc-500">{formatCurrency(b2bCom, getOperatingCurrency())}</td>
                               <td className="p-3 text-center">
                                 <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-bold ${
                                   vuelo.expedienteAereo?.status === "Facturado" || vuelo.expedienteAereo?.status === "PagadoAerolinea" ? "bg-emerald-50 text-emerald-700 border-emerald-250" :
@@ -1581,7 +1582,7 @@ export default function ClientesB2BPanel({
                                 <td className="p-3 text-zinc-900 font-bold">{inv.clientName}</td>
                                 <td className="p-3 text-zinc-500 font-mono">{inv.date}</td>
                                 <td className={`p-3 text-right font-black font-mono text-xs ${isCreditNote ? "text-red-650" : isExcess ? "text-emerald-700 font-extrabold" : "text-zinc-900"}`}>
-                                  {isCreditNote ? "" : "+"}${inv.amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })} USD
+                                  {isCreditNote ? "" : "+"}{formatCurrency(inv.amount, getOperatingCurrency())}
                                 </td>
                                 <td className="p-3 text-center">
                                   <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${
@@ -1735,7 +1736,7 @@ export default function ClientesB2BPanel({
               {/* 4. Finanzas (Límites + Días + Balances) */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Límite Crédito ($)</label>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Límite Crédito ({getCurrencySymbol()})</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1760,7 +1761,7 @@ export default function ClientesB2BPanel({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Saldo a Favor ($)</label>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Saldo a Favor ({getCurrencySymbol()})</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1773,7 +1774,7 @@ export default function ClientesB2BPanel({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Deuda Inicial ($)</label>
+                  <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Deuda Inicial ({getCurrencySymbol()})</label>
                   <input
                     type="number"
                     step="0.01"

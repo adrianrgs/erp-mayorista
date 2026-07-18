@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { formatCurrency, getOperatingCurrency } from "../lib/taxEngine";
 import { 
   FinancialInvoice, 
   Reservation, 
@@ -244,7 +245,7 @@ export default function AdministracionView({
           <div className="space-y-1">
             <span className="text-[9px] uppercase font-black tracking-widest text-zinc-400 block">Ventas PVP (Tarifa Retail)</span>
             <h3 className="text-2xl font-black text-zinc-900 tracking-tight">
-              ${Math.round(totalPvpSales).toLocaleString("es-ES")} <span className="text-[10px] font-bold text-zinc-400">USD</span>
+              {formatCurrency(Math.round(totalPvpSales), getOperatingCurrency())}
             </h3>
           </div>
           <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
@@ -258,7 +259,7 @@ export default function AdministracionView({
           <div className="space-y-1">
             <span className="text-[9px] uppercase font-black tracking-widest text-zinc-400 block">Ventas B2B (Facturado)</span>
             <h3 className="text-2xl font-black text-zinc-900 tracking-tight">
-              ${totalGrossSales.toLocaleString("es-ES")} <span className="text-[10px] font-bold text-zinc-400">USD</span>
+              {formatCurrency(totalGrossSales, getOperatingCurrency())}
             </h3>
           </div>
           <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
@@ -272,7 +273,7 @@ export default function AdministracionView({
           <div className="space-y-1">
             <span className="text-[9px] uppercase font-black tracking-widest text-zinc-400 block">Comisiones B2B Cedidas</span>
             <h3 className="text-2xl font-black text-zinc-900 tracking-tight text-amber-700">
-              -${Math.round(totalB2BCommissions).toLocaleString("es-ES")} <span className="text-[10px] font-bold text-zinc-400">USD</span>
+              -{formatCurrency(Math.round(totalB2BCommissions), getOperatingCurrency())}
             </h3>
           </div>
           <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
@@ -286,7 +287,7 @@ export default function AdministracionView({
           <div className="space-y-1">
             <span className="text-[9px] uppercase font-black tracking-widest text-zinc-400 block">Utilidad Neta (Neto)</span>
             <h3 className="text-2xl font-black text-zinc-900 tracking-tight text-emerald-700">
-              ${projectedProfit.toLocaleString("es-ES")} <span className="text-[10px] font-bold text-zinc-400">USD</span>
+              {formatCurrency(projectedProfit, getOperatingCurrency())}
             </h3>
           </div>
           <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-semibold">
@@ -300,7 +301,7 @@ export default function AdministracionView({
           <div className="space-y-1">
             <span className="text-[9px] uppercase font-black tracking-widest text-zinc-400 block">Liquidez Real (Caja)</span>
             <h3 className="text-2xl font-black text-zinc-900 tracking-tight">
-              ${realLiquidity.toLocaleString("es-ES")} <span className="text-[10px] font-bold text-zinc-400">USD</span>
+              {formatCurrency(realLiquidity, getOperatingCurrency())}
             </h3>
           </div>
           <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
@@ -342,7 +343,7 @@ export default function AdministracionView({
                     </div>
                   </div>
                   <div className="text-right font-mono">
-                    <span className="font-black text-zinc-900 block">${agency.volume.toLocaleString("es-ES")} USD</span>
+                    <span className="font-black text-zinc-900 block">{formatCurrency(agency.volume, getOperatingCurrency())}</span>
                     <span className="text-[9px] text-emerald-600 font-bold block uppercase tracking-wide">Cliente Preferencial</span>
                   </div>
                 </div>
@@ -368,7 +369,7 @@ export default function AdministracionView({
                     <span className="text-[9.5px] text-zinc-400 font-bold uppercase block tracking-wider">📍 {hotel.destination} · {hotel.count} Noches reservadas</span>
                   </div>
                   <div className="text-right">
-                    <span className="font-black text-zinc-950 font-mono text-xs block">${hotel.volume.toLocaleString("es-ES")} USD</span>
+                    <span className="font-black text-zinc-950 font-mono text-xs block">{formatCurrency(hotel.volume, getOperatingCurrency())}</span>
                     <div className="flex gap-0.5 justify-end mt-0.5">
                       {[...Array(5)].map((_, i) => (
                         <Star key={i} className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
@@ -402,7 +403,7 @@ export default function AdministracionView({
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded bg-violet-600" /> Alojamiento (Hotelería)
                   </span>
-                  <span>{alojPercent}% (${alojVolume.toLocaleString("es-ES")} USD)</span>
+                  <span>{alojPercent}% ({formatCurrency(alojVolume, getOperatingCurrency())})</span>
                 </div>
                 <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden border border-zinc-200">
                   <div className="h-full bg-violet-600 rounded-full" style={{ width: `${alojPercent}%` }} />
@@ -415,7 +416,7 @@ export default function AdministracionView({
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded bg-indigo-600" /> Vuelos (Emisión GDS)
                   </span>
-                  <span>{vuelosPercent}% (${vuelosVolume.toLocaleString("es-ES")} USD)</span>
+                  <span>{vuelosPercent}% ({formatCurrency(vuelosVolume, getOperatingCurrency())})</span>
                 </div>
                 <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden border border-zinc-200">
                   <div className="h-full bg-indigo-600 rounded-full" style={{ width: `${vuelosPercent}%` }} />
@@ -428,7 +429,7 @@ export default function AdministracionView({
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded bg-emerald-600" /> Traslados (Receptivos)
                   </span>
-                  <span>{trasladoPercent}% (${trasladoVolume.toLocaleString("es-ES")} USD)</span>
+                  <span>{trasladoPercent}% ({formatCurrency(trasladoVolume, getOperatingCurrency())})</span>
                 </div>
                 <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden border border-zinc-200">
                   <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${trasladoPercent}%` }} />
@@ -441,7 +442,7 @@ export default function AdministracionView({
                   <span className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded bg-amber-600" /> Otros Servicios
                   </span>
-                  <span>{otrosPercent}% (${otrosVolume.toLocaleString("es-ES")} USD)</span>
+                  <span>{otrosPercent}% ({formatCurrency(otrosVolume, getOperatingCurrency())})</span>
                 </div>
                 <div className="w-full bg-zinc-100 h-2 rounded-full overflow-hidden border border-zinc-200">
                   <div className="h-full bg-amber-600 rounded-full" style={{ width: `${otrosPercent}%` }} />

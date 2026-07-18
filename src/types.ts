@@ -24,6 +24,8 @@ export interface CompanyConfig {
   phone: string;
   email: string;
   logoLetter: string;
+  /** Moneda de operación mayorista (por defecto "USD"). Lo fiscal local se deriva por tipo de cambio. */
+  currency?: string;
 }
 
 export interface HotelProperty {
