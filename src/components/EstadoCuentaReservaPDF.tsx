@@ -30,7 +30,9 @@ export default function EstadoCuentaReservaPDF({
   const money = (n: number) => formatCurrency(n, cur);
   const r = getReservationReceivable(res, invoices, vouchers);
 
-  // Abonos (pagos verificados) del expediente, con su fecha.
+  // Abonos (pagos verificados) del expediente, con su fecha. En el estado de cuenta por reserva se
+  // muestran TODOS (sin límite): una reserva puntual no debería acumular tantos como para paginar,
+  // y conviene evitar cualquier ambigüedad sobre pagos omitidos.
   const resInvoiceIds = new Set(r.lines.map(l => l.inv.id));
   const abonos = vouchers
     .filter(v => v.status === "Verificado" && (v.locatorId === res.id || (!!v.invoiceId && resInvoiceIds.has(v.invoiceId))))

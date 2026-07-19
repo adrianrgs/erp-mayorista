@@ -4,7 +4,8 @@ import { Reservation, FinancialInvoice, DirectClient, PaymentVoucher, CompanyCon
 import type { FlightTicket } from "../types/aereos";
 import { nextSequentialId } from "../lib/idGenerator";
 import { printElementById } from "../lib/print";
-import EstadoCuentaClientePDF from "../components/EstadoCuentaClientePDF";
+import EstadoCuentaClientePDF, { StatementConfig, DEFAULT_STATEMENT_CONFIG } from "../components/EstadoCuentaClientePDF";
+import EstadoCuentaConfigModal from "../components/EstadoCuentaConfigModal";
 import {
   Users,
   Search,
@@ -80,6 +81,9 @@ export default function CobranzasDirectosPanel({
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   // Edición inline del vencimiento de una factura ya emitida
   const [editingDueDateId, setEditingDueDateId] = useState<string | null>(null);
+  // Modal de configuración del estado de cuenta del cliente
+  const [showStatementModal, setShowStatementModal] = useState(false);
+  const [statementConfig, setStatementConfig] = useState<StatementConfig>(DEFAULT_STATEMENT_CONFIG);
 
   // Withdrawal of saldo a favor
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -558,8 +562,19 @@ export default function CobranzasDirectosPanel({
                   vouchers={vouchers}
                   netByInvoice={netByInvoice}
                   companyConfig={companyConfig}
+                  config={statementConfig}
                 />
               </div>
+
+              {showStatementModal && (
+                <EstadoCuentaConfigModal
+                  clientName={activeClient.nombre}
+                  config={statementConfig}
+                  onChange={setStatementConfig}
+                  onClose={() => setShowStatementModal(false)}
+                  onGenerate={() => { setShowStatementModal(false); setTimeout(() => printElementById("estado-cuenta-content"), 50); }}
+                />
+              )}
 
               {/* Client standing info card */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
@@ -572,9 +587,9 @@ export default function CobranzasDirectosPanel({
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => printElementById("estado-cuenta-content")}
+                      onClick={() => setShowStatementModal(true)}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-[10px] font-black uppercase tracking-wider cursor-pointer"
-                      title="Imprimir / descargar el estado de cuenta del cliente en PDF"
+                      title="Configurar y generar el estado de cuenta del cliente en PDF"
                     >
                       <FileText className="w-3.5 h-3.5" /> Estado de Cuenta PDF
                     </button>

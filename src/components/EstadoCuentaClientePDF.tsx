@@ -2,7 +2,25 @@ import React from "react";
 import { FinancialInvoice, PaymentVoucher, CompanyConfig } from "../types";
 import { formatCurrency, getOperatingCurrency } from "../lib/taxEngine";
 
-// (PaymentVoucher se usa para listar los abonos recibidos con su fecha.)
+// Opciones configurables del estado de cuenta del cliente (se eligen en un modal antes de imprimir).
+export interface StatementConfig {
+  fromDate?: string;             // filtrar facturas/abonos desde esta fecha de emisión (YYYY-MM-DD)
+  includePaidInvoices: boolean;  // incluir facturas ya pagadas (historial completo)
+  showAging: boolean;            // mostrar desglose Vencido / Por vencer
+  showAbonos: boolean;           // mostrar sección de pagos/abonos recibidos
+  abonosAll: boolean;            // true = todos los abonos; false = solo los últimos abonosCantidad
+  abonosCantidad: number;        // cuántos de los últimos abonos mostrar (cuando abonosAll = false)
+  nota?: string;                 // nota / mensaje libre al cliente
+}
+
+export const DEFAULT_STATEMENT_CONFIG: StatementConfig = {
+  includePaidInvoices: false,
+  showAging: true,
+  showAbonos: true,
+  abonosAll: false,
+  abonosCantidad: 12,
+  nota: "",
+};
 
 // Forma mínima estructural del cliente (sirve tanto para B2BClient como DirectClient).
 interface StatementClient {
@@ -23,6 +41,7 @@ interface Props {
   vouchers?: PaymentVoucher[];
   netByInvoice: Record<string, { paid: number; ncApplied: number; remaining: number }>;
   companyConfig: CompanyConfig;
+  config?: StatementConfig;
   elementId?: string;       // id del contenedor imprimible (default "estado-cuenta-content")
 }
 
@@ -42,34 +61,43 @@ const extractExpediente = (inv: FinancialInvoice): string => {
 };
 
 export default function EstadoCuentaClientePDF({
-  client, taxId, taxIdLabel = "RIF", invoices, vouchers = [], netByInvoice, companyConfig, elementId = "estado-cuenta-content",
+  client, taxId, taxIdLabel = "RIF", invoices, vouchers = [], netByInvoice, companyConfig,
+  config = DEFAULT_STATEMENT_CONFIG, elementId = "estado-cuenta-content",
 }: Props) {
   const cur = getOperatingCurrency();
   const money = (n: number) => formatCurrency(n, cur);
   const today = new Date().toISOString().slice(0, 10);
+  const fromOK = (d?: string) => !config.fromDate || (!!d && d >= config.fromDate);
 
-  // Abonos (pagos verificados) del cliente, con su fecha.
+  // Abonos (pagos verificados) del cliente, con su fecha. Configurable: mostrar todos o los últimos 12.
   const abonos = vouchers
-    .filter(v => v.status === "Verificado" && v.clientId === client.id)
+    .filter(v => v.status === "Verificado" && v.clientId === client.id && fromOK(v.date))
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  const abonosLimit = config.abonosAll ? abonos.length : Math.max(1, config.abonosCantidad || 12);
+  const abonosShown = abonos.slice(-abonosLimit);
+  const abonosOmitidos = abonos.length - abonosShown.length;
+  const montoOmitido = abonos.slice(0, abonosOmitidos).reduce((s, v) => s + v.amount, 0);
 
-  // Facturas por cobrar del cliente con saldo pendiente (mismo criterio de match que el panel).
-  // isUnpaid excluye los "Recibos de Cobro" (facturas type "Cobro" con status "Pagado" que se
-  // generan al registrar un pago): NO son deuda, son el comprobante del abono. Sin este filtro,
-  // el abono aparecía como una factura nueva (FAC-2) y duplicaba el saldo.
+  // Facturas-cargo del cliente. Excluye "Recibos de Cobro" (facturas type "Cobro" status "Pagado"
+  // que se generan al registrar un pago: son el comprobante del abono, no deuda). Con includePaid
+  // se incluyen también las facturas ya pagadas (historial); sin él, solo las pendientes.
   const rows = invoices
     .filter(inv =>
       inv.type === "Cobro" &&
       inv.id.startsWith("FAC-") &&
-      (inv.status === "Facturado" || inv.status === "Vencido") &&
+      !inv.clientName.startsWith("Recibo de Cobro") &&
+      (config.includePaidInvoices
+        ? (inv.status === "Facturado" || inv.status === "Vencido" || inv.status === "Pagado")
+        : (inv.status === "Facturado" || inv.status === "Vencido")) &&
+      fromOK(inv.date) &&
       (inv.clientId === client.id || inv.clientName.toLowerCase().includes(client.nombre.toLowerCase()))
     )
     .map(inv => {
       const net = netByInvoice[inv.id] || { paid: 0, ncApplied: 0, remaining: Math.max(0, inv.amount) };
-      const vencida = inv.status === "Vencido" || (!!inv.dueDate && inv.dueDate < today);
+      const vencida = (inv.status === "Vencido" || (!!inv.dueDate && inv.dueDate < today)) && net.remaining > 0.005;
       return { inv, ...net, vencida };
     })
-    .filter(r => r.remaining > 0.005)
+    .filter(r => config.includePaidInvoices || r.remaining > 0.005)
     .sort((a, b) => (a.inv.dueDate || "").localeCompare(b.inv.dueDate || ""));
 
   const totalMonto = rows.reduce((s, r) => s + r.inv.amount, 0);
@@ -141,8 +169,10 @@ export default function EstadoCuentaClientePDF({
         </div>
       </div>
 
-      {/* Tabla de facturas pendientes */}
-      <p className="text-[9px] font-black text-zinc-700 uppercase tracking-widest mb-1.5">Detalle de Facturas Pendientes</p>
+      {/* Tabla de facturas */}
+      <p className="text-[9px] font-black text-zinc-700 uppercase tracking-widest mb-1.5">
+        Detalle de Facturas{config.includePaidInvoices ? "" : " Pendientes"}{config.fromDate ? ` (desde ${fmtDate(config.fromDate)})` : ""}
+      </p>
       {rows.length === 0 ? (
         <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 text-center text-emerald-700 font-bold text-xs">
           Sin saldos pendientes. La cuenta está al día. ✓
@@ -172,10 +202,10 @@ export default function EstadoCuentaClientePDF({
                 <td className={`${td} text-right font-mono`}>{money(r.inv.amount)}</td>
                 <td className={`${td} text-right font-mono text-emerald-700`}>{r.paid > 0 ? money(r.paid) : "—"}</td>
                 <td className={`${td} text-right font-mono text-zinc-500`}>{r.ncApplied > 0 ? money(r.ncApplied) : "—"}</td>
-                <td className={`${td} text-right font-mono font-black text-red-700`}>{money(r.remaining)}</td>
+                <td className={`${td} text-right font-mono font-black ${r.remaining <= 0.005 ? "text-emerald-700" : "text-red-700"}`}>{money(r.remaining)}</td>
                 <td className={`${td} text-center`}>
-                  <span className={`px-1.5 py-0.5 rounded text-[7.5px] font-black uppercase ${r.vencida ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
-                    {r.vencida ? "Vencido" : "Por vencer"}
+                  <span className={`px-1.5 py-0.5 rounded text-[7.5px] font-black uppercase ${r.remaining <= 0.005 ? "bg-emerald-100 text-emerald-700" : r.vencida ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                    {r.remaining <= 0.005 ? "Pagada" : r.vencida ? "Vencido" : "Por vencer"}
                   </span>
                 </td>
               </tr>
@@ -195,18 +225,20 @@ export default function EstadoCuentaClientePDF({
       )}
 
       {/* Aging + total a pagar */}
-      {rows.length > 0 && (
+      {totalSaldo > 0.005 && (
         <div className="flex justify-between items-end mt-4 gap-4">
-          <div className="flex gap-2">
-            <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              <p className="text-[7.5px] font-black text-red-500 uppercase tracking-wider">Vencido</p>
-              <p className="font-black text-red-700 text-xs font-mono mt-0.5">{money(vencido)}</p>
+          {config.showAging ? (
+            <div className="flex gap-2">
+              <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                <p className="text-[7.5px] font-black text-red-500 uppercase tracking-wider">Vencido</p>
+                <p className="font-black text-red-700 text-xs font-mono mt-0.5">{money(vencido)}</p>
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                <p className="text-[7.5px] font-black text-amber-600 uppercase tracking-wider">Por Vencer</p>
+                <p className="font-black text-amber-700 text-xs font-mono mt-0.5">{money(porVencer)}</p>
+              </div>
             </div>
-            <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-              <p className="text-[7.5px] font-black text-amber-600 uppercase tracking-wider">Por Vencer</p>
-              <p className="font-black text-amber-700 text-xs font-mono mt-0.5">{money(porVencer)}</p>
-            </div>
-          </div>
+          ) : <div />}
           <div className="bg-zinc-950 text-white rounded-lg px-4 py-2.5 text-right">
             <p className="text-[8px] font-black text-zinc-400 uppercase tracking-widest">Total a Pagar</p>
             <p className="font-black text-lg font-mono leading-none mt-0.5">{money(totalSaldo)}</p>
@@ -217,10 +249,12 @@ export default function EstadoCuentaClientePDF({
         </div>
       )}
 
-      {/* Abonos recibidos (con fecha) */}
-      {abonos.length > 0 && (
+      {/* Abonos recibidos (con fecha) — configurable: todos o los más recientes */}
+      {config.showAbonos && abonos.length > 0 && (
         <div className="mt-4">
-          <p className="text-[9px] font-black text-zinc-700 uppercase tracking-widest mb-1.5">Pagos / Abonos Recibidos</p>
+          <p className="text-[9px] font-black text-zinc-700 uppercase tracking-widest mb-1.5">
+            Pagos / Abonos Recibidos{abonosOmitidos > 0 ? ` (últimos ${abonosShown.length} de ${abonos.length})` : ""}
+          </p>
           <table className="w-full border-collapse" style={{ fontSize: "9.5px" }}>
             <thead>
               <tr className="bg-zinc-50">
@@ -231,7 +265,13 @@ export default function EstadoCuentaClientePDF({
               </tr>
             </thead>
             <tbody>
-              {abonos.map(v => (
+              {abonosOmitidos > 0 && (
+                <tr className="bg-zinc-50/60 italic text-zinc-500">
+                  <td className={td} colSpan={3}>… {abonosOmitidos} abono{abonosOmitidos !== 1 ? "s" : ""} anterior{abonosOmitidos !== 1 ? "es" : ""}</td>
+                  <td className={`${td} text-right font-mono`}>{money(montoOmitido)}</td>
+                </tr>
+              )}
+              {abonosShown.map(v => (
                 <tr key={v.id}>
                   <td className={`${td} font-mono text-zinc-700`}>{fmtDate(v.date)}</td>
                   <td className={`${td} text-zinc-600`}>{v.method}</td>
@@ -241,6 +281,14 @@ export default function EstadoCuentaClientePDF({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Nota / mensaje al cliente */}
+      {config.nota && config.nota.trim() !== "" && (
+        <div className="mt-4 bg-blue-50/60 border border-blue-100 rounded-lg p-3">
+          <p className="text-[8px] font-black text-blue-500 uppercase tracking-wider mb-1">Nota</p>
+          <p className="text-[10px] text-zinc-700 leading-snug whitespace-pre-wrap">{config.nota}</p>
         </div>
       )}
 
