@@ -3,6 +3,8 @@ import { Reservation, FinancialInvoice, B2BClient, PaymentVoucher, CompanyConfig
 import type { FlightTicket } from "../types/aereos";
 import { TaxJurisdiction, formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { nextSequentialId } from "../lib/idGenerator";
+import { printElementById } from "../lib/print";
+import EstadoCuentaClientePDF from "../components/EstadoCuentaClientePDF";
 import {
   Users,
   Search,
@@ -576,6 +578,18 @@ export default function CobranzasB2BPanel({
         <div className="lg:col-span-8 space-y-6">
           {activeClient ? (
             <>
+              {/* Estado de cuenta imprimible (oculto en pantalla, se clona al imprimir) */}
+              <div className="hidden">
+                <EstadoCuentaClientePDF
+                  client={activeClient}
+                  taxId={activeClient.rif}
+                  taxIdLabel="RIF"
+                  invoices={invoices}
+                  netByInvoice={netByInvoice}
+                  companyConfig={companyConfig}
+                />
+              </div>
+
               {/* Client standing info card */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-100 pb-3 gap-3">
@@ -585,10 +599,17 @@ export default function CobranzasB2BPanel({
                     </span>
                     <h3 className="font-black text-base text-zinc-950 uppercase mt-1.5">{activeClient.nombre}</h3>
                   </div>
-                  <div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => printElementById("estado-cuenta-content")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                      title="Imprimir / descargar el estado de cuenta del cliente en PDF"
+                    >
+                      <FileText className="w-3.5 h-3.5" /> Estado de Cuenta PDF
+                    </button>
                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                      activeClient.moroso 
-                        ? "bg-red-50 border-red-200 text-red-650 animate-pulse" 
+                      activeClient.moroso
+                        ? "bg-red-50 border-red-200 text-red-650 animate-pulse"
                         : "bg-emerald-50 border-emerald-250 text-emerald-700"
                     }`}>
                       {activeClient.moroso ? "● Cuenta Morosa" : "● Estatus Normal"}
