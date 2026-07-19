@@ -26,6 +26,8 @@ export interface CompanyConfig {
   logoLetter: string;
   /** Moneda de operación mayorista (por defecto "USD"). Lo fiscal local se deriva por tipo de cambio. */
   currency?: string;
+  /** Días de anticipación para alertar reservas por vencer (por defecto 7). */
+  alertDiasVencimiento?: number;
 }
 
 export interface HotelProperty {

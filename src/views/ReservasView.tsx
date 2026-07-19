@@ -245,7 +245,7 @@ export default function ReservasView({
   // Search & Filters (Level 1)
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("Todas");
-  const [sortBy, setSortBy] = useState<"ultimas" | "checkin">("ultimas");
+  const [sortBy, setSortBy] = useState<"ultimas" | "checkin" | "vencimiento">("ultimas");
 
   // --- VISOR DE COMPROBANTE MODAL STATES ---
   const [showProvReceiptModal, setShowProvReceiptModal] = useState(false);
@@ -808,6 +808,15 @@ export default function ReservasView({
   const [activeTab, setActiveTab] = useState<"Activos" | "Canceladas">("Activos");
 
   // Filter and Sort (Level 1)
+  // Umbral de alerta configurable (Ajustes → Datos de la Empresa). Precomputamos el saldo/alerta de
+  // cada reserva una sola vez para usarlo en el filtro, el orden y los badges.
+  const alertDays = Number(companyConfig.alertDiasVencimiento) || 7;
+  const receivableByRes = React.useMemo(() => {
+    const m = new Map<string, ReturnType<typeof getReservationReceivable>>();
+    reservations.forEach(r => m.set(r.id, getReservationReceivable(r, invoices, vouchers, alertDays)));
+    return m;
+  }, [reservations, invoices, vouchers, alertDays]);
+
   const filteredAndSorted = reservations
     .filter((r) => {
       const isCancelada = r.status === "Cancelada";
@@ -831,6 +840,9 @@ export default function ReservasView({
         matchesStatus = r.status === "Pendiente" || r.status === "Pendiente de Pago" || r.status === "Petición Especial" || r.status === "Modificada";
       } else if (filterStatus === "Rechazadas") {
         matchesStatus = !!r.facturacionRechazoMotivo || !!(r.servicios && r.servicios.some(s => s.statusFacturacion === "Rechazado"));
+      } else if (filterStatus === "PorVencer") {
+        const rc = receivableByRes.get(r.id);
+        matchesStatus = !!rc && (rc.isNear || rc.isOverdue);
       } else {
         matchesStatus = r.status === filterStatus;
       }
@@ -838,7 +850,13 @@ export default function ReservasView({
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
-      if (sortBy === "ultimas") {
+      if (sortBy === "vencimiento") {
+        // Por vencer primero: vencidas/próximas arriba, ordenadas por fecha de vencimiento ascendente.
+        const da = receivableByRes.get(a.id)?.dueDate || "9999-12-31";
+        const db = receivableByRes.get(b.id)?.dueDate || "9999-12-31";
+        if (da !== db) return da.localeCompare(db);
+        return (a.checkIn || "").localeCompare(b.checkIn || "");
+      } else if (sortBy === "ultimas") {
         const dateA = a.createdAt || "";
         const dateB = b.createdAt || "";
         if (dateB !== dateA) return dateB.localeCompare(dateA);
@@ -1932,7 +1950,7 @@ export default function ReservasView({
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <div 
               onClick={() => setFilterStatus("Todas")}
               className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
@@ -2022,6 +2040,25 @@ export default function ReservasView({
                 <AlertTriangle className="w-5.5 h-5.5" />
               </div>
             </div>
+
+            <div
+              onClick={() => setFilterStatus("PorVencer")}
+              className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
+                filterStatus === "PorVencer"
+                  ? "bg-amber-100 border-amber-500 ring-2 ring-amber-500/20"
+                  : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-xs"
+              }`}
+              title={`Reservas con saldo que vence en ${alertDays} días o menos (o ya vencidas)`}
+            >
+              <div className="space-y-1">
+                <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block">Por Vencer</span>
+                <span className="text-2xl font-black text-amber-700 block">{[...receivableByRes.values()].filter(rc => rc.isNear || rc.isOverdue).length}</span>
+                <span className="text-[9.5px] text-amber-600 font-semibold block">≤ {alertDays} días / vencidas</span>
+              </div>
+              <div className={`p-2.5 rounded-md border ${filterStatus === "PorVencer" ? "bg-amber-200 border-amber-300 text-amber-700" : "bg-zinc-50 border-zinc-200 text-zinc-600"}`}>
+                <Clock className="w-5.5 h-5.5" />
+              </div>
+            </div>
           </div>
 
           {/* Filtros */}
@@ -2054,6 +2091,7 @@ export default function ReservasView({
                   <option value="Petición Especial">PETICIÓN ESPECIAL</option>
                   <option value="Modificada">MODIFICADAS</option>
                   <option value="Cancelada">CANCELADAS</option>
+                  <option value="PorVencer">POR VENCER (≤ {alertDays} DÍAS)</option>
                 </select>
               </div>
 
@@ -2062,11 +2100,12 @@ export default function ReservasView({
                 <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Ordenar:</span>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as "ultimas" | "checkin")}
+                  onChange={(e) => setSortBy(e.target.value as "ultimas" | "checkin" | "vencimiento")}
                   className="p-1.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none cursor-pointer"
                 >
                   <option value="ultimas">ÚLTIMAS AGREGADAS</option>
                   <option value="checkin">CHECK-IN MÁS PRÓXIMO</option>
+                  <option value="vencimiento">VENCIMIENTO MÁS PRÓXIMO</option>
                 </select>
               </div>
 
@@ -2123,8 +2162,8 @@ export default function ReservasView({
                             {r.mercado === "INTERNACIONAL" ? "INTL" : "NAC"}
                           </span>
                           {(() => {
-                            const rc = getReservationReceivable(r, invoices, vouchers);
-                            if (!rc.isNear && !rc.isOverdue) return null;
+                            const rc = receivableByRes.get(r.id);
+                            if (!rc || (!rc.isNear && !rc.isOverdue)) return null;
                             return (
                               <span
                                 className={`ml-1 px-1 py-0.5 rounded text-[7px] font-extrabold uppercase border ${rc.isOverdue ? "bg-red-100 border-red-200 text-red-700 animate-pulse" : "bg-amber-100 border-amber-200 text-amber-800"}`}
@@ -2307,8 +2346,8 @@ export default function ReservasView({
                   <span className="text-xs font-bold text-zinc-500 uppercase truncate">{activeRes.holder}</span>
                   {expedienteMode === "edit" && <span className="px-1.5 py-0.25 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold uppercase shrink-0">Editando</span>}
                   {(() => {
-                    const rc = getReservationReceivable(activeRes, invoices, vouchers);
-                    if (!rc.isNear && !rc.isOverdue) return null;
+                    const rc = receivableByRes.get(activeRes.id);
+                    if (!rc || (!rc.isNear && !rc.isOverdue)) return null;
                     return (
                       <span
                         className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 border ${rc.isOverdue ? "bg-red-100 text-red-700 border-red-200 animate-pulse" : "bg-amber-100 text-amber-800 border-amber-200"}`}

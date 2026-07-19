@@ -30,6 +30,12 @@ export default function EstadoCuentaReservaPDF({
   const money = (n: number) => formatCurrency(n, cur);
   const r = getReservationReceivable(res, invoices, vouchers);
 
+  // Abonos (pagos verificados) del expediente, con su fecha.
+  const resInvoiceIds = new Set(r.lines.map(l => l.inv.id));
+  const abonos = vouchers
+    .filter(v => v.status === "Verificado" && (v.locatorId === res.id || (!!v.invoiceId && resInvoiceIds.has(v.invoiceId))))
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
   const th = "text-left font-black text-zinc-500 uppercase tracking-wider text-[8px] px-2 py-1.5 border-b border-zinc-300";
   const td = "px-2 py-1.5 border-b border-zinc-100 align-top";
 
@@ -153,6 +159,33 @@ export default function EstadoCuentaReservaPDF({
       ) : (
         <div className="bg-amber-50 border border-amber-100 rounded-lg p-4 text-center text-amber-800 text-xs">
           Expediente aún no facturado. El total de la venta ({money(r.totalCargos)}) queda pendiente; el vencimiento de referencia es el check-in ({fmtDate(res.checkIn)}).
+        </div>
+      )}
+
+      {/* Abonos recibidos (con fecha) */}
+      {abonos.length > 0 && (
+        <div className="mt-4">
+          <p className="text-[9px] font-black text-zinc-700 uppercase tracking-widest mb-1.5">Pagos / Abonos Recibidos</p>
+          <table className="w-full border-collapse" style={{ fontSize: "9.5px" }}>
+            <thead>
+              <tr className="bg-zinc-50">
+                <th className={th}>Fecha</th>
+                <th className={th}>Método</th>
+                <th className={th}>Referencia</th>
+                <th className={`${th} text-right`}>Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {abonos.map(v => (
+                <tr key={v.id}>
+                  <td className={`${td} font-mono text-zinc-700`}>{fmtDate(v.date)}</td>
+                  <td className={`${td} text-zinc-600`}>{v.method}</td>
+                  <td className={`${td} font-mono text-zinc-500`}>{v.reference || "—"}</td>
+                  <td className={`${td} text-right font-mono font-bold text-emerald-700`}>{money(v.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

@@ -555,6 +555,7 @@ export default function CobranzasDirectosPanel({
                   taxId={activeClient.cedula}
                   taxIdLabel="Cédula"
                   invoices={invoices}
+                  vouchers={vouchers}
                   netByInvoice={netByInvoice}
                   companyConfig={companyConfig}
                 />

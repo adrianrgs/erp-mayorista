@@ -2,6 +2,8 @@ import React from "react";
 import { FinancialInvoice, PaymentVoucher, CompanyConfig } from "../types";
 import { formatCurrency, getOperatingCurrency } from "../lib/taxEngine";
 
+// (PaymentVoucher se usa para listar los abonos recibidos con su fecha.)
+
 // Forma mínima estructural del cliente (sirve tanto para B2BClient como DirectClient).
 interface StatementClient {
   id: string;
@@ -18,6 +20,7 @@ interface Props {
   taxId?: string;           // RIF (B2B) o cédula (Directo)
   taxIdLabel?: string;      // etiqueta: "RIF" | "Cédula" | ...
   invoices: FinancialInvoice[];
+  vouchers?: PaymentVoucher[];
   netByInvoice: Record<string, { paid: number; ncApplied: number; remaining: number }>;
   companyConfig: CompanyConfig;
   elementId?: string;       // id del contenedor imprimible (default "estado-cuenta-content")
@@ -39,11 +42,16 @@ const extractExpediente = (inv: FinancialInvoice): string => {
 };
 
 export default function EstadoCuentaClientePDF({
-  client, taxId, taxIdLabel = "RIF", invoices, netByInvoice, companyConfig, elementId = "estado-cuenta-content",
+  client, taxId, taxIdLabel = "RIF", invoices, vouchers = [], netByInvoice, companyConfig, elementId = "estado-cuenta-content",
 }: Props) {
   const cur = getOperatingCurrency();
   const money = (n: number) => formatCurrency(n, cur);
   const today = new Date().toISOString().slice(0, 10);
+
+  // Abonos (pagos verificados) del cliente, con su fecha.
+  const abonos = vouchers
+    .filter(v => v.status === "Verificado" && v.clientId === client.id)
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
 
   // Facturas por cobrar del cliente con saldo pendiente (mismo criterio de match que el panel).
   // isUnpaid excluye los "Recibos de Cobro" (facturas type "Cobro" con status "Pagado" que se
@@ -206,6 +214,33 @@ export default function EstadoCuentaClientePDF({
               <p className="text-[8px] text-emerald-400 mt-1">Aplicando saldo a favor: {money(Math.max(0, totalSaldo - client.saldoFavor))}</p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Abonos recibidos (con fecha) */}
+      {abonos.length > 0 && (
+        <div className="mt-4">
+          <p className="text-[9px] font-black text-zinc-700 uppercase tracking-widest mb-1.5">Pagos / Abonos Recibidos</p>
+          <table className="w-full border-collapse" style={{ fontSize: "9.5px" }}>
+            <thead>
+              <tr className="bg-zinc-50">
+                <th className={th}>Fecha</th>
+                <th className={th}>Método</th>
+                <th className={th}>Referencia</th>
+                <th className={`${th} text-right`}>Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {abonos.map(v => (
+                <tr key={v.id}>
+                  <td className={`${td} font-mono text-zinc-700`}>{fmtDate(v.date)}</td>
+                  <td className={`${td} text-zinc-600`}>{v.method}</td>
+                  <td className={`${td} font-mono text-zinc-500`}>{v.reference || "—"}</td>
+                  <td className={`${td} text-right font-mono font-bold text-emerald-700`}>{money(v.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

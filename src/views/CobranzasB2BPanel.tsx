@@ -587,6 +587,7 @@ export default function CobranzasB2BPanel({
                   taxId={activeClient.rif}
                   taxIdLabel="RIF"
                   invoices={invoices}
+                  vouchers={vouchers}
                   netByInvoice={netByInvoice}
                   companyConfig={companyConfig}
                 />

@@ -471,6 +471,14 @@ function EmpresaTab({ formData, onChange, onSubmit }: { formData: CompanyConfig;
             <p className="text-[9px] text-zinc-400 mt-1">Moneda de las operaciones mayoristas. Lo fiscal local se deriva por tipo de cambio.</p>
           </div>
 
+          <div>
+            <label htmlFor="alertDiasVencimiento" className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Aviso de Vencimiento (días)</label>
+            <input type="number" id="alertDiasVencimiento" name="alertDiasVencimiento" min={0} max={90}
+              value={formData.alertDiasVencimiento ?? 7} onChange={onChange}
+              className="w-full px-3 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-900 font-semibold" />
+            <p className="text-[9px] text-zinc-400 mt-1">Días de anticipación para alertar y filtrar reservas por vencer en el módulo de Reservas.</p>
+          </div>
+
           <div className="pt-2">
             <Button type="submit" className="w-full uppercase tracking-wider">
               <Save className="w-4 h-4 text-zinc-300" /> Guardar Ajustes
