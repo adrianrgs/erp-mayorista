@@ -91,6 +91,18 @@ export class FinancesController {
   @RequierePermiso(Accion.CREAR, Modulo.CONTABILIDAD, Modulo.ADMINISTRACION)
   createExchangeRate(@Body() dto: any) { return this.service.createExchangeRate(dto); }
 
+  // ── Custom Rates (tasas personalizables) ──────────────────────────────────
+  @Get('custom-rates')
+  findAllCustomRates() { return this.service.findAllCustomRates(); }
+
+  @Post('custom-rates')
+  @RequierePermiso(Accion.EDITAR, Modulo.CONFIGURACION, Modulo.ADMINISTRACION)
+  upsertCustomRate(@Body() dto: any) { return this.service.upsertCustomRate(dto); }
+
+  @Delete('custom-rates/:id')
+  @RequierePermiso(Accion.EDITAR, Modulo.CONFIGURACION, Modulo.ADMINISTRACION)
+  deleteCustomRate(@Param('id') id: string) { return this.service.deleteCustomRate(id); }
+
   // ── Withholding Certificates ──────────────────────────────────────────────
   @Get('withholding-certificates')
   findAllWithholding() { return this.service.findAllWithholdingCertificates(); }

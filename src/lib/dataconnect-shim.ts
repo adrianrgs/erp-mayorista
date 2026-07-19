@@ -447,6 +447,21 @@ export const insertExchangeRate = async (_dc: any, vars: any) => {
   return { data: {} };
 };
 
+export const listCustomRates = async () => {
+  const r = await api.get("/finances/custom-rates");
+  return { data: { customRates: Array.isArray(r.data) ? r.data : [] } };
+};
+
+export const upsertCustomRate = async (_dc: any, vars: any) => {
+  await api.post("/finances/custom-rates", vars);
+  return { data: {} };
+};
+
+export const deleteCustomRate = async (_dc: any, vars: { id: string }) => {
+  await api.delete(`/finances/custom-rates/${vars.id}`);
+  return { data: {} };
+};
+
 export const insertWithholdingCertificate = async (_dc: any, vars: any) => {
   await api.post("/finances/withholding-certificates", vars);
   return { data: {} };

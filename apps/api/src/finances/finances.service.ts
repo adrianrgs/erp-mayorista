@@ -146,6 +146,32 @@ export class FinancesService {
     return { success: true, id: dto.id };
   }
 
+  // ── Custom Rates (tasas personalizables definidas por el usuario) ──────────
+
+  async findAllCustomRates() {
+    const data = await this.dc.executeQuery<{ customRates: any[] }>('ListCustomRates');
+    return data.customRates || [];
+  }
+
+  async upsertCustomRate(dto: any) {
+    await this.dc.executeMutation('UpsertCustomRate', {
+      id: dto.id,
+      label: dto.label,
+      fromCurrency: dto.fromCurrency ?? 'USD',
+      toCurrency: dto.toCurrency,
+      value: dto.value,
+      showInHeader: dto.showInHeader ?? true,
+      sortOrder: dto.sortOrder ?? 0,
+      updatedAt: new Date().toISOString(),
+    });
+    return { success: true, id: dto.id };
+  }
+
+  async deleteCustomRate(id: string) {
+    await this.dc.executeMutation('DeleteCustomRate', { id });
+    return { success: true };
+  }
+
   // ── Withholding Certificates ──────────────────────────────────────────────
 
   async findAllWithholdingCertificates() {

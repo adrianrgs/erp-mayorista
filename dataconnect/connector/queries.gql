@@ -391,6 +391,19 @@ query ListExchangeRates @auth(level: PUBLIC) {
   }
 }
 
+query ListCustomRates @auth(level: PUBLIC) {
+  customRates {
+    id
+    label
+    fromCurrency
+    toCurrency
+    value
+    showInHeader
+    sortOrder
+    updatedAt
+  }
+}
+
 query ListWithholdingCertificates @auth(level: PUBLIC) {
   withholdingCertificates {
     id

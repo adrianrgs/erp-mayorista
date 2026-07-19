@@ -480,6 +480,18 @@ export interface ExchangeRate {
   source: string;         // "BCV" | "TRM" | "SBS" | "Manual"
 }
 
+// Tasa personalizable definida por el usuario. Se expresa como "1 <fromCurrency> = value <toCurrency>".
+export interface CustomRate {
+  id: string;
+  label: string;          // "BCV" | "Preferencial" | "Euro" | ... (libre)
+  fromCurrency: string;   // moneda origen: "USD" | "EUR" | "VES" | ...
+  toCurrency: string;     // moneda destino: "VES" | "EUR" | "COP" | ...
+  value: number;          // 1 fromCurrency = value toCurrency
+  showInHeader: boolean;  // si aparece en el header global
+  sortOrder?: number;
+  updatedAt?: string;
+}
+
 export interface WithholdingCertificate {
   updatedAt?: string;
   id: string;

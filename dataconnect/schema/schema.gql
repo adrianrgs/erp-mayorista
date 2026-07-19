@@ -389,6 +389,19 @@ type ExchangeRate @table {
   updatedAt: String
 }
 
+# Tasas personalizables definidas por el usuario (BCV, Preferencial, Euro, ...). Se expresan como
+# "1 <fromCurrency> = value <toCurrency>". showInHeader controla si aparecen en el header.
+type CustomRate @table {
+  id: String! @col(dataType: "varchar(50)")
+  label: String!
+  fromCurrency: String!
+  toCurrency: String!
+  value: Float!
+  showInHeader: Boolean!
+  sortOrder: Int
+  updatedAt: String
+}
+
 type WithholdingCertificate @table {
   id: String! @col(dataType: "varchar(50)")
   number: String!

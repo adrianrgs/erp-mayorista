@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { CompanyConfig, ProjectView } from "../types";
+import React, { useState, useEffect } from "react";
+import { CompanyConfig, ProjectView, CustomRate } from "../types";
+import { getCurrencySymbol } from "../lib/taxEngine";
 import {
   Usuario, Rol, ReglaAutorizacion, SolicitudAutorizacion, RegistroAuditoria,
   AccionPermiso, ACCIONES_POR_MODULO, NOMBRE_MODULO, NOMBRE_ACCION,
@@ -26,6 +27,9 @@ import {
   Clock,
   History,
   ShieldCheck,
+  Coins,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 interface ConfiguracionViewProps {
@@ -33,6 +37,9 @@ interface ConfiguracionViewProps {
   onUpdateConfig: (updated: CompanyConfig) => void;
   usuarios: Usuario[];
   roles: Rol[];
+  customRates: CustomRate[];
+  onUpsertCustomRate: (rate: CustomRate) => void;
+  onDeleteCustomRate: (id: string) => void;
   reglasAutorizacion: ReglaAutorizacion[];
   solicitudesAutorizacion: SolicitudAutorizacion[];
   registrosAuditoria: RegistroAuditoria[];
@@ -48,12 +55,13 @@ interface ConfiguracionViewProps {
   onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "id" | "createdAt">) => void;
 }
 
-type TabType = "empresa" | "usuarios" | "permisos" | "autorizaciones";
+type TabType = "empresa" | "tasas" | "usuarios" | "permisos" | "autorizaciones";
 
 const MODULOS_CON_ACCIONES = Object.values(ProjectView).filter(v => ACCIONES_POR_MODULO[v]?.length > 0);
 
 export default function ConfiguracionView({
   config, onUpdateConfig,
+  customRates, onUpsertCustomRate, onDeleteCustomRate,
   usuarios, roles, reglasAutorizacion, solicitudesAutorizacion, registrosAuditoria,
   onAddUsuario, onUpdateUsuario, onDeleteUsuario, onAddRol, onUpdateRol, onDeleteRol,
   onAddReglaAutorizacion, onUpdateReglaAutorizacion, onResolveSolicitudAutorizacion, onAddRegistroAuditoria,
@@ -105,6 +113,14 @@ export default function ConfiguracionView({
           </button>
 
           <button
+            onClick={() => setActiveTab("tasas")}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left font-semibold ${activeTab === "tasas" ? "bg-zinc-900 text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50"}`}
+          >
+            <Coins className="w-4.5 h-4.5" />
+            <span className="text-xs">Tasas de Cambio</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab("usuarios")}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left font-semibold ${activeTab === "usuarios" ? "bg-zinc-900 text-white shadow-xs" : "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50"}`}
           >
@@ -139,17 +155,28 @@ export default function ConfiguracionView({
             <EmpresaTab formData={formData} onChange={handleInputChange} onSubmit={handleSubmit} />
           )}
 
-          {activeTab === "usuarios" && (
-            <UsuariosTab
-              usuarios={usuarios}
-              roles={roles}
-              nombreRol={nombreRol}
-              onAddUsuario={onAddUsuario}
-              onUpdateUsuario={onUpdateUsuario}
-              onDeleteUsuario={onDeleteUsuario}
-              onAddRegistroAuditoria={onAddRegistroAuditoria}
-              sesionUsuarioId={sesion?.id || ""}
+          {activeTab === "tasas" && (
+            <TasasTab
+              customRates={customRates}
+              onUpsertCustomRate={onUpsertCustomRate}
+              onDeleteCustomRate={onDeleteCustomRate}
             />
+          )}
+
+          {activeTab === "usuarios" && (
+            <div className="space-y-6">
+              <AccesosMonitor usuarios={usuarios} roles={roles} />
+              <UsuariosTab
+                usuarios={usuarios}
+                roles={roles}
+                nombreRol={nombreRol}
+                onAddUsuario={onAddUsuario}
+                onUpdateUsuario={onUpdateUsuario}
+                onDeleteUsuario={onDeleteUsuario}
+                onAddRegistroAuditoria={onAddRegistroAuditoria}
+                sesionUsuarioId={sesion?.id || ""}
+              />
+            </div>
           )}
 
           {activeTab === "permisos" && (
@@ -179,6 +206,187 @@ export default function ConfiguracionView({
             />
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── TAB: TASAS DE CAMBIO PERSONALIZABLES ─────────────────────────────────────
+
+const CURRENCY_OPTIONS = ["VES", "EUR", "COP", "PEN", "USD", "MXN", "CLP", "ARS", "BRL", "PAB"];
+
+function TasasTab({ customRates, onUpsertCustomRate, onDeleteCustomRate }: {
+  customRates: CustomRate[];
+  onUpsertCustomRate: (rate: CustomRate) => void;
+  onDeleteCustomRate: (id: string) => void;
+}) {
+  // Copia local editable; se re-sincroniza cuando cambian las tasas del backend/estado.
+  const [rows, setRows] = useState<CustomRate[]>(customRates);
+  useEffect(() => { setRows(customRates); }, [customRates]);
+
+  const updateRow = (id: string, patch: Partial<CustomRate>) =>
+    setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
+
+  const addRow = () => {
+    setRows(prev => [...prev, {
+      id: "rate-" + Date.now().toString(36),
+      label: "",
+      fromCurrency: "USD",
+      toCurrency: "VES",
+      value: 0,
+      showInHeader: true,
+      sortOrder: prev.length,
+    }]);
+  };
+
+  const visibles = rows.filter(r => r.showInHeader);
+
+  return (
+    <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs space-y-5">
+      <div className="flex items-start justify-between border-b border-zinc-100 pb-3">
+        <h3 className="font-black text-xs text-zinc-900 uppercase tracking-widest flex items-center gap-2">
+          <Coins className="w-4 h-4 text-zinc-500" /> Tasas de Cambio Personalizables
+        </h3>
+        <button
+          onClick={addRow}
+          className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider bg-zinc-900 hover:bg-zinc-800 text-white px-3 py-1.5 rounded-lg cursor-pointer"
+        >
+          <Plus className="w-3.5 h-3.5" /> Agregar tasa
+        </button>
+      </div>
+
+      <p className="text-[11px] text-zinc-500 leading-relaxed">
+        Define tus propias tasas (BCV, Preferencial, Euro, etc.) como <b>1 origen = valor destino</b>
+        (ej. 1 USD = 45,50 VES, o 1 EUR = 1,08 USD). Las marcadas con el ojo abierto se muestran en el
+        header de toda la app. Se guardan en el backend.
+      </p>
+
+      {/* Vista previa del header */}
+      <div className="bg-zinc-50 border border-zinc-200 rounded-lg px-4 py-2.5 flex items-center gap-4 flex-wrap">
+        <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Vista previa del header</span>
+        {visibles.length === 0
+          ? <span className="text-[11px] text-zinc-400 italic">Ninguna tasa visible</span>
+          : visibles.map((r, i) => (
+              <span key={r.id} className="font-mono text-[11px] text-zinc-700 flex items-center gap-1.5">
+                {i > 0 && <span className="text-zinc-300 mr-2">|</span>}
+                <span className="text-zinc-400 uppercase text-[9px]">{r.label || "—"}</span>
+                1 {r.fromCurrency} = {getCurrencySymbol(r.toCurrency)} {(r.value || 0).toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+              </span>
+            ))}
+      </div>
+
+      {/* Filas editables */}
+      <div className="space-y-2.5">
+        {rows.length === 0 && (
+          <p className="text-[11px] text-zinc-400 italic py-4 text-center">Sin tasas. Agrega la primera con el botón de arriba.</p>
+        )}
+        {rows.map(rate => (
+          <div key={rate.id} className="grid grid-cols-12 gap-2 items-end bg-zinc-50/60 border border-zinc-100 rounded-lg p-2.5">
+            <div className="col-span-3">
+              <label className="text-[8px] font-black text-zinc-400 uppercase tracking-wider block mb-0.5">Etiqueta</label>
+              <input
+                type="text"
+                value={rate.label}
+                placeholder="BCV, Preferencial..."
+                onChange={e => updateRow(rate.id, { label: e.target.value })}
+                className="w-full px-2 py-1.5 border border-zinc-200 rounded text-xs font-bold bg-white focus:outline-none focus:border-zinc-500"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="text-[8px] font-black text-zinc-400 uppercase tracking-wider block mb-0.5">1 (origen)</label>
+              <select
+                value={rate.fromCurrency}
+                onChange={e => updateRow(rate.id, { fromCurrency: e.target.value })}
+                className="w-full px-2 py-1.5 border border-zinc-200 rounded text-xs font-bold bg-white focus:outline-none focus:border-zinc-500"
+              >
+                {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="text-[8px] font-black text-zinc-400 uppercase tracking-wider block mb-0.5">= Valor</label>
+              <input
+                type="number"
+                step="0.0001"
+                value={rate.value}
+                onChange={e => updateRow(rate.id, { value: parseFloat(e.target.value) || 0 })}
+                className="w-full px-2 py-1.5 border border-zinc-200 rounded text-xs font-bold bg-white focus:outline-none focus:border-zinc-500"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="text-[8px] font-black text-zinc-400 uppercase tracking-wider block mb-0.5">Destino</label>
+              <select
+                value={rate.toCurrency}
+                onChange={e => updateRow(rate.id, { toCurrency: e.target.value })}
+                className="w-full px-2 py-1.5 border border-zinc-200 rounded text-xs font-bold bg-white focus:outline-none focus:border-zinc-500"
+              >
+                {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="col-span-3 flex items-center justify-end gap-1.5">
+              <button
+                title={rate.showInHeader ? "Visible en header" : "Oculta del header"}
+                onClick={() => updateRow(rate.id, { showInHeader: !rate.showInHeader })}
+                className={`p-1.5 rounded cursor-pointer ${rate.showInHeader ? "text-emerald-600 bg-emerald-50" : "text-zinc-400 bg-zinc-100"}`}
+              >
+                {rate.showInHeader ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                title="Guardar"
+                onClick={() => onUpsertCustomRate(rate)}
+                className="p-1.5 rounded cursor-pointer text-white bg-zinc-900 hover:bg-zinc-800"
+              >
+                <Save className="w-3.5 h-3.5" />
+              </button>
+              <button
+                title="Eliminar"
+                onClick={() => onDeleteCustomRate(rate.id)}
+                className="p-1.5 rounded cursor-pointer text-red-600 bg-red-50 hover:bg-red-100"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── MONITOREO DE ACCESOS (movido desde Administración) ────────────────────────
+
+function AccesosMonitor({ usuarios, roles }: { usuarios: Usuario[]; roles: Rol[] }) {
+  const palette = ["bg-violet-500", "bg-indigo-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-cyan-500", "bg-fuchsia-500", "bg-teal-500"];
+  const grupos = roles
+    .map((rol, idx) => {
+      const delRol = usuarios.filter(u => u.rolId === rol.id);
+      return { name: rol.nombre, active: delRol.filter(u => u.activo).length, total: delRol.length, color: palette[idx % palette.length] };
+    })
+    .filter(g => g.total > 0);
+  const sinRol = usuarios.filter(u => !roles.some(r => r.id === u.rolId));
+  if (sinRol.length > 0) {
+    grupos.push({ name: "Sin rol asignado", active: sinRol.filter(u => u.activo).length, total: sinRol.length, color: "bg-zinc-400" });
+  }
+
+  return (
+    <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs space-y-3">
+      <h3 className="font-black text-xs text-zinc-900 uppercase tracking-widest flex items-center gap-2 border-b border-zinc-100 pb-3">
+        <Users className="w-4 h-4 text-zinc-500" /> Monitoreo de Accesos (Usuarios Activos)
+      </h3>
+      {grupos.length === 0 && (
+        <p className="text-[11px] text-zinc-400 font-semibold italic">Sin usuarios registrados en el sistema.</p>
+      )}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {grupos.map(g => (
+          <div key={g.name} className="p-3 bg-zinc-50 border border-zinc-100 rounded-lg flex flex-col justify-between">
+            <span className="text-[10px] font-black text-zinc-600 leading-tight block">{g.name}</span>
+            <div className="flex items-center justify-between gap-2 mt-2">
+              <span className="flex items-center gap-1.5 text-xs font-black text-zinc-900">
+                <span className={`w-1.5 h-1.5 rounded-full ${g.color}`} /> {g.active} / {g.total}
+              </span>
+              <span className="text-[8px] bg-zinc-200 font-black px-1.5 py-0.5 text-zinc-500 rounded uppercase">Activos</span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

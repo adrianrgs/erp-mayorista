@@ -1,7 +1,7 @@
 import { FlightTicket } from "./types/aereos";
 import React, { useState } from "react";
-import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, OperationalTransfer, mapToOperationalTransfer, mapToTransferService, FinancialInvoice, B2BClient, DirectClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement, PaymentVoucher, CompanyConfig, ExchangeRate, WithholdingCertificate, JournalEntry } from "./types";
-import { TaxJurisdiction, DEFAULT_JURISDICTION, setOperatingCurrency } from "./lib/taxEngine";
+import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, OperationalTransfer, mapToOperationalTransfer, mapToTransferService, FinancialInvoice, B2BClient, DirectClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement, PaymentVoucher, CompanyConfig, ExchangeRate, WithholdingCertificate, JournalEntry, CustomRate } from "./types";
+import { TaxJurisdiction, DEFAULT_JURISDICTION, setOperatingCurrency, getCurrencySymbol } from "./lib/taxEngine";
 import { Property, RoomType, RatePlan, StopSale, ExtraService, ServiceRate, Proveedor } from "./types/producto";
 
 import {
@@ -26,6 +26,7 @@ import {
   listProveedores, insertProveedor, updateProveedor, deleteProveedor,
   listTaxJurisdictions, listExchangeRates, listWithholdingCertificates, listJournalEntries,
   upsertTaxJurisdiction, insertExchangeRate, insertWithholdingCertificate,
+  listCustomRates, upsertCustomRate, deleteCustomRate,
   deleteWithholdingCertificate, insertJournalEntry,
   listUsuarios, insertUsuario, updateUsuario, deleteUsuario,
   listRoles, insertRol, updateRol, deleteRol,
@@ -132,7 +133,31 @@ export default function App() {
   const [invoices, setInvoices] = useState<FinancialInvoice[]>(initialInvoices);
   const [clients, setClients] = useState<B2BClient[]>(initialClients);
   const [directClients, setDirectClients] = useState<DirectClient[]>([]);
-  const [exchangeRates, setExchangeRates] = useState({ usdToEur: 0.92, usdToVes: 45.50 });
+  // Tasas personalizables (BCV, Preferencial, Euro, ...) editables en Ajustes y persistidas en el
+  // backend. Fallback a localStorage / defaults para que el header nunca quede vacío.
+  const DEFAULT_CUSTOM_RATES: CustomRate[] = [
+    { id: "rate-eur", label: "Euro", fromCurrency: "USD", toCurrency: "EUR", value: 0.92, showInHeader: true, sortOrder: 0 },
+    { id: "rate-bcv", label: "BCV", fromCurrency: "USD", toCurrency: "VES", value: 45.50, showInHeader: true, sortOrder: 1 },
+  ];
+  const [customRates, setCustomRates] = useState<CustomRate[]>(() => {
+    const saved = localStorage.getItem("custom_rates");
+    if (saved) { try { return JSON.parse(saved); } catch (e) {} }
+    return DEFAULT_CUSTOM_RATES;
+  });
+
+  const persistCustomRates = (next: CustomRate[]) => {
+    setCustomRates(next);
+    localStorage.setItem("custom_rates", JSON.stringify(next));
+  };
+  const handleUpsertCustomRate = async (rate: CustomRate) => {
+    const exists = customRates.some(r => r.id === rate.id);
+    persistCustomRates(exists ? customRates.map(r => r.id === rate.id ? rate : r) : [...customRates, rate]);
+    try { await upsertCustomRate(dataConnect, rate); } catch (e) {}
+  };
+  const handleDeleteCustomRate = async (id: string) => {
+    persistCustomRates(customRates.filter(r => r.id !== id));
+    try { await deleteCustomRate(dataConnect, { id }); } catch (e) {}
+  };
 
   // Accounting & Fiscal module state
   const [jurisdiction, setJurisdiction] = useState<TaxJurisdiction>(() => {
@@ -683,6 +708,13 @@ export default function App() {
           if (er.data.exchangeRates.length > 0) {
             setFiscalExchangeRates(er.data.exchangeRates);
             localStorage.setItem("fiscal_exchange_rates", JSON.stringify(er.data.exchangeRates));
+          }
+        } catch (e) {}
+        try {
+          const cr = await listCustomRates();
+          if (cr.data.customRates.length > 0) {
+            setCustomRates(cr.data.customRates);
+            localStorage.setItem("custom_rates", JSON.stringify(cr.data.customRates));
           }
         } catch (e) {}
         try {
@@ -1940,13 +1972,15 @@ export default function App() {
             <span className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded text-zinc-700 font-bold">
               💵 Tipo de Cambio del Día
             </span>
-            <span className="font-mono text-zinc-800">
-              1 USD = €{exchangeRates.usdToEur.toLocaleString("es-ES", { minimumFractionDigits: 2 })} EUR
-            </span>
-            <span className="text-zinc-300">|</span>
-            <span className="font-mono text-zinc-800">
-              1 USD = Bs. {exchangeRates.usdToVes.toLocaleString("es-ES", { minimumFractionDigits: 2 })} VES
-            </span>
+            {[...customRates].filter(r => r.showInHeader).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).map((r, i, arr) => (
+              <React.Fragment key={r.id}>
+                <span className="font-mono text-zinc-800">
+                  <span className="text-zinc-400 font-bold uppercase text-[10px] mr-1.5">{r.label}</span>
+                  1 {r.fromCurrency} = {getCurrencySymbol(r.toCurrency)} {r.value.toLocaleString("es-ES", { minimumFractionDigits: 2 })}
+                </span>
+                {i < arr.length - 1 && <span className="text-zinc-300">|</span>}
+              </React.Fragment>
+            ))}
           </div>
 
           {/* Profile */}
@@ -2128,15 +2162,13 @@ onDeleteStopSale={handleDeleteStopSale}
                   />
                 )}
                 {currentSection === ProjectView.ADMINISTRACION && (
-                  <AdministracionView 
-                    invoices={invoices} 
-                    onUpdateInvoice={handleUpdateInvoice} 
+                  <AdministracionView
+                    invoices={invoices}
+                    onUpdateInvoice={handleUpdateInvoice}
                     reservations={reservations}
                     boletos={boletos}
                     clients={clients}
                     detailedProperties={detailedProperties}
-                    exchangeRates={exchangeRates}
-                    onExchangeRatesChange={setExchangeRates}
                     payableObligations={payableObligations}
                   />
                 )}
@@ -2206,6 +2238,9 @@ onDeleteStopSale={handleDeleteStopSale}
                   <ConfiguracionView
                     config={companyConfig}
                     onUpdateConfig={handleUpdateCompanyConfig}
+                    customRates={customRates}
+                    onUpsertCustomRate={handleUpsertCustomRate}
+                    onDeleteCustomRate={handleDeleteCustomRate}
                     usuarios={usuarios}
                     roles={roles}
                     reglasAutorizacion={reglasAutorizacion}

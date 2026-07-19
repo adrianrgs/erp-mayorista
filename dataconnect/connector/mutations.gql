@@ -989,6 +989,32 @@ mutation InsertExchangeRate(
   })
 }
 
+mutation UpsertCustomRate(
+  $id: String!
+  $label: String!
+  $fromCurrency: String!
+  $toCurrency: String!
+  $value: Float!
+  $showInHeader: Boolean!
+  $sortOrder: Int
+  $updatedAt: String
+) @auth(level: PUBLIC) {
+  customRate_upsert(data: {
+    id: $id
+    label: $label
+    fromCurrency: $fromCurrency
+    toCurrency: $toCurrency
+    value: $value
+    showInHeader: $showInHeader
+    sortOrder: $sortOrder
+    updatedAt: $updatedAt
+  })
+}
+
+mutation DeleteCustomRate($id: String!) @auth(level: PUBLIC) {
+  customRate_delete(id: $id)
+}
+
 mutation InsertWithholdingCertificate(
   $id: String!
   $number: String!
