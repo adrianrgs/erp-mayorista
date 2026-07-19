@@ -55,6 +55,9 @@ import SearchableSelect from "../components/ui/SearchableSelect";
 import ProveedorPicker from "../components/ui/ProveedorPicker";
 import { reconcileDossierUpdate } from "../lib/financialReconciler";
 import { resolveSaleClient, isCreditEligible } from "../lib/clientResolver";
+import { printElementById } from "../lib/print";
+import { getReservationReceivable } from "../lib/receivables";
+import EstadoCuentaReservaPDF from "../components/EstadoCuentaReservaPDF";
 import { nextSequentialId } from "../lib/idGenerator";
 import { parseAttachment, downloadAttachment } from "../lib/attachments";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
@@ -2119,6 +2122,18 @@ export default function ReservasView({
                           }`}>
                             {r.mercado === "INTERNACIONAL" ? "INTL" : "NAC"}
                           </span>
+                          {(() => {
+                            const rc = getReservationReceivable(r, invoices, vouchers);
+                            if (!rc.isNear && !rc.isOverdue) return null;
+                            return (
+                              <span
+                                className={`ml-1 px-1 py-0.5 rounded text-[7px] font-extrabold uppercase border ${rc.isOverdue ? "bg-red-100 border-red-200 text-red-700 animate-pulse" : "bg-amber-100 border-amber-200 text-amber-800"}`}
+                                title={`Saldo pendiente ${formatCurrency(rc.saldo, getOperatingCurrency())}${rc.dueDate ? ` · ${rc.isOverdue ? "venció" : "vence"} ${new Date(rc.dueDate + "T00:00:00").toLocaleDateString("es-ES")}` : ""}`}
+                              >
+                                {rc.isOverdue ? `⚠ -${Math.abs(rc.daysUntilDue!)}d` : `⚠ ${rc.daysUntilDue}d`}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-2 py-2.5 font-bold text-zinc-900 group-hover:underline truncate text-[11px]">
                           <div className="flex items-center gap-1.5">
@@ -2291,6 +2306,18 @@ export default function ReservasView({
                   <h3 className="font-black text-xl text-zinc-950 font-mono tracking-tight">{activeRes.id}</h3>
                   <span className="text-xs font-bold text-zinc-500 uppercase truncate">{activeRes.holder}</span>
                   {expedienteMode === "edit" && <span className="px-1.5 py-0.25 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold uppercase shrink-0">Editando</span>}
+                  {(() => {
+                    const rc = getReservationReceivable(activeRes, invoices, vouchers);
+                    if (!rc.isNear && !rc.isOverdue) return null;
+                    return (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 border ${rc.isOverdue ? "bg-red-100 text-red-700 border-red-200 animate-pulse" : "bg-amber-100 text-amber-800 border-amber-200"}`}
+                        title={`Saldo pendiente: ${formatCurrency(rc.saldo, getOperatingCurrency())}${rc.dueDate ? ` · vence ${new Date(rc.dueDate + "T00:00:00").toLocaleDateString("es-ES")}` : ""}`}
+                      >
+                        {rc.isOverdue ? `⚠ Vencido hace ${Math.abs(rc.daysUntilDue!)}d` : `⚠ Vence en ${rc.daysUntilDue}d`}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -2342,6 +2369,36 @@ export default function ReservasView({
                   <span>Voucher</span>
                 </Button>
               )}
+
+              <Button
+                onClick={() => printElementById("estado-cuenta-reserva-content")}
+                variant="secondary"
+                size="sm"
+                className="uppercase whitespace-nowrap"
+                title="Imprimir / descargar el estado de cuenta de este expediente"
+              >
+                <FileText className="w-3 h-3" />
+                <span>Estado de Cuenta</span>
+              </Button>
+
+              {/* Estado de cuenta imprimible del expediente (oculto; se clona al imprimir) */}
+              {(() => {
+                const cl = resolveSaleClient(activeRes, clients, directClients).client;
+                const isB2B = !!cl && "rif" in cl;
+                return (
+                  <div className="hidden">
+                    <EstadoCuentaReservaPDF
+                      res={activeRes}
+                      clientName={cl?.nombre || activeRes.agenciaName || activeRes.holder}
+                      taxId={isB2B ? (cl as any).rif : (cl as any)?.cedula}
+                      taxIdLabel={isB2B ? "RIF" : "Cédula"}
+                      invoices={invoices}
+                      vouchers={vouchers}
+                      companyConfig={companyConfig}
+                    />
+                  </div>
+                );
+              })()}
 
               {expedienteMode === "edit" ? (
                 <>

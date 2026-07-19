@@ -4,6 +4,7 @@ import { AccionPermiso, ReglaAutorizacion, SolicitudAutorizacion, RegistroAudito
 import { usePermissions } from "../hooks/usePermissions";
 import { useAutorizacion } from "../hooks/useAutorizacion";
 import { resolveSaleClient, isCreditEligible, SaleClientRef } from "../lib/clientResolver";
+import { computeDueDate } from "../lib/dueDate";
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
 import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile, getOperatingCurrency, formatCurrency, getCurrencySymbol } from "../lib/taxEngine";
@@ -146,6 +147,8 @@ export default function FacturacionView({
   
   const [selectedFacturacionTipo, setSelectedFacturacionTipo] = useState<"Crédito" | "Pago Contado">("Pago Contado");
   const [useSaldoFavor, setUseSaldoFavor] = useState(false);
+  // Vencimiento editable de la factura a emitir (default inteligente: check-in, o emisión + días de crédito).
+  const [invoiceDueDate, setInvoiceDueDate] = useState<string>("");
 
   // Rejection Modal State
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -689,6 +692,11 @@ export default function FacturacionView({
     if (activeRes) {
       setSelectedFacturacionTipo(activeRes.facturacionTipo || "Pago Contado");
       setUseSaldoFavor(false);
+      // Default inteligente del vencimiento: check-in, o emisión + días de crédito si el check-in
+      // es hoy/pasado. Editable luego en el formulario de facturación.
+      const saleClient = resolveSaleClient(activeRes, clients, directClients).client;
+      const hoy = new Date().toISOString().split("T")[0];
+      setInvoiceDueDate(computeDueDate(activeRes.checkIn, saleClient?.diasCredito, hoy));
     }
   }, [activeRes?.id]);
 
@@ -1299,7 +1307,7 @@ export default function FacturacionView({
           clientId: agencyRecord?.id,
           reservationId: activeRes.id,
           date: new Date().toISOString().split("T")[0],
-          dueDate: activeRes.checkIn,
+          dueDate: invoiceDueDate || activeRes.checkIn,
           amount: appliedSaldoFavor,
           vatAmount: taxSaldo.vatAmount,
           taxableBase: taxSaldo.taxableBase,
@@ -1324,7 +1332,7 @@ export default function FacturacionView({
           clientId: agencyRecord?.id,
           reservationId: activeRes.id,
           date: new Date().toISOString().split("T")[0],
-          dueDate: activeRes.checkIn,
+          dueDate: invoiceDueDate || activeRes.checkIn,
           amount: remainingToPay,
           vatAmount: taxRemaining.vatAmount,
           taxableBase: taxRemaining.taxableBase,
@@ -1350,7 +1358,7 @@ export default function FacturacionView({
           clientId: agencyRecord?.id,
           reservationId: activeRes.id,
           date: new Date().toISOString().split("T")[0],
-          dueDate: activeRes.checkIn,
+          dueDate: invoiceDueDate || activeRes.checkIn,
           amount: pendingTotal,
           vatAmount: taxMain.vatAmount,
           taxableBase: taxMain.taxableBase,
@@ -2386,6 +2394,23 @@ export default function FacturacionView({
                         <option value="Pago Contado">Pago Contado (Factura Pagada)</option>
                         <option value="Crédito">A Crédito (Factura Contra Reporte)</option>
                       </select>
+                    </div>
+                  )}
+
+                  {hasRequests && (
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-zinc-200/60 pb-3">
+                      <div className="space-y-0.5 text-left">
+                        <span className="text-zinc-500 uppercase text-[9px] font-bold block">Vencimiento del Pago</span>
+                        <span className="text-[10px] text-zinc-400 font-medium leading-none">
+                          Default: check-in del expediente (o emisión + días de crédito). Editable.
+                        </span>
+                      </div>
+                      <input
+                        type="date"
+                        value={invoiceDueDate}
+                        onChange={(e) => setInvoiceDueDate(e.target.value)}
+                        className="text-xs bg-white border border-zinc-200 rounded px-2 py-1 font-bold focus:outline-none focus:border-zinc-500 cursor-pointer"
+                      />
                     </div>
                   )}
 

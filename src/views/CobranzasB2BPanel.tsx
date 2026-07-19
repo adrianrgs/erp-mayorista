@@ -109,6 +109,8 @@ export default function CobranzasB2BPanel({
   const [selectedVoucherForPreview, setSelectedVoucherForPreview] = useState<PaymentVoucher | null>(null);
   const [selectedReceiptVoucher, setSelectedReceiptVoucher] = useState<{voucher: PaymentVoucher, clientName: string} | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  // Edición inline del vencimiento de una factura ya emitida
+  const [editingDueDateId, setEditingDueDateId] = useState<string | null>(null);
 
   // Withdrawal of saldo a favor
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -1119,7 +1121,31 @@ export default function CobranzasB2BPanel({
                                       </td>
                                       <td className="p-3 font-mono text-[10.5px]">
                                         <p>{formatDate(inv.date)}</p>
-                                        <p className="text-red-500 font-bold mt-0.5">Vence: {formatDate(inv.dueDate)}</p>
+                                        {editingDueDateId === inv.id ? (
+                                          <input
+                                            type="date"
+                                            autoFocus
+                                            defaultValue={(inv.dueDate || "").slice(0, 10)}
+                                            onBlur={(e) => {
+                                              if (e.target.value && e.target.value !== (inv.dueDate || "").slice(0, 10)) {
+                                                onUpdateInvoice({ ...inv, dueDate: e.target.value });
+                                              }
+                                              setEditingDueDateId(null);
+                                            }}
+                                            className="mt-0.5 border border-zinc-300 rounded px-1 py-0.5 text-[10px] font-bold focus:outline-none focus:border-zinc-600"
+                                          />
+                                        ) : (
+                                          <p className="text-red-500 font-bold mt-0.5 flex items-center gap-1">
+                                            Vence: {formatDate(inv.dueDate)}
+                                            <button
+                                              onClick={() => setEditingDueDateId(inv.id)}
+                                              title="Editar fecha de vencimiento"
+                                              className="text-zinc-400 hover:text-zinc-700 cursor-pointer"
+                                            >
+                                              <Edit2 className="w-2.5 h-2.5" />
+                                            </button>
+                                          </p>
+                                        )}
                                       </td>
                                       <td className="p-3 text-right font-mono font-black">
                                         {(() => {
