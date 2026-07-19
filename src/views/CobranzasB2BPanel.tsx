@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Reservation, FinancialInvoice, B2BClient, PaymentVoucher, CompanyConfig, WithholdingCertificate } from "../types";
 import type { FlightTicket } from "../types/aereos";
-import { TaxJurisdiction, formatCurrency, getOperatingCurrency } from "../lib/taxEngine";
+import { TaxJurisdiction, formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { nextSequentialId } from "../lib/idGenerator";
 import {
   Users,

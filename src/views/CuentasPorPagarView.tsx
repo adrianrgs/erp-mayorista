@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { PayableObligation, ProviderStatement } from "../types";
-import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency, getOperatingCurrency } from "../lib/taxEngine";
+import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { nextSequentialId } from "../lib/idGenerator";
 import { parseAttachment, packAttachment, readFileAsDataURL, downloadAttachment, hasDownloadableFile, MAX_ATTACHMENT_BYTES } from "../lib/attachments";
 import {

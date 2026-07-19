@@ -6,7 +6,7 @@ import { useAutorizacion } from "../hooks/useAutorizacion";
 import { resolveSaleClient, isCreditEligible, SaleClientRef } from "../lib/clientResolver";
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
-import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile, getOperatingCurrency, formatCurrency } from "../lib/taxEngine";
+import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile, getOperatingCurrency, formatCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { nextSequentialId } from "../lib/idGenerator";
 import { formatGDSDate } from "../lib/parsers/pnrParser";
 import { 

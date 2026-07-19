@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { formatCurrency, getOperatingCurrency } from "../lib/taxEngine";
+import { formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { Reservation, FinancialInvoice, DirectClient, PaymentVoucher, CompanyConfig } from "../types";
 import type { FlightTicket } from "../types/aereos";
 import { nextSequentialId } from "../lib/idGenerator";
