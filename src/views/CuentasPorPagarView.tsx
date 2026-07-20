@@ -64,6 +64,8 @@ export default function CuentasPorPagarView({
   const [statementSearch, setStatementSearch] = useState("");  // buscador del libro mayor (historial)
   const [selectedPayableIds, setSelectedPayableIds] = useState<string[]>([]);
   const [showConsolidatedPay, setShowConsolidatedPay] = useState(false);
+  // Tratamiento fiscal aplicado a todas las obligaciones del pago consolidado (mismo proveedor).
+  const [consolidatedFiscal, setConsolidatedFiscal] = useState<{ isExempt: boolean; pct: number }>({ isExempt: false, pct: 0 });
   const [consolidatedForm, setConsolidatedForm] = useState({
     method: "Transferencia Bancaria",
     reference: "",
@@ -354,7 +356,27 @@ export default function CuentasPorPagarView({
     () => providerPayables.filter(o => selectedPayableIds.includes(o.id)),
     [providerPayables, selectedPayableIds]
   );
-  const consolidatedTotal = selectedPayables.reduce((sum, o) => sum + remainingOf(o), 0);
+  // Fiscal por obligación en el consolidado. Si el usuario NO eligió tratamiento (default), se
+  // respeta el fiscal ya guardado de la obligación. Si elige exento o % retención, se aplica
+  // uniformemente a todas (mismo proveedor): IVA = netCost × taxRate, retención = IVA × pct.
+  const consolidatedOverriding = consolidatedFiscal.isExempt || consolidatedFiscal.pct > 0;
+  const consolidatedFiscalOf = (o: PayableObligation) => {
+    let vat: number, withheld: number;
+    if (!consolidatedOverriding) {
+      vat = o.vatAmount ?? 0;
+      withheld = o.vatWithheld ?? 0;
+    } else {
+      vat = consolidatedFiscal.isExempt ? 0 : Number((o.netCost * jur.taxRate).toFixed(2));
+      withheld = Number((vat * consolidatedFiscal.pct / 100).toFixed(2));
+    }
+    return { vat, withheld, remaining: Math.max(0, o.netCost + vat - withheld - o.paidAmount) };
+  };
+  const consolidatedNeto = selectedPayables.reduce((sum, o) => sum + o.netCost, 0);
+  const consolidatedIVA = selectedPayables.reduce((sum, o) => sum + consolidatedFiscalOf(o).vat, 0);
+  const consolidatedRetencion = selectedPayables.reduce((sum, o) => sum + consolidatedFiscalOf(o).withheld, 0);
+  const consolidatedTotal = selectedPayables.reduce((sum, o) => sum + consolidatedFiscalOf(o).remaining, 0);
+  // Porción ya abonada (pagos parciales previos) para que el desglose cuadre con el total a pagar.
+  const consolidatedAbonosPrevios = Math.max(0, (consolidatedNeto + consolidatedIVA - consolidatedRetencion) - consolidatedTotal);
 
   // Al cambiar de proveedor, limpiar la selección y el buscador de facturas.
   useEffect(() => {
@@ -372,6 +394,7 @@ export default function CuentasPorPagarView({
 
   const openConsolidatedPay = () => {
     if (selectedPayables.length === 0) return;
+    setConsolidatedFiscal({ isExempt: false, pct: 0 });
     setConsolidatedForm({
       method: "Transferencia Bancaria",
       reference: "",
@@ -384,7 +407,7 @@ export default function CuentasPorPagarView({
 
   const handleConsolidatedPaymentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const toPay = selectedPayables.filter(o => remainingOf(o) > 0);
+    const toPay = selectedPayables.filter(o => consolidatedFiscalOf(o).remaining > 0);
     if (toPay.length === 0) {
       showAlert({ title: "Sin facturas", message: "Selecciona al menos una factura con saldo pendiente.", type: "warning" });
       return;
@@ -392,14 +415,26 @@ export default function CuentasPorPagarView({
     const reference = consolidatedForm.reference.trim() || `REF-PAG-${Math.floor(100000 + Math.random() * 900000)}`;
     const fecha = consolidatedForm.date || new Date().toISOString().split("T")[0];
 
-    // 1. Saldar cada obligación seleccionada (pago total del saldo pendiente).
+    // 1. Saldar cada obligación con el tratamiento fiscal elegido (si aplica).
     let total = 0;
     toPay.forEach(o => {
-      const totalToPay = calcTotalToPay(o);
-      total += remainingOf(o);
+      const f = consolidatedFiscalOf(o);
+      const totalFactura = o.netCost + f.vat - f.withheld;
+      total += f.remaining;
+      // Si el usuario aplicó un tratamiento (exento/retención), lo persistimos en la obligación;
+      // si no, se respeta el fiscal ya guardado.
+      const fiscalFields = consolidatedOverriding
+        ? {
+            isExempt: consolidatedFiscal.isExempt || undefined,
+            vatAmount: f.vat || undefined,
+            vatWithheldPct: consolidatedFiscal.pct || undefined,
+            vatWithheld: f.withheld || undefined,
+          }
+        : {};
       onUpdateObligation({
         ...o,
-        paidAmount: Number(totalToPay.toFixed(2)),
+        ...fiscalFields,
+        paidAmount: Number(totalFactura.toFixed(2)),
         status: "Pagado Total",
         paymentMethod: consolidatedForm.method,
         reference,
@@ -1019,6 +1054,13 @@ export default function CuentasPorPagarView({
                     <div className={selectedPayables.length > 0 ? "text-white" : "text-zinc-500"}>
                       <span className="text-[10px] uppercase font-bold tracking-wider block">{selectedPayables.length} factura(s) seleccionada(s) · total a pagar</span>
                       <span className="text-lg font-black font-mono">{formatCurrency(Number(consolidatedTotal.toFixed(2)), getOperatingCurrency())}</span>
+                      {(consolidatedIVA > 0 || consolidatedRetencion > 0) && (
+                        <span className={`text-[9.5px] font-semibold tracking-wide block mt-0.5 ${selectedPayables.length > 0 ? "text-zinc-300" : "text-zinc-400"}`}>
+                          Neto {formatCurrency(Number(consolidatedNeto.toFixed(2)), getOperatingCurrency())}
+                          {consolidatedIVA > 0 && <> · +{jur.taxName || "IVA"} {formatCurrency(Number(consolidatedIVA.toFixed(2)), getOperatingCurrency())}</>}
+                          {consolidatedRetencion > 0 && <> · −Ret. {jur.taxName || "IVA"} {formatCurrency(Number(consolidatedRetencion.toFixed(2)), getOperatingCurrency())}</>}
+                        </span>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -1465,15 +1507,75 @@ export default function CuentasPorPagarView({
                     <li key={o.id} className="flex justify-between items-center gap-2 py-1.5 text-[11px]">
                       <span className="font-mono font-bold text-zinc-600 shrink-0">{o.id}</span>
                       <span className="text-zinc-500 truncate flex-1" title={o.serviceDetail}>{o.serviceDetail}</span>
-                      <span className="font-mono font-bold text-zinc-900 shrink-0">{formatCurrency(remainingOf(o), o.currency || getOperatingCurrency())}</span>
+                      <span className="font-mono font-bold text-zinc-900 shrink-0">{formatCurrency(consolidatedFiscalOf(o).remaining, o.currency || getOperatingCurrency())}</span>
                     </li>
                   ))}
                 </ul>
+                {/* Desglose fiscal consolidado */}
+                <div className="border-t border-zinc-200 pt-2 space-y-1">
+                  <div className="flex justify-between items-center text-[11px] text-zinc-500 font-semibold">
+                    <span>Subtotal Neto</span>
+                    <span className="font-mono text-zinc-700">{formatCurrency(Number(consolidatedNeto.toFixed(2)), getOperatingCurrency())}</span>
+                  </div>
+                  {consolidatedIVA > 0 && (
+                    <div className="flex justify-between items-center text-[11px] text-zinc-500 font-semibold">
+                      <span>{jur.taxName || "IVA"}</span>
+                      <span className="font-mono text-zinc-700">+{formatCurrency(Number(consolidatedIVA.toFixed(2)), getOperatingCurrency())}</span>
+                    </div>
+                  )}
+                  {consolidatedRetencion > 0 && (
+                    <div className="flex justify-between items-center text-[11px] font-semibold text-red-600">
+                      <span>Retención {jur.taxName || "IVA"}</span>
+                      <span className="font-mono">-{formatCurrency(Number(consolidatedRetencion.toFixed(2)), getOperatingCurrency())}</span>
+                    </div>
+                  )}
+                  {consolidatedAbonosPrevios > 0 && (
+                    <div className="flex justify-between items-center text-[11px] text-zinc-500 font-semibold">
+                      <span>Pagos previos</span>
+                      <span className="font-mono">-{formatCurrency(Number(consolidatedAbonosPrevios.toFixed(2)), getOperatingCurrency())}</span>
+                    </div>
+                  )}
+                </div>
                 <div className="flex justify-between items-center border-t border-zinc-300 pt-2">
                   <span className="text-xs font-black uppercase tracking-wider text-zinc-700">Total a pagar</span>
                   <span className="text-lg font-black font-mono text-emerald-700">{formatCurrency(Number(consolidatedTotal.toFixed(2)), getOperatingCurrency())}</span>
                 </div>
               </div>
+
+              {/* Tratamiento fiscal (aplica a todas las facturas del proveedor) */}
+              {jur.taxRate > 0 && (
+                <div className="border border-zinc-200 rounded-lg p-3 space-y-2.5 bg-zinc-50">
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Tratamiento Fiscal del Proveedor (aplica a todas)</span>
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={consolidatedFiscal.isExempt}
+                      onChange={e => setConsolidatedFiscal(prev => ({ ...prev, isExempt: e.target.checked, pct: e.target.checked ? 0 : prev.pct }))}
+                      className="w-4 h-4 rounded border-gray-300 accent-zinc-800 cursor-pointer"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-zinc-800 block">Exento de {jur.taxName}</span>
+                      <span className="text-[10px] text-zinc-500">No aplica {jur.taxName} ni retención</span>
+                    </div>
+                  </label>
+                  {jur.hasWithholding && !consolidatedFiscal.isExempt && (
+                    <div>
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">% Retención {jur.taxName}</label>
+                      <select
+                        value={consolidatedFiscal.pct > 0 ? String(consolidatedFiscal.pct) : ""}
+                        onChange={e => setConsolidatedFiscal(prev => ({ ...prev, pct: parseFloat(e.target.value) || 0 }))}
+                        className="w-full text-xs border border-zinc-200 rounded px-3 py-2 bg-white focus:outline-none"
+                      >
+                        <option value="">Sin retención</option>
+                        {(jur.vatWithholdingOptions ?? []).map(opt => (
+                          <option key={opt} value={String(opt)}>{opt}%</option>
+                        ))}
+                      </select>
+                      <p className="text-[9.5px] text-zinc-400 mt-1">Aplica {jur.taxName} ({(jur.taxRate * 100).toFixed(0)}%) sobre el costo de cada factura y retiene el % indicado.</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Método + Fecha */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -5853,10 +5853,10 @@ export default function ReservasView({
             </div>
 
             {/* Document Container */}
-            <div className="p-8 overflow-y-auto flex-1 bg-white" id="printable-b2b-doc">
+            <div className="p-6 overflow-y-auto flex-1 bg-white" id="printable-b2b-doc">
 
               {/* Document Header */}
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b-2 border-zinc-900 pb-6 mb-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b-2 border-zinc-900 pb-3.5 mb-3.5">
                 <div>
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded bg-zinc-950 text-white flex items-center justify-center font-black text-base font-sans">
@@ -5886,8 +5886,8 @@ export default function ReservasView({
               </div>
 
               {/* Passenger & Agency Information Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-zinc-200 pb-6 mb-6 text-xs font-sans">
-                <div className="space-y-2.5">
+              <div className="grid grid-cols-2 gap-6 border-b border-zinc-200 pb-3.5 mb-3.5 text-xs font-sans">
+                <div className="space-y-1.5">
                   <h4 className="font-bold text-[10px] uppercase text-zinc-400 tracking-wider">Información del Viaje</h4>
                   <div className="grid grid-cols-3 gap-y-1 text-zinc-700">
                     <span className="font-bold text-zinc-400">Pasajero Titular:</span>
@@ -5911,7 +5911,7 @@ export default function ReservasView({
                   </div>
                 </div>
 
-                <div className="space-y-2.5">
+                <div className="space-y-1.5">
                   <h4 className="font-bold text-[10px] uppercase text-zinc-500 tracking-wider">{isDirecto ? "Información de Contacto" : "Agencia Minorista (Emisora)"}</h4>
                   <div className="grid grid-cols-3 gap-y-1 text-zinc-700">
                     {!isDirecto && (
@@ -5967,22 +5967,22 @@ export default function ReservasView({
 
                 return (
                   <React.Fragment>
-                    <div className="space-y-3 font-sans">
+                    <div className="space-y-2 font-sans">
                       <h4 className="font-bold text-[10px] uppercase text-zinc-400 tracking-wider">Detalle de Servicios Incluidos</h4>
                       <div className="border border-zinc-200 rounded-lg overflow-x-auto">
                         <table className="w-full text-left border-collapse text-xs">
                           <thead>
                             <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 uppercase text-[9px] font-extrabold tracking-wider">
-                              <th className="p-3 w-16">Cod</th>
-                              <th className="p-3 w-24">Tipo</th>
-                              <th className="p-3">Descripción / Itinerario del Servicio</th>
+                              <th className="p-2 w-16">Cod</th>
+                              <th className="p-2 w-24">Tipo</th>
+                              <th className="p-2">Descripción / Itinerario del Servicio</th>
                               {isDirecto ? (
-                                <th className="p-3 text-right w-28">Precio</th>
+                                <th className="p-2 text-right w-28">Precio</th>
                               ) : (
                                 <>
-                                  <th className="p-3 text-right w-24">PVP Tarifa</th>
-                                  <th className="p-3 text-center w-36">Comisión B2B</th>
-                                  <th className="p-3 text-right w-28">Neto a Pagar B2B</th>
+                                  <th className="p-2 text-right w-24">PVP Tarifa</th>
+                                  <th className="p-2 text-center w-36">Comisión B2B</th>
+                                  <th className="p-2 text-right w-28">Neto a Pagar B2B</th>
                                 </>
                               )}
                             </tr>
@@ -5996,58 +5996,70 @@ export default function ReservasView({
                                 
                                 if (s.tipo === ServiceType.ALOJAMIENTO && s.detalles?.lodgingRooms) {
                                   const hotelName = detailedProperties.find(p => p.id === s.detalles.hotelId)?.nombre || s.descripcion.split(" (")[0]?.replace("Hotel: ", "") || "Hotel";
+                                  const rooms = s.detalles.lodgingRooms;
+                                  // Con una sola habitación, la sub-fila repetiría los mismos montos que la
+                                  // cabecera (parece duplicado). En ese caso colapsamos: mostramos el tipo de
+                                  // habitación y los pasajeros en la descripción y omitimos la sub-fila.
+                                  const singleRoom = rooms.length === 1;
+                                  const firstRoomTypeName = roomTypes.find((rt: any) => rt.id === rooms[0]?.roomTypeId)?.nombre || "Habitación";
+                                  const firstRoomGuests = rooms[0]?.guests?.map((g: any) => `${g.name} (${g.type === "Adulto" ? "ADT" : "CHD"})`).filter((str: string) => str.replace(/\s*\([^)]+\)/g, "").trim() !== "").join(", ");
                                   return (
                                     <React.Fragment key={s.id || idx}>
                                       {/* Header Hotel Row */}
                                       <tr className="bg-zinc-50/40 font-semibold border-t border-zinc-200">
-                                        <td className="p-3 font-mono text-[10.5px] text-zinc-400">{s.id}</td>
-                                        <td className="p-3 font-bold text-zinc-900">{s.tipo}</td>
-                                        <td className="p-3 text-left leading-normal">
+                                        <td className="p-2 font-mono text-[10.5px] text-zinc-400">{s.id}</td>
+                                        <td className="p-2 font-bold text-zinc-900">{s.tipo}</td>
+                                        <td className="p-2 text-left leading-tight">
                                           <span className="text-zinc-900 font-extrabold">{hotelName}</span>
                                           <span className="block text-[9.5px] text-zinc-500 font-medium mt-0.5">
                                             IN: {formatDate(s.detalles.checkInDate)} / OUT: {formatDate(s.detalles.checkOutDate)} ({formatTarifaLabel(s.detalles, s.detalles.lodgingRooms[0]?.roomTypeId, activeRes.mercado || "NACIONAL")})
                                           </span>
+                                          {singleRoom && (
+                                            <span className="block text-[10px] text-zinc-600 font-semibold mt-0.5">
+                                              {firstRoomTypeName}{firstRoomGuests ? ` · Pasajeros: ${firstRoomGuests}` : ""}
+                                            </span>
+                                          )}
                                         </td>
                                         {isDirecto ? (
-                                          <td className="p-3 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
+                                          <td className="p-2 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
                                         ) : (
                                           <>
-                                            <td className="p-3 text-right font-bold text-zinc-900">{formatCurrency(pvp, getOperatingCurrency())}</td>
-                                            <td className="p-3 text-center font-bold text-zinc-600">
+                                            <td className="p-2 text-right font-bold text-zinc-900">{formatCurrency(pvp, getOperatingCurrency())}</td>
+                                            <td className="p-2 text-center font-bold text-zinc-600">
                                               {comisionPct}%
                                               <span className="text-[10.5px] text-zinc-400 block font-normal">
                                                 ({formatCurrency(Math.max(0, comisionAmt), getOperatingCurrency())})
                                               </span>
                                             </td>
-                                            <td className="p-3 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
+                                            <td className="p-2 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
                                           </>
                                         )}
                                       </tr>
-                                      {/* Room Rows */}
-                                      {s.detalles.lodgingRooms.map((room: any, rIdx: number) => {
+                                      {/* Desglose por habitación: solo con más de una (con una sola iría duplicado). */}
+                                      {!singleRoom && rooms.map((room: any, rIdx: number) => {
                                         const rates = calculateRoomRates(room, s.detalles, activeRes.mercado || "NACIONAL", ratePlans, roomTypes);
                                         const roomTypeName = roomTypes.find(rt => rt.id === room.roomTypeId)?.nombre || "Habitación";
                                         const guestsNames = room.guests?.map((g: any) => `${g.name} (${g.type === "Adulto" ? "ADT" : "CHD"})`).filter((str: string) => str.replace(/\s*\([^)]+\)/g, "").trim() !== "").join(", ");
                                         return (
                                           <tr key={`${s.id}-rm-${rIdx}`} className="border-b border-zinc-100 last:border-b-zinc-200 bg-white">
-                                            <td className="p-2.5"></td>
-                                            <td className="p-2.5 text-[9.5px] text-zinc-400 font-bold uppercase tracking-wider pl-5">Hab {rIdx + 1}</td>
-                                            <td className="p-2.5 text-zinc-600 pl-5 text-left">
+                                            <td className="p-1.5"></td>
+                                            <td className="p-1.5 text-[9.5px] text-zinc-400 font-bold uppercase tracking-wider pl-5">Hab {rIdx + 1}</td>
+                                            <td className="p-1.5 text-zinc-600 pl-5 text-left leading-tight">
                                               <span className="font-semibold text-zinc-800 text-xs">{roomTypeName}</span>
                                               {guestsNames && <span className="block text-[10px] text-zinc-400 italic">Pasajeros: {guestsNames}</span>}
                                             </td>
                                             {isDirecto ? (
-                                              <td className="p-2.5 text-right text-zinc-800 font-bold text-xs">{formatCurrency(rates.sale, getOperatingCurrency())}</td>
+                                              <td className="p-1.5 text-right text-zinc-800 font-bold text-xs">{formatCurrency(rates.sale, getOperatingCurrency())}</td>
                                             ) : (
                                               <>
-                                                <td className="p-2.5 text-right text-zinc-700 text-xs font-semibold">{formatCurrency(rates.pvp, getOperatingCurrency())}</td>
-                                                <td className="p-2.5 text-center text-zinc-500 text-[10.5px]">
+                                                <td className="p-1.5 text-right text-zinc-700 text-xs font-semibold">{formatCurrency(rates.pvp, getOperatingCurrency())}</td>
+                                                <td className="p-1.5 text-center text-zinc-500 text-[10.5px]">
                                                   {comisionPct}%
                                                   <span className="text-[9.5px] text-zinc-400 block font-normal">
                                                     ({formatCurrency(rates.comisionB2BVal, getOperatingCurrency())})
                                                   </span>
                                                 </td>
-                                                <td className="p-2.5 text-right text-zinc-800 font-bold text-xs">{formatCurrency(rates.sale, getOperatingCurrency())}</td>
+                                                <td className="p-1.5 text-right text-zinc-800 font-bold text-xs">{formatCurrency(rates.sale, getOperatingCurrency())}</td>
                                               </>
                                             )}
                                           </tr>
@@ -6059,21 +6071,21 @@ export default function ReservasView({
                                 
                                 return (
                                   <tr key={s.id || idx} className="hover:bg-zinc-50/50">
-                                    <td className="p-3 font-mono text-[10.5px] text-zinc-400">{s.id}</td>
-                                    <td className="p-3 font-bold text-zinc-900">{s.tipo}</td>
-                                    <td className="p-3 font-medium text-zinc-700 leading-normal">{s.descripcion}</td>
+                                    <td className="p-2 font-mono text-[10.5px] text-zinc-400">{s.id}</td>
+                                    <td className="p-2 font-bold text-zinc-900">{s.tipo}</td>
+                                    <td className="p-2 font-medium text-zinc-700 leading-tight">{s.descripcion}</td>
                                     {isDirecto ? (
-                                      <td className="p-3 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
+                                      <td className="p-2 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
                                     ) : (
                                       <>
-                                        <td className="p-3 text-right font-bold text-zinc-900">{formatCurrency(pvp, getOperatingCurrency())}</td>
-                                        <td className="p-3 text-center font-bold text-zinc-600">
+                                        <td className="p-2 text-right font-bold text-zinc-900">{formatCurrency(pvp, getOperatingCurrency())}</td>
+                                        <td className="p-2 text-center font-bold text-zinc-600">
                                           {comisionPct}%
                                           <span className="text-[10.5px] text-zinc-400 block font-normal">
                                             ({formatCurrency(Math.max(0, comisionAmt), getOperatingCurrency())})
                                           </span>
                                         </td>
-                                        <td className="p-3 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
+                                        <td className="p-2 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
                                       </>
                                     )}
                                   </tr>
@@ -6116,7 +6128,7 @@ export default function ReservasView({
 
                     {/* Notes */}
                     {activeRes.specialRequests && (
-                      <div className="mt-6 space-y-2 font-sans">
+                      <div className="mt-4 space-y-1.5 font-sans">
                         <h5 className="font-bold text-[10px] uppercase text-zinc-500 tracking-wider">Observaciones / Requerimientos Especiales</h5>
                         <p className="p-3 bg-zinc-50 border border-zinc-200 text-zinc-700 rounded text-xs leading-relaxed font-semibold">
                           {activeRes.specialRequests}
@@ -6125,8 +6137,8 @@ export default function ReservasView({
                     )}
 
                     {/* Totals Summary Card */}
-                    <div className="mt-8 flex justify-end font-sans">
-                      <div className="w-full sm:w-80 bg-zinc-50 border border-zinc-200 p-4.5 rounded-lg space-y-2.5">
+                    <div className="mt-4 flex justify-end font-sans">
+                      <div className="w-full sm:w-80 bg-zinc-50 border border-zinc-200 p-3.5 rounded-lg space-y-2">
                         {isDirecto ? (
                           <div className="flex justify-between items-end">
                             <span className="text-xs text-zinc-700 uppercase font-black tracking-wide">Total a Pagar:</span>
@@ -6156,7 +6168,7 @@ export default function ReservasView({
               })()}
 
               {/* Legal Disclaimer */}
-              <div className="mt-10 border-t border-zinc-200 pt-6 text-center text-[10px] text-zinc-400 font-medium space-y-1 font-sans">
+              <div className="mt-6 border-t border-zinc-200 pt-4 text-center text-[10px] text-zinc-400 font-medium space-y-1 font-sans">
                 <p>
                   {isDirecto
                     ? `Este documento es una cotización de viaje emitida por ${companyConfig.name} para uso exclusivo del pasajero.`
