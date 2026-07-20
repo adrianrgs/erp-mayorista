@@ -195,6 +195,7 @@ async function main() {
   await deleteAll(token, "Servicios de Traslado",  "/transfers",                     "/transfers");
   await deleteAll(token, "Facturas Emitidas",      "/finances/invoices",             "/finances/invoices");
   await deleteAll(token, "Comprobantes de Pago",   "/finances/vouchers",             "/finances/vouchers");
+  await deleteAll(token, "Transacciones de Billetera", "/finances/wallet-transactions", "/finances/wallet-transactions");
   await deleteAll(token, "Obligaciones de Pago",   "/finances/obligations",          "/finances/obligations");
   await deleteAll(token, "Estados de Cuenta",      "/finances/statements",           "/finances/statements");
   await deleteAll(token, "Retenciones (IVA/ISLR)", "/finances/withholding-certificates", "/finances/withholding-certificates");
