@@ -172,6 +172,39 @@ export class FinancesService {
     return { success: true };
   }
 
+  // ── Wallet Transactions (billetera del cliente) ───────────────────────────
+
+  async findAllWalletTransactions() {
+    const data = await this.dc.executeQuery<{ walletTransactions: any[] }>('ListWalletTransactions');
+    return data.walletTransactions || [];
+  }
+
+  async createWalletTransaction(dto: any) {
+    await this.dc.executeMutation('InsertWalletTransaction', {
+      id: dto.id,
+      clientId: dto.clientId,
+      clientKind: dto.clientKind ?? 'B2B',
+      clientName: dto.clientName ?? '',
+      type: dto.type,
+      amount: dto.amount,
+      office: dto.office ?? null,
+      method: dto.method ?? null,
+      reference: dto.reference ?? null,
+      notes: dto.notes ?? null,
+      reservationId: dto.reservationId ?? null,
+      voucherId: dto.voucherId ?? null,
+      date: dto.date,
+      createdBy: dto.createdBy ?? null,
+      createdAt: dto.createdAt ?? new Date().toISOString(),
+    });
+    return { success: true, id: dto.id };
+  }
+
+  async deleteWalletTransaction(id: string) {
+    await this.dc.executeMutation('DeleteWalletTransaction', { id });
+    return { success: true };
+  }
+
   // ── Withholding Certificates ──────────────────────────────────────────────
 
   async findAllWithholdingCertificates() {

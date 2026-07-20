@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { B2BClient, DirectClient, FinancialInvoice, Reservation } from "../types";
+import { B2BClient, DirectClient, FinancialInvoice, Reservation, WalletTransaction, CompanyConfig } from "../types";
 import { FlightTicket } from "../types/aereos";
 import { RoomType, RatePlan, Property } from "../types/producto";
 import ClientesB2BPanel from "./ClientesB2BPanel";
@@ -21,6 +21,9 @@ interface ClientesViewProps {
   ratePlans: RatePlan[];
   detailedProperties: Property[];
   onNavigateToCobranzas?: (clientId: string) => void;
+  walletTransactions: WalletTransaction[];
+  onAddWalletTransaction: (tx: WalletTransaction) => void;
+  companyConfig: CompanyConfig;
 }
 
 export default function ClientesView({
@@ -38,7 +41,10 @@ export default function ClientesView({
   roomTypes,
   ratePlans,
   detailedProperties,
-  onNavigateToCobranzas
+  onNavigateToCobranzas,
+  walletTransactions,
+  onAddWalletTransaction,
+  companyConfig
 }: ClientesViewProps) {
   const [activeTab, setActiveTab] = useState<"b2b" | "directos">("b2b");
 
@@ -82,6 +88,9 @@ export default function ClientesView({
           ratePlans={ratePlans}
           detailedProperties={detailedProperties}
           onNavigateToCobranzas={onNavigateToCobranzas}
+          walletTransactions={walletTransactions}
+          onAddWalletTransaction={onAddWalletTransaction}
+          companyConfig={companyConfig}
         />
       ) : (
         <ClientesDirectosPanel
@@ -96,6 +105,9 @@ export default function ClientesView({
           ratePlans={ratePlans}
           detailedProperties={detailedProperties}
           onNavigateToCobranzas={onNavigateToCobranzas}
+          walletTransactions={walletTransactions}
+          onAddWalletTransaction={onAddWalletTransaction}
+          companyConfig={companyConfig}
         />
       )}
     </div>

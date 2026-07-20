@@ -404,6 +404,26 @@ query ListCustomRates @auth(level: PUBLIC) {
   }
 }
 
+query ListWalletTransactions @auth(level: PUBLIC) {
+  walletTransactions {
+    id
+    clientId
+    clientKind
+    clientName
+    type
+    amount
+    office
+    method
+    reference
+    notes
+    reservationId
+    voucherId
+    date
+    createdBy
+    createdAt
+  }
+}
+
 query ListWithholdingCertificates @auth(level: PUBLIC) {
   withholdingCertificates {
     id

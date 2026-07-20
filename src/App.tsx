@@ -1,6 +1,6 @@
 import { FlightTicket } from "./types/aereos";
 import React, { useState } from "react";
-import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, OperationalTransfer, mapToOperationalTransfer, mapToTransferService, FinancialInvoice, B2BClient, DirectClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement, PaymentVoucher, CompanyConfig, ExchangeRate, WithholdingCertificate, JournalEntry, CustomRate } from "./types";
+import { ProjectView, HotelProperty, Reservation, FlightLeg, TransferService, OperationalTransfer, mapToOperationalTransfer, mapToTransferService, FinancialInvoice, B2BClient, DirectClient, FleetVehicle, FleetDriver, PayableObligation, ProviderStatement, PaymentVoucher, CompanyConfig, ExchangeRate, WithholdingCertificate, JournalEntry, CustomRate, WalletTransaction } from "./types";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, setOperatingCurrency, getCurrencySymbol } from "./lib/taxEngine";
 import { Property, RoomType, RatePlan, StopSale, ExtraService, ServiceRate, Proveedor } from "./types/producto";
 
@@ -27,6 +27,7 @@ import {
   listTaxJurisdictions, listExchangeRates, listWithholdingCertificates, listJournalEntries,
   upsertTaxJurisdiction, insertExchangeRate, insertWithholdingCertificate,
   listCustomRates, upsertCustomRate, deleteCustomRate,
+  listWalletTransactions, insertWalletTransaction,
   deleteWithholdingCertificate, insertJournalEntry,
   listUsuarios, insertUsuario, updateUsuario, deleteUsuario,
   listRoles, insertRol, updateRol, deleteRol,
@@ -157,6 +158,36 @@ export default function App() {
   const handleDeleteCustomRate = async (id: string) => {
     persistCustomRates(customRates.filter(r => r.id !== id));
     try { await deleteCustomRate(dataConnect, { id }); } catch (e) {}
+  };
+
+  // Billetera (wallet) de clientes: historial de movimientos. El saldo vigente sigue en
+  // client.saldoFavor; esto es el ledger persistido.
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
+  const handleAddWalletTransaction = async (tx: WalletTransaction) => {
+    // Un abono en efectivo (Deposito) también queda registrado como voucher (VOU-) en el registro
+    // de comprobantes del cliente. Guardamos su id en la tx (voucherId) para el comprobante. Sin
+    // invoiceId + status Verificado: es un ingreso a saldo a favor, no altera el neteo de deuda.
+    let finalTx = tx;
+    if (tx.type === "Deposito") {
+      const voucherId = nextSequentialId("VOU", vouchers.map(v => v.id));
+      finalTx = { ...tx, voucherId };
+      handleAddVoucher({
+        id: voucherId,
+        clientId: tx.clientId,
+        clientName: tx.clientName,
+        invoiceId: undefined,
+        locatorId: tx.reservationId || undefined,
+        method: tx.method || "Efectivo",
+        reference: tx.reference || `WLT-${tx.id}`,
+        amount: tx.amount,
+        date: tx.date,
+        status: "Verificado",
+        bankName: tx.office ? `Oficina ${tx.office}` : undefined,
+        notes: tx.notes ? `Abono a billetera. ${tx.notes}` : "Abono a billetera (saldo a favor)",
+      });
+    }
+    setWalletTransactions(prev => [...prev, finalTx]);
+    try { await insertWalletTransaction(dataConnect, finalTx); } catch (e) {}
   };
 
   // Accounting & Fiscal module state
@@ -716,6 +747,10 @@ export default function App() {
             setCustomRates(cr.data.customRates);
             localStorage.setItem("custom_rates", JSON.stringify(cr.data.customRates));
           }
+        } catch (e) {}
+        try {
+          const wt = await listWalletTransactions();
+          if (wt.data.walletTransactions.length > 0) setWalletTransactions(wt.data.walletTransactions);
         } catch (e) {}
         try {
           const wh = await listWithholdingCertificates();
@@ -2188,6 +2223,9 @@ onDeleteStopSale={handleDeleteStopSale}
                     roomTypes={roomTypes}
                     ratePlans={ratePlans}
                     detailedProperties={detailedProperties}
+                    walletTransactions={walletTransactions}
+                    onAddWalletTransaction={handleAddWalletTransaction}
+                    companyConfig={companyConfig}
                   />
                 )}
                 {currentSection === ProjectView.COBRANZAS && (
@@ -2209,6 +2247,8 @@ onDeleteStopSale={handleDeleteStopSale}
                     withholdingCertificates={withholdingCertificates}
                     onAddWithholdingCertificate={handleAddWithholdingCertificate}
                     onDeleteWithholdingCertificate={handleDeleteWithholdingCertificate}
+                    walletTransactions={walletTransactions}
+                    onAddWalletTransaction={handleAddWalletTransaction}
                   />
                 )}
                 {currentSection === ProjectView.CONTABILIDAD && (

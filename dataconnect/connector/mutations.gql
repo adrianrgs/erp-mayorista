@@ -1015,6 +1015,46 @@ mutation DeleteCustomRate($id: String!) @auth(level: PUBLIC) {
   customRate_delete(id: $id)
 }
 
+mutation InsertWalletTransaction(
+  $id: String!
+  $clientId: String!
+  $clientKind: String!
+  $clientName: String!
+  $type: String!
+  $amount: Float!
+  $office: String
+  $method: String
+  $reference: String
+  $notes: String
+  $reservationId: String
+  $voucherId: String
+  $date: String!
+  $createdBy: String
+  $createdAt: String
+) @auth(level: PUBLIC) {
+  walletTransaction_insert(data: {
+    id: $id
+    clientId: $clientId
+    clientKind: $clientKind
+    clientName: $clientName
+    type: $type
+    amount: $amount
+    office: $office
+    method: $method
+    reference: $reference
+    notes: $notes
+    reservationId: $reservationId
+    voucherId: $voucherId
+    date: $date
+    createdBy: $createdBy
+    createdAt: $createdAt
+  })
+}
+
+mutation DeleteWalletTransaction($id: String!) @auth(level: PUBLIC) {
+  walletTransaction_delete(id: $id)
+}
+
 mutation InsertWithholdingCertificate(
   $id: String!
   $number: String!

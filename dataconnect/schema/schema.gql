@@ -402,6 +402,27 @@ type CustomRate @table {
   updatedAt: String
 }
 
+# Movimientos de la billetera (wallet) de un cliente. El saldo vigente vive en el saldoFavor del
+# cliente; esta tabla es el historial estructurado (depósitos en efectivo en otra oficina, retiros,
+# aplicaciones a facturas, ajustes). type: "Deposito" | "Retiro" | "Aplicacion" | "Ajuste".
+type WalletTransaction @table {
+  id: String! @col(dataType: "varchar(50)")
+  clientId: String!
+  clientKind: String!
+  clientName: String!
+  type: String!
+  amount: Float!
+  office: String
+  method: String
+  reference: String
+  notes: String
+  reservationId: String
+  voucherId: String
+  date: String!
+  createdBy: String
+  createdAt: String
+}
+
 type WithholdingCertificate @table {
   id: String! @col(dataType: "varchar(50)")
   number: String!

@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
-import { Reservation, FinancialInvoice, DirectClient, PaymentVoucher, CompanyConfig } from "../types";
+import { Reservation, FinancialInvoice, DirectClient, PaymentVoucher, CompanyConfig, WalletTransaction } from "../types";
 import type { FlightTicket } from "../types/aereos";
+import { round2 } from "../lib/money";
+import WalletClienteModal from "../components/WalletClienteModal";
 import { nextSequentialId } from "../lib/idGenerator";
 import { printElementById } from "../lib/print";
 import EstadoCuentaClientePDF, { StatementConfig, DEFAULT_STATEMENT_CONFIG } from "../components/EstadoCuentaClientePDF";
@@ -34,7 +36,8 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Eye,
-  Banknote
+  Banknote,
+  Wallet
 } from "lucide-react";
 
 interface CobranzasDirectosPanelProps {
@@ -49,6 +52,8 @@ interface CobranzasDirectosPanelProps {
   onAddVoucher: (newVoucher: PaymentVoucher) => void;
   onUpdateVoucher: (updated: PaymentVoucher) => void;
   companyConfig: CompanyConfig;
+  walletTransactions?: WalletTransaction[];
+  onAddWalletTransaction?: (tx: WalletTransaction) => void;
 }
 
 export default function CobranzasDirectosPanel({
@@ -63,9 +68,12 @@ export default function CobranzasDirectosPanel({
   onAddVoucher,
   onUpdateVoucher,
   companyConfig,
+  walletTransactions = [],
+  onAddWalletTransaction,
 }: CobranzasDirectosPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [invoiceSearchQuery, setInvoiceSearchQuery] = useState("");
+  const [voucherSearch, setVoucherSearch] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(clients[0]?.id || null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<FinancialInvoice | null>(null);
@@ -84,6 +92,8 @@ export default function CobranzasDirectosPanel({
   // Modal de configuración del estado de cuenta del cliente
   const [showStatementModal, setShowStatementModal] = useState(false);
   const [statementConfig, setStatementConfig] = useState<StatementConfig>(DEFAULT_STATEMENT_CONFIG);
+  // Modal de billetera del cliente
+  const [showWalletModal, setShowWalletModal] = useState(false);
 
   // Withdrawal of saldo a favor
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -367,6 +377,17 @@ export default function CobranzasDirectosPanel({
 
     onUpdateClient({ ...activeClient, saldoFavor: Math.max(0, activeClient.saldoFavor - amount) });
 
+    onAddWalletTransaction?.({
+      id: "WTX-" + Date.now().toString(36).toUpperCase(),
+      clientId: activeClient.id, clientKind: "Directo", clientName: activeClient.nombre,
+      type: "Retiro", amount,
+      method: withdrawForm.method || undefined,
+      reference: withdrawForm.reference || undefined,
+      notes: withdrawForm.notes || undefined,
+      date: new Date().toISOString().split("T")[0],
+      createdAt: new Date().toISOString(),
+    });
+
     if (onAddInvoice) {
       onAddInvoice({
         id: nextSequentialId("RET", invoices.map(i => i.id)),
@@ -576,6 +597,22 @@ export default function CobranzasDirectosPanel({
                 />
               )}
 
+              {showWalletModal && (
+                <WalletClienteModal
+                  client={activeClient}
+                  clientKind="Directo"
+                  transactions={walletTransactions}
+                  companyConfig={companyConfig}
+                  clientTaxId={activeClient.cedula}
+                  clientTaxIdLabel="Cédula"
+                  onClose={() => setShowWalletModal(false)}
+                  onRegisterDeposit={(tx) => {
+                    onAddWalletTransaction?.(tx);
+                    onUpdateClient({ ...activeClient, saldoFavor: round2(activeClient.saldoFavor + tx.amount) });
+                  }}
+                />
+              )}
+
               {/* Client standing info card */}
               <div className="bg-white border border-zinc-200 rounded-lg p-5 space-y-4 shadow-xs">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-100 pb-3 gap-3">
@@ -586,6 +623,13 @@ export default function CobranzasDirectosPanel({
                     <h3 className="font-black text-base text-zinc-950 uppercase mt-1.5">{activeClient.nombre}</h3>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowWalletModal(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                      title="Billetera del cliente: registrar abonos en efectivo y ver historial"
+                    >
+                      <Wallet className="w-3.5 h-3.5" /> Billetera
+                    </button>
                     <button
                       onClick={() => setShowStatementModal(true)}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-[10px] font-black uppercase tracking-wider cursor-pointer"
@@ -841,10 +885,25 @@ export default function CobranzasDirectosPanel({
                   ) : (
                     // Payment Vouchers list and auditing panel
                     (() => {
-                      const clientVouchers = vouchers.filter(v => v.clientId === activeClient.id);
+                      const allClientVouchers = vouchers.filter(v => v.clientId === activeClient.id);
+                      const q = voucherSearch.trim().toLowerCase();
+                      const clientVouchers = q === "" ? allClientVouchers : allClientVouchers.filter(v =>
+                        [v.id, v.reference, v.method, v.bankName, v.status, v.date, String(v.amount), v.invoiceId, v.notes]
+                          .some(f => (f || "").toString().toLowerCase().includes(q))
+                      );
 
                       return (
                         <div className="space-y-4">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                            <input
+                              type="text"
+                              placeholder="Buscar comprobante por Nº, referencia, método, fecha o monto..."
+                              className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-500 font-semibold"
+                              value={voucherSearch}
+                              onChange={(e) => setVoucherSearch(e.target.value)}
+                            />
+                          </div>
                           <div className="overflow-x-auto">
                             <table className="w-full text-left text-xs divide-y divide-zinc-200">
                               <thead>

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Reservation, FinancialInvoice, B2BClient, DirectClient, PaymentVoucher, CompanyConfig, WithholdingCertificate } from "../types";
+import { Reservation, FinancialInvoice, B2BClient, DirectClient, PaymentVoucher, CompanyConfig, WithholdingCertificate, WalletTransaction } from "../types";
 import type { FlightTicket } from "../types/aereos";
 import { TaxJurisdiction } from "../lib/taxEngine";
 import CobranzasB2BPanel from "./CobranzasB2BPanel";
@@ -23,6 +23,8 @@ interface CobranzasViewProps {
   withholdingCertificates?: WithholdingCertificate[];
   onAddWithholdingCertificate?: (cert: WithholdingCertificate) => void;
   onDeleteWithholdingCertificate?: (id: string) => void;
+  walletTransactions: WalletTransaction[];
+  onAddWalletTransaction: (tx: WalletTransaction) => void;
 }
 
 export default function CobranzasView({
@@ -43,6 +45,8 @@ export default function CobranzasView({
   withholdingCertificates,
   onAddWithholdingCertificate,
   onDeleteWithholdingCertificate,
+  walletTransactions,
+  onAddWalletTransaction,
 }: CobranzasViewProps) {
   const [activeTab, setActiveTab] = useState<"b2b" | "directos">("b2b");
 
@@ -99,6 +103,8 @@ export default function CobranzasView({
           withholdingCertificates={withholdingCertificates}
           onAddWithholdingCertificate={onAddWithholdingCertificate}
           onDeleteWithholdingCertificate={onDeleteWithholdingCertificate}
+          walletTransactions={walletTransactions}
+          onAddWalletTransaction={onAddWalletTransaction}
         />
       ) : (
         <CobranzasDirectosPanel
@@ -113,6 +119,8 @@ export default function CobranzasView({
           onAddVoucher={onAddVoucher}
           onUpdateVoucher={onUpdateVoucher}
           companyConfig={companyConfig}
+          walletTransactions={walletTransactions}
+          onAddWalletTransaction={onAddWalletTransaction}
         />
       )}
     </div>

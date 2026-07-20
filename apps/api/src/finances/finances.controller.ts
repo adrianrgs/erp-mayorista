@@ -103,6 +103,18 @@ export class FinancesController {
   @RequierePermiso(Accion.EDITAR, Modulo.CONFIGURACION, Modulo.ADMINISTRACION)
   deleteCustomRate(@Param('id') id: string) { return this.service.deleteCustomRate(id); }
 
+  // ── Wallet Transactions (billetera del cliente) ───────────────────────────
+  @Get('wallet-transactions')
+  findAllWalletTransactions() { return this.service.findAllWalletTransactions(); }
+
+  @Post('wallet-transactions')
+  @RequierePermiso(Accion.CREAR, Modulo.COBRANZAS, Modulo.CLIENTES)
+  createWalletTransaction(@Body() dto: any) { return this.service.createWalletTransaction(dto); }
+
+  @Delete('wallet-transactions/:id')
+  @RequierePermiso(Accion.ELIMINAR, Modulo.COBRANZAS, Modulo.CLIENTES)
+  deleteWalletTransaction(@Param('id') id: string) { return this.service.deleteWalletTransaction(id); }
+
   // ── Withholding Certificates ──────────────────────────────────────────────
   @Get('withholding-certificates')
   findAllWithholding() { return this.service.findAllWithholdingCertificates(); }

@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
-import { DirectClient, DirectClientTipo, ClientStatus, FinancialInvoice, Reservation, ServiceType } from "../types";
+import { DirectClient, DirectClientTipo, ClientStatus, FinancialInvoice, Reservation, ServiceType, WalletTransaction, CompanyConfig } from "../types";
 import { FlightTicket } from "../types/aereos";
+import { round2 } from "../lib/money";
+import WalletClienteModal from "../components/WalletClienteModal";
 import { RoomType, RatePlan, TipoCobro, Property } from "../types/producto";
 import { nextSequentialId } from "../lib/idGenerator";
 import {
@@ -22,7 +24,8 @@ import {
   FileText,
   Calendar,
   AlertTriangle,
-  Trash2
+  Trash2,
+  Wallet
 } from "lucide-react";
 import { ProjectView } from "../types";
 import { AccionPermiso } from "../types/usuarios";
@@ -41,6 +44,9 @@ interface ClientesDirectosPanelProps {
   ratePlans: RatePlan[];
   detailedProperties: Property[];
   onNavigateToCobranzas?: (clientId: string) => void;
+  walletTransactions?: WalletTransaction[];
+  onAddWalletTransaction?: (tx: WalletTransaction) => void;
+  companyConfig?: CompanyConfig;
 }
 
 const formatDate = (dateStr?: string): string => {
@@ -113,10 +119,14 @@ export default function ClientesDirectosPanel({
   roomTypes,
   ratePlans,
   detailedProperties,
-  onNavigateToCobranzas
+  onNavigateToCobranzas,
+  walletTransactions = [],
+  onAddWalletTransaction,
+  companyConfig
 }: ClientesDirectosPanelProps) {
   const { puede } = usePermissions();
   const { showConfirm } = useDialog();
+  const [showWalletModal, setShowWalletModal] = useState(false);
   // Navigation inside the module (Level 1: List, Level 2: Ficha Técnica, Level 3: Detalle Expediente)
   const [viewLevel, setViewLevel] = useState<1 | 2 | 3>(1);
   const [activeClientId, setActiveClientId] = useState<string | null>(null);
@@ -177,20 +187,36 @@ export default function ClientesDirectosPanel({
     : [];
 
   // Filtered invoices for Tab 2
-  const filteredInvoices = clientInvoices.filter(inv => {
-    const isCreditNote = inv.id.startsWith("NC-") || inv.amount < 0;
-    const isExcess = inv.id.startsWith("ABO-");
-    const isPayment = inv.status === "Pagado" && inv.amount > 0 && !isExcess;
-    const typeStr = isCreditNote ? "REINTEGRO" : isExcess ? "EXCEDENTE" : isPayment ? "PAGO" : "FACTURA";
+  // Movimientos financieros = facturas del cliente + abonos a su billetera (efectivo → saldo a favor).
+  const clientWalletDeposits = (walletTransactions || []).filter(t => t.clientId === activeClient?.id && t.type === "Deposito");
+  const movements = [
+    ...clientInvoices.map(inv => {
+      const esCredito = inv.id.startsWith("NC-") || inv.amount < 0;
+      const esExcess = inv.id.startsWith("ABO-");
+      const esPayment = inv.status === "Pagado" && inv.amount > 0 && !esExcess;
+      const tipo = esCredito ? "REINTEGRO" : esExcess ? "EXCEDENTE" : esPayment ? "PAGO" : "FACTURA";
+      return {
+        id: inv.id, clientName: inv.clientName, date: inv.date, amount: inv.amount, status: inv.status,
+        tipo, esCredito, esExcess, esPayment,
+        labelTipo: esCredito ? "Reintegro / NC" : esExcess ? "Excedente / Abono" : esPayment ? "Pago Recibido" : "Factura Emitida",
+      };
+    }),
+    ...clientWalletDeposits.map(t => ({
+      id: t.voucherId || t.id,
+      clientName: `Abono a billetera${t.office ? ` — Oficina ${t.office}` : ""}${t.method ? ` (${t.method})` : ""}${t.reference ? ` · Ref ${t.reference}` : ""}`,
+      date: t.date, amount: t.amount, status: "Pagado",
+      tipo: "EXCEDENTE" as const, esCredito: false, esExcess: true, esPayment: false,
+      labelTipo: "Abono a Billetera",
+    })),
+  ].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
-    const matchesSearch = 
-      inv.id.toLowerCase().includes(movSearch.toLowerCase()) ||
-      inv.clientName.toLowerCase().includes(movSearch.toLowerCase()) ||
-      inv.date.toLowerCase().includes(movSearch.toLowerCase());
-
-    const matchesType = movType === "ALL" || typeStr === movType;
-    const matchesStatus = movStatus === "ALL" || inv.status.toUpperCase() === movStatus;
-
+  const filteredInvoices = movements.filter(m => {
+    const matchesSearch =
+      m.id.toLowerCase().includes(movSearch.toLowerCase()) ||
+      m.clientName.toLowerCase().includes(movSearch.toLowerCase()) ||
+      m.date.toLowerCase().includes(movSearch.toLowerCase());
+    const matchesType = movType === "ALL" || m.tipo === movType;
+    const matchesStatus = movStatus === "ALL" || m.status.toUpperCase() === movStatus;
     return matchesSearch && matchesType && matchesStatus;
   });
 
@@ -596,6 +622,13 @@ export default function ClientesDirectosPanel({
                 }`}>
                   {activeClient.tipo}
                 </span>
+                <button
+                  onClick={() => setShowWalletModal(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                  title="Billetera del cliente: registrar abonos en efectivo y ver historial"
+                >
+                  <Wallet className="w-3.5 h-3.5" /> Billetera
+                </button>
                 {puede(ProjectView.CLIENTES, AccionPermiso.ELIMINAR) && (
                   <button
                     onClick={() => showConfirm({
@@ -614,6 +647,22 @@ export default function ClientesDirectosPanel({
                 )}
               </div>
             </div>
+
+            {showWalletModal && companyConfig && (
+              <WalletClienteModal
+                client={activeClient}
+                clientKind="Directo"
+                transactions={walletTransactions}
+                companyConfig={companyConfig}
+                clientTaxId={activeClient.cedula}
+                clientTaxIdLabel="Cédula"
+                onClose={() => setShowWalletModal(false)}
+                onRegisterDeposit={(tx) => {
+                  onAddWalletTransaction?.(tx);
+                  onUpdateClient({ ...activeClient, saldoFavor: round2(activeClient.saldoFavor + tx.amount) });
+                }}
+              />
+            )}
 
             {/* Financial Overview Tiles */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -718,7 +767,7 @@ export default function ClientesDirectosPanel({
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                Movimientos Financieros ({clientInvoices.length})
+                Movimientos Financieros ({movements.length})
               </button>
               <button
                 type="button"
@@ -976,22 +1025,18 @@ export default function ClientesDirectosPanel({
                         </tr>
                       ) : (
                         filteredInvoices.map((inv) => {
-                          const isCreditNote = inv.id.startsWith("NC-") || inv.amount < 0;
-                          const isExcess = inv.id.startsWith("ABO-");
-                          const isPayment = inv.status === "Pagado" && inv.amount > 0 && !isExcess;
-                          
                           return (
                             <tr key={inv.id} className="hover:bg-zinc-50/50 transition-colors">
                               <td className="p-3 font-mono font-bold text-zinc-600">{inv.id}</td>
                               <td className="p-3 text-zinc-900 font-bold">{inv.clientName}</td>
                               <td className="p-3 text-zinc-500 font-mono">{inv.date}</td>
-                              <td className={`p-3 text-right font-black font-mono text-xs ${isCreditNote ? "text-red-650" : isExcess ? "text-emerald-700 font-extrabold" : "text-zinc-900"}`}>
-                                {isCreditNote ? "" : "+"}{formatCurrency(inv.amount, getOperatingCurrency())}
+                              <td className={`p-3 text-right font-black font-mono text-xs ${inv.esCredito ? "text-red-650" : inv.esExcess ? "text-emerald-700 font-extrabold" : "text-zinc-900"}`}>
+                                {inv.esCredito ? "" : "+"}{formatCurrency(inv.amount, getOperatingCurrency())}
                               </td>
                               <td className="p-3 text-center">
                                 <span className={`text-[8.5px] uppercase tracking-wider px-2 py-0.5 rounded border font-semibold ${
-                                  inv.status === "Pagado" ? "bg-emerald-50 text-emerald-700 border-emerald-250 font-bold" : 
-                                  inv.status === "Facturado" ? "bg-amber-50 text-amber-700 border-amber-250" : 
+                                  inv.status === "Pagado" ? "bg-emerald-50 text-emerald-700 border-emerald-250 font-bold" :
+                                  inv.status === "Facturado" ? "bg-amber-50 text-amber-700 border-amber-250" :
                                   inv.status === "Vencido" ? "bg-red-50 text-red-700 border-red-200 font-bold animate-pulse" : "bg-zinc-50 text-zinc-600 border-zinc-200"
                                 }`}>
                                   {inv.status}
@@ -999,15 +1044,15 @@ export default function ClientesDirectosPanel({
                               </td>
                               <td className="p-3 text-center">
                                 <span className={`px-2.5 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider border ${
-                                  isCreditNote 
-                                    ? "bg-red-50 border-red-200 text-red-750" 
-                                    : isExcess
+                                  inv.esCredito
+                                    ? "bg-red-50 border-red-200 text-red-750"
+                                    : inv.esExcess
                                       ? "bg-emerald-50 border-emerald-250 text-emerald-750"
-                                      : isPayment 
-                                        ? "bg-emerald-50 border-emerald-205 text-emerald-700" 
+                                      : inv.esPayment
+                                        ? "bg-emerald-50 border-emerald-205 text-emerald-700"
                                         : "bg-blue-50 border-blue-200 text-blue-750"
                                 }`}>
-                                  {isCreditNote ? "Reintegro / NC" : isExcess ? "Excedente / Abono" : isPayment ? "Pago Recibido" : "Factura Emitida"}
+                                  {inv.labelTipo}
                                 </span>
                               </td>
                             </tr>

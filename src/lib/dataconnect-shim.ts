@@ -462,6 +462,21 @@ export const deleteCustomRate = async (_dc: any, vars: { id: string }) => {
   return { data: {} };
 };
 
+export const listWalletTransactions = async () => {
+  const r = await api.get("/finances/wallet-transactions");
+  return { data: { walletTransactions: Array.isArray(r.data) ? r.data : [] } };
+};
+
+export const insertWalletTransaction = async (_dc: any, vars: any) => {
+  await api.post("/finances/wallet-transactions", vars);
+  return { data: {} };
+};
+
+export const deleteWalletTransaction = async (_dc: any, vars: { id: string }) => {
+  await api.delete(`/finances/wallet-transactions/${vars.id}`);
+  return { data: {} };
+};
+
 export const insertWithholdingCertificate = async (_dc: any, vars: any) => {
   await api.post("/finances/withholding-certificates", vars);
   return { data: {} };

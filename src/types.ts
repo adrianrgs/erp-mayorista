@@ -458,6 +458,26 @@ export interface FinancialVariation {
   excessPendingVerification?: number;
 }
 
+// Movimiento de la billetera (wallet) de un cliente. El saldo vigente vive en client.saldoFavor;
+// esto es el historial persistido. amount siempre positivo (el signo lo determina `type`).
+export interface WalletTransaction {
+  id: string;
+  clientId: string;
+  clientKind: "B2B" | "Directo";
+  clientName: string;
+  type: "Deposito" | "Retiro" | "Aplicacion" | "Ajuste";
+  amount: number;
+  office?: string;
+  method?: string;
+  reference?: string;
+  notes?: string;
+  reservationId?: string;
+  voucherId?: string;        // voucher (VOU-) generado para el abono, para el comprobante
+  date: string;
+  createdBy?: string;
+  createdAt?: string;
+}
+
 export interface B2BWalletTransaction {
   id: string;
   clientId: string;
