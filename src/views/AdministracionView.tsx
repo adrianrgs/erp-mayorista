@@ -89,8 +89,10 @@ export default function AdministracionView({
   const profitMarginPercent = totalGrossSales > 0 ? Math.round((projectedProfit / totalGrossSales) * 100) : 0;
 
   // Real Liquidity (Cobros verificados/pagados menos pagos reales a proveedores)
+  // Efectivo cobrado: excluye retiros (RET-) y notas de crédito (NC-, montos negativos de
+  // anulaciones/reintegros). Sin excluir la NC, una factura anulada dejaba la liquidez en negativo.
   const realCashCollected = invoices
-    .filter(i => i.type === "Cobro" && i.status === "Pagado" && !i.id?.startsWith("RET-"))
+    .filter(i => i.type === "Cobro" && i.status === "Pagado" && !i.id?.startsWith("RET-") && !i.id?.startsWith("NC-") && i.amount > 0)
     .reduce((sum, i) => sum + i.amount, 0);
 
   // RET- invoices = saldoFavor cash withdrawals (outflow, must be subtracted)

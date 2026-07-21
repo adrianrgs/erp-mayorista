@@ -3059,40 +3059,48 @@ export default function ReservasView({
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>Reactivar</span>
                       </Button>
-                      {puede(ProjectView.RESERVAS, AccionPermiso.ELIMINAR) && (
-                        <Button
-                          onClick={() => intentarAccionSensible({
-                            modulo: ProjectView.RESERVAS,
-                            accion: AccionPermiso.ELIMINAR,
-                            entidadTipo: "Reservation",
-                            entidadId: activeRes.id,
-                            descripcion: `Eliminar permanentemente el expediente ${activeRes.id}`,
-                            ejecutar: () => {
-                              showConfirm({
-                                title: "Eliminar Permanentemente",
-                                message: "Esta acción no se puede deshacer. El expediente y sus traslados serán eliminados de la base de datos de manera definitiva, liberando su identificador.",
-                                requireInputToConfirm: activeRes.id,
-                                type: "danger",
-                                confirmText: "Sí, Eliminar Permanentemente",
-                                onConfirm: () => {
-                                  if (onDeleteReservation) {
-                                    onDeleteReservation(activeRes.id);
-                                    showAlert({ title: "Expediente Eliminado", message: "El expediente ha sido eliminado de forma permanente.", type: "success" });
-                                    setViewLevel(1);
+                      {puede(ProjectView.RESERVAS, AccionPermiso.ELIMINAR) && (() => {
+                        // Solo se puede eliminar permanentemente cuando Facturación ya procesó la
+                        // anulación: no quedan servicios/boletos facturados o solicitados por revertir.
+                        const anulacionPendiente =
+                          (activeRes.servicios || []).some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado") ||
+                          boletos.some(b => b.expedienteId === activeRes.id && b.facturarConjunto && (b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "Solicitado"));
+                        return (
+                          <Button
+                            disabled={anulacionPendiente}
+                            onClick={() => intentarAccionSensible({
+                              modulo: ProjectView.RESERVAS,
+                              accion: AccionPermiso.ELIMINAR,
+                              entidadTipo: "Reservation",
+                              entidadId: activeRes.id,
+                              descripcion: `Eliminar permanentemente el expediente ${activeRes.id}`,
+                              ejecutar: () => {
+                                showConfirm({
+                                  title: "Eliminar Permanentemente",
+                                  message: "Esta acción no se puede deshacer. El expediente y sus traslados serán eliminados de la base de datos de manera definitiva, liberando su identificador.",
+                                  requireInputToConfirm: activeRes.id,
+                                  type: "danger",
+                                  confirmText: "Sí, Eliminar Permanentemente",
+                                  onConfirm: () => {
+                                    if (onDeleteReservation) {
+                                      onDeleteReservation(activeRes.id);
+                                      showAlert({ title: "Expediente Eliminado", message: "El expediente ha sido eliminado de forma permanente.", type: "success" });
+                                      setViewLevel(1);
+                                    }
                                   }
-                                }
-                              });
-                            },
-                          })}
-                          variant="danger"
-                          size="sm"
-                          className="uppercase"
-                          title="Eliminar Permanente"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Eliminar Permanente</span>
-                        </Button>
-                      )}
+                                });
+                              },
+                            })}
+                            variant="danger"
+                            size="sm"
+                            className="uppercase"
+                            title={anulacionPendiente ? "Disponible cuando Facturación procese/apruebe la anulación de este expediente" : "Eliminar Permanente"}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Eliminar Permanente</span>
+                          </Button>
+                        );
+                      })()}
                     </>
                   )}
                 </div>

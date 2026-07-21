@@ -664,8 +664,18 @@ export default function FacturacionView({
     );
     const isCancelled = r.status === "Cancelada";
 
+    // Cancelada que TODAVÍA tiene algo realmente facturado/solicitado por revertir (excluye vuelos en
+    // "Borrador", que no están facturados). Requiere emitir la nota de crédito / anulación.
+    const cancelledNeedsAttention = isCancelled && (
+      services.some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado") ||
+      jointFlights.some(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "Solicitado")
+    );
+
     let bucket: "anuladas" | "atencion" | "proveedor" | "facturadas";
-    if (isCancelled) bucket = "anuladas";
+    // Va primero a "Necesitan Atención" para que la anulación no pase desapercibida; solo cuando ya
+    // no queda nada facturado por revertir cae en "Anuladas".
+    if (cancelledNeedsAttention) bucket = "atencion";
+    else if (isCancelled) bucket = "anuladas";
     else if (hasRequest || hasPendingSupplement || hasPendingCreditNote) bucket = "atencion";
     else if (hasPendingExcessVerification) bucket = "proveedor";
     else bucket = "facturadas";
@@ -688,6 +698,10 @@ export default function FacturacionView({
   const activeRes = selectedResId ? realBookings.find(r => r.id === selectedResId) : undefined;
   const activeResId = activeRes?.id || null;
 
+  // Penalidad / gastos no reembolsables al anular. Se precarga con lo ya pagado a proveedores del
+  // expediente (normalmente no reembolsable) y es editable.
+  const [cancelPenalty, setCancelPenalty] = useState<string>("");
+
   React.useEffect(() => {
     if (activeRes) {
       setSelectedFacturacionTipo(activeRes.facturacionTipo || "Pago Contado");
@@ -697,6 +711,11 @@ export default function FacturacionView({
       const saleClient = resolveSaleClient(activeRes, clients, directClients).client;
       const hoy = new Date().toISOString().split("T")[0];
       setInvoiceDueDate(computeDueDate(activeRes.checkIn, saleClient?.diasCredito, hoy));
+      // Penalidad por defecto = pagos ya emitidos a proveedores de este expediente.
+      const providerPaid = (payableObligations || [])
+        .filter(o => o.locatorId === activeRes.id)
+        .reduce((s, o) => s + (o.paidAmount || 0), 0);
+      setCancelPenalty(providerPaid > 0 ? providerPaid.toFixed(2) : "0");
     }
   }, [activeRes?.id]);
 
@@ -1570,31 +1589,41 @@ export default function FacturacionView({
       (inv.id.startsWith("FAC-") || inv.id.startsWith("NC-"))
     );
     
-    // Sum of paid invoices
+    const invoicedTotal = associatedInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+
+    // Cobrado real = pagos verificados (vouchers) sobre esas facturas + facturas ya marcadas Pagado
+    // (contado). Antes solo miraba el status "Pagado" e ignoraba los adelantos / pagos parciales,
+    // por lo que "Total Cobrado" salía en 0 aunque el cliente hubiera abonado.
     const paidInvoicedAmount = associatedInvoices
-      .filter(inv => inv.status === "Pagado")
-      .reduce((sum, inv) => sum + inv.amount, 0);
+      .filter(inv => inv.id.startsWith("FAC-"))
+      .reduce((sum, inv) => {
+        const vpaid = vouchers.filter(v => v.invoiceId === inv.id && v.status === "Verificado").reduce((s, v) => s + v.amount, 0);
+        const paid = inv.status === "Pagado" ? Math.max(inv.amount, vpaid) : vpaid;
+        return sum + Math.min(paid, inv.amount);
+      }, 0);
 
-    // Sum of unpaid invoices (Facturado or Vencido)
-    const unpaidInvoicedAmount = associatedInvoices
-      .filter(inv => inv.status !== "Pagado")
-      .reduce((sum, inv) => sum + inv.amount, 0);
-
-    const invoicedTotal = paidInvoicedAmount + unpaidInvoicedAmount;
+    const unpaidInvoicedAmount = Math.max(0, invoicedTotal - paidInvoicedAmount);
+    // Penalidad / gastos no reembolsables retenidos del reintegro (no puede exceder lo cobrado).
+    const penaltyInput = Math.max(0, parseFloat(cancelPenalty) || 0);
+    const penaltyRetained = Math.min(penaltyInput, paidInvoicedAmount);
+    const reintegroCliente = Math.max(0, paidInvoicedAmount - penaltyRetained);
+    // La NC revierte solo lo que NO se retiene: la penalidad queda como ingreso que compensa el
+    // costo no reembolsable del proveedor.
+    const reversedAmount = Math.max(0, invoicedTotal - penaltyRetained);
     const _cancelSaleClient = resolveSaleClient(activeRes, clients, directClients);
     const _cancelAgency = _cancelSaleClient.client;
 
-    // Emit Credit Note in Financial Log for the total amount that was invoiced
-    if (onAddInvoice && invoicedTotal > 0) {
-      const _cancelTax = computeTax(invoicedTotal, activeRes, _cancelAgency);
+    // Emit Credit Note in Financial Log for the amount reversed (invoiced minus retained penalty)
+    if (onAddInvoice && reversedAmount > 0) {
+      const _cancelTax = computeTax(reversedAmount, activeRes, _cancelAgency);
       const creditNote: FinancialInvoice = {
         id: nextSequentialId("NC", invoices.map(i => i.id)),
-        clientName: `Anulación: ${activeRes.holder} - Localizador ${activeRes.id}`,
+        clientName: `Anulación: ${activeRes.holder} - Localizador ${activeRes.id}${penaltyRetained > 0 ? ` (penalidad retenida: ${formatCurrency(penaltyRetained, getOperatingCurrency())})` : ""}`,
         clientId: _cancelAgency?.id,
         reservationId: activeRes.id,
         date: new Date().toISOString().split("T")[0],
         dueDate: activeRes.checkIn,
-        amount: -invoicedTotal,
+        amount: -reversedAmount,
         vatAmount: -_cancelTax.vatAmount,
         taxableBase: -_cancelTax.taxableBase,
         exchangeRate: _cancelTax.exchangeRate,
@@ -1611,8 +1640,8 @@ export default function FacturacionView({
       let nextSaldoFavor = _cancelAgency.saldoFavor;
       let nextSaldoDeber = _cancelAgency.saldoDeber;
 
-      if (paidInvoicedAmount > 0) {
-        nextSaldoFavor += paidInvoicedAmount;
+      if (reintegroCliente > 0) {
+        nextSaldoFavor += reintegroCliente;
       }
       if (unpaidInvoicedAmount > 0) {
         nextSaldoDeber = Math.max(0, nextSaldoDeber - unpaidInvoicedAmount);
@@ -1625,13 +1654,13 @@ export default function FacturacionView({
       }
     }
 
-    const typeMsg = paidInvoicedAmount > 0 && unpaidInvoicedAmount > 0
-      ? `reintegrando ${formatCurrency(paidInvoicedAmount, getOperatingCurrency())} a Saldo a Favor y anulando ${formatCurrency(unpaidInvoicedAmount, getOperatingCurrency())} de Saldo Deudor`
-      : paidInvoicedAmount > 0
-        ? `reintegrando ${formatCurrency(paidInvoicedAmount, getOperatingCurrency())} a Saldo a Favor`
-        : `anulando ${formatCurrency(unpaidInvoicedAmount, getOperatingCurrency())} de Saldo Deudor`;
+    const msgParts: string[] = [];
+    if (reintegroCliente > 0) msgParts.push(`reintegrando ${formatCurrency(reintegroCliente, getOperatingCurrency())} a Saldo a Favor`);
+    if (penaltyRetained > 0) msgParts.push(`reteniendo ${formatCurrency(penaltyRetained, getOperatingCurrency())} como penalidad no reembolsable`);
+    if (unpaidInvoicedAmount > 0) msgParts.push(`anulando ${formatCurrency(unpaidInvoicedAmount, getOperatingCurrency())} de Saldo Deudor`);
+    const typeMsg = msgParts.join(" y ") || "sin movimientos de saldo";
 
-    setStatusMessage(`✓ ¡Anulación de facturación confirmada para el Expediente ${activeRes.id}! Se ha emitido la Nota de Crédito por -${formatCurrency(invoicedTotal, getOperatingCurrency())} (${typeMsg}).`);
+    setStatusMessage(`✓ ¡Anulación de facturación confirmada para el Expediente ${activeRes.id}! Se ha emitido la Nota de Crédito por -${formatCurrency(reversedAmount, getOperatingCurrency())} (${typeMsg}).`);
     setTimeout(() => setStatusMessage(""), 6000);
 
     // Go back to Level 1
@@ -2228,9 +2257,22 @@ export default function FacturacionView({
                   inv.type === "Cobro" &&
                   (inv.id.startsWith("FAC-") || inv.id.startsWith("NC-"))
                 );
-                const paidInvoicedAmount = associatedInvoices.filter(inv => inv.status === "Pagado").reduce((sum, inv) => sum + inv.amount, 0);
-                const unpaidInvoicedAmount = associatedInvoices.filter(inv => inv.status !== "Pagado").reduce((sum, inv) => sum + inv.amount, 0);
-                const invoicedTotal = paidInvoicedAmount + unpaidInvoicedAmount;
+                const invoicedTotal = associatedInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+                // Cobrado real = vouchers verificados + facturas contado (Pagado); incluye adelantos/parciales.
+                const paidInvoicedAmount = associatedInvoices
+                  .filter(inv => inv.id.startsWith("FAC-"))
+                  .reduce((sum, inv) => {
+                    const vpaid = vouchers.filter(v => v.invoiceId === inv.id && v.status === "Verificado").reduce((s, v) => s + v.amount, 0);
+                    const paid = inv.status === "Pagado" ? Math.max(inv.amount, vpaid) : vpaid;
+                    return sum + Math.min(paid, inv.amount);
+                  }, 0);
+                const unpaidInvoicedAmount = Math.max(0, invoicedTotal - paidInvoicedAmount);
+                // Penalidad / gastos no reembolsables: se retiene del reintegro al cliente. No se puede
+                // retener más de lo que el cliente efectivamente pagó (el exceso lo asume la agencia).
+                const penaltyInput = Math.max(0, parseFloat(cancelPenalty) || 0);
+                const penaltyRetained = Math.min(penaltyInput, paidInvoicedAmount);
+                const reintegroCliente = Math.max(0, paidInvoicedAmount - penaltyRetained);
+                const agencyAssumes = Math.max(0, penaltyInput - paidInvoicedAmount);
                 const jointFlights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
                 const hasBilledOrRequested = (activeRes.servicios || []).some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado") ||
                                              jointFlights.some(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea" || b.expedienteAereo?.status === "Solicitado");
@@ -2269,20 +2311,52 @@ export default function FacturacionView({
                         <span className="font-bold text-zinc-900">{formatCurrency(invoicedTotal, getOperatingCurrency())}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Total Cobrado (Ya Pagado):</span>
+                        <span>Total Cobrado (adelantos):</span>
                         <span className="font-bold text-emerald-800">{formatCurrency(paidInvoicedAmount, getOperatingCurrency())}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Total Pendiente (A Crédito):</span>
                         <span className="font-bold text-zinc-900">{formatCurrency(unpaidInvoicedAmount, getOperatingCurrency())}</span>
                       </div>
+
+                      {/* Penalidad / gastos no reembolsables */}
+                      <div className="flex justify-between items-center gap-2 border-t border-red-100 pt-2 mt-1">
+                        <span className="flex-1">Penalidad / gastos no reembolsables:</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-zinc-400">-</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={cancelPenalty}
+                            onChange={(e) => setCancelPenalty(e.target.value)}
+                            className="w-24 px-2 py-1 border border-red-200 rounded text-right text-xs font-bold text-red-700 bg-white focus:outline-none focus:border-red-400"
+                          />
+                        </div>
+                      </div>
+                      {agencyAssumes > 0 && (
+                        <div className="flex justify-between text-[11px] text-amber-700">
+                          <span>· La agencia asume (excede lo cobrado):</span>
+                          <span className="font-bold">{formatCurrency(agencyAssumes, getOperatingCurrency())}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between border-t border-red-100 pt-2 mt-1">
+                        <span className="font-black uppercase tracking-wide text-zinc-800">Reintegro al cliente (saldo a favor):</span>
+                        <span className="font-black text-emerald-700">{formatCurrency(reintegroCliente, getOperatingCurrency())}</span>
+                      </div>
                     </div>
 
                     <div className="p-3 bg-white border border-red-100 rounded-lg text-xs font-medium space-y-1.5 text-left">
-                      {paidInvoicedAmount > 0 && (
+                      {penaltyRetained > 0 && (
+                        <p className="text-red-800 flex items-start gap-1.5 leading-snug">
+                          <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                          <span>Se retienen <strong>{formatCurrency(penaltyRetained, getOperatingCurrency())}</strong> como penalidad / gastos no reembolsables (el cliente absorbe esta pérdida).</span>
+                        </p>
+                      )}
+                      {reintegroCliente > 0 && (
                         <p className="text-emerald-900 flex items-start gap-1.5 leading-snug">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                          <span>Se reintegrarán <strong>{formatCurrency(paidInvoicedAmount, getOperatingCurrency())}</strong> como saldo a favor de <strong>{activeRes.agenciaName || "Canal Directo"}</strong>.</span>
+                          <span>Se reintegrarán <strong>{formatCurrency(reintegroCliente, getOperatingCurrency())}</strong> como saldo a favor de <strong>{activeRes.agenciaName || "Canal Directo"}</strong>.</span>
                         </p>
                       )}
                       {unpaidInvoicedAmount > 0 && (

@@ -136,19 +136,27 @@ export function reconcileDossierUpdate(
       }
     }
 
-    // Freeze all payable obligations linked to this locator
+    // Al anular la reserva: si NO se pagó al proveedor, la obligación se anula (no hay nada que
+    // reclamar y no debe seguir en la lista). Si YA se pagó, se congela para reclamar el reembolso /
+    // conciliar la penalidad con el proveedor.
     updatedPayableObligations = updatedPayableObligations.map(obl => {
       if (obl.locatorId === newRes.id) {
         const isAlreadyPaid = obl.paidAmount > 0;
-        const newStatus = isAlreadyPaid ? "Congelado" as const : "Congelado" as const;
-        
-        log.push(`[Cuentas por Pagar] Obligación ${obl.id} (${obl.providerName}) congelada. (Monto pagado: ${formatCurrency(obl.paidAmount, getOperatingCurrency())})`);
-        
+        if (isAlreadyPaid) {
+          log.push(`[Cuentas por Pagar] Obligación ${obl.id} (${obl.providerName}) congelada (pagado: ${formatCurrency(obl.paidAmount, getOperatingCurrency())}) — reclamar reembolso.`);
+          return {
+            ...obl,
+            status: "Congelado" as const,
+            isFrozen: true,
+            notes: `${obl.notes || ""}\n[Bloqueado] Reserva anulada. Verificar penalidad del proveedor.`
+          };
+        }
+        log.push(`[Cuentas por Pagar] Obligación ${obl.id} (${obl.providerName}) anulada (sin pago al proveedor).`);
         return {
           ...obl,
-          status: newStatus,
-          isFrozen: true,
-          notes: `${obl.notes || ""}\n[Bloqueado] Reserva anulada. Verificar penalidad del proveedor.`
+          status: "Anulado" as const,
+          isFrozen: false,
+          notes: `${obl.notes || ""}\n[Anulado] Reserva anulada sin pago al proveedor.`
         };
       }
       return obl;

@@ -829,9 +829,13 @@ export default function CuentasPorPagarView({
                                   Resolver
                                 </button>
                               ) : (
-                                <span className="text-[9.5px] text-red-600 font-bold uppercase flex items-center justify-end gap-1 pr-2">
-                                  🔒 Bloqueado
-                                </span>
+                                <button
+                                  onClick={() => onUpdateObligation({ ...ob, status: "Anulado", isFrozen: false, notes: `${ob.notes || ""}\n[Anulado] Cerrada manualmente — reserva anulada sin pago al proveedor.` })}
+                                  className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-800 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer shadow-3xs"
+                                  title="Cerrar y quitar de la lista: la reserva se anuló sin pago al proveedor, no hay nada que reclamar."
+                                >
+                                  Cerrar / Anular
+                                </button>
                               )
                             ) : ob.status === "Pagado Total" && ob.paidAmount > ob.netCost ? (
                               <button

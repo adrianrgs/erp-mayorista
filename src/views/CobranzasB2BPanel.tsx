@@ -132,7 +132,8 @@ export default function CobranzasB2BPanel({
     amount: "",
     method: "Transferencia Bancaria",
     reference: "",
-    notes: ""
+    notes: "",
+    destino: "cliente" as "cliente" | "empresa"  // reembolso al cliente vs retener a favor de la empresa
   });
 
   // Payment Form States
@@ -188,13 +189,17 @@ export default function CobranzasB2BPanel({
 
   // Financial KPIs Calculations
   // Total outstanding accounts receivable
+  // CXC = deuda NETA pendiente por factura (descuenta pagos y notas de crédito), consistente con el
+  // resto del panel. Antes sumaba el bruto de las facturas sin netear la NC de una anulación, por lo
+  // que una factura anulada seguía apareciendo en la tarjeta.
   const accountsReceivable = invoices
-    .filter(i => i.type === "Cobro" && i.status !== "Pagado")
-    .reduce((sum, item) => sum + item.amount, 0);
+    .filter(i => i.type === "Cobro" && (i.status === "Facturado" || i.status === "Vencido"))
+    .reduce((sum, i) => sum + (netByInvoice[i.id]?.remaining ?? i.amount), 0);
 
-  // Total collections this month (conciliated payment invoices)
+  // Cobros conciliados = ingresos reales; excluye las notas de crédito (NC-, montos negativos de
+  // anulaciones/reintegros) que antes daban un total negativo.
   const collectionsMtd = invoices
-    .filter(i => i.type === "Cobro" && i.status === "Pagado")
+    .filter(i => i.type === "Cobro" && i.status === "Pagado" && !i.id.startsWith("NC-") && i.amount > 0)
     .reduce((sum, item) => sum + item.amount, 0);
 
   // Number of clients with active debt
@@ -408,20 +413,24 @@ export default function CobranzasB2BPanel({
     if (isNaN(amount) || amount <= 0) { alert("Ingrese un monto válido."); return; }
     if (amount > activeClient.saldoFavor) { alert("El monto excede el saldo a favor disponible."); return; }
 
+    const aFavorEmpresa = withdrawForm.destino === "empresa";
+
     onUpdateClient({ ...activeClient, saldoFavor: Math.max(0, activeClient.saldoFavor - amount) });
 
     onAddWalletTransaction?.({
       id: "WTX-" + Date.now().toString(36).toUpperCase(),
       clientId: activeClient.id, clientKind: "B2B", clientName: activeClient.nombre,
       type: "Retiro", amount,
-      method: withdrawForm.method || undefined,
+      method: aFavorEmpresa ? "Retención a favor de la empresa" : (withdrawForm.method || undefined),
       reference: withdrawForm.reference || undefined,
-      notes: withdrawForm.notes || undefined,
+      notes: (aFavorEmpresa ? "Retenido a favor de la empresa (no reembolsado al cliente). " : "Reembolso en efectivo al cliente. ") + (withdrawForm.notes || ""),
       date: new Date().toISOString().split("T")[0],
       createdAt: new Date().toISOString(),
     });
 
-    if (onAddInvoice) {
+    // Solo el reembolso en efectivo al cliente es una salida de caja (RET-, afecta liquidez). La
+    // retención a favor de la empresa NO es egreso: la empresa conserva el efectivo (recuperación).
+    if (!aFavorEmpresa && onAddInvoice) {
       onAddInvoice({
         id: nextSequentialId("RET", invoices.map(i => i.id)),
         clientName: `Retiro Saldo a Favor: ${activeClient.nombre} — Ref. ${withdrawForm.reference || "S/N"}`,
@@ -434,10 +443,12 @@ export default function CobranzasB2BPanel({
       });
     }
 
-    setStatusMessage(`✓ Reintegro de ${formatCurrency(amount, getOperatingCurrency())} procesado para ${activeClient.nombre}.`);
+    setStatusMessage(aFavorEmpresa
+      ? `✓ Se retuvieron ${formatCurrency(amount, getOperatingCurrency())} del saldo a favor de ${activeClient.nombre} a favor de la empresa.`
+      : `✓ Reintegro de ${formatCurrency(amount, getOperatingCurrency())} procesado para ${activeClient.nombre}.`);
     setTimeout(() => setStatusMessage(""), 5000);
     setShowWithdrawModal(false);
-    setWithdrawForm({ amount: "", method: "Transferencia Bancaria", reference: "", notes: "" });
+    setWithdrawForm({ amount: "", method: "Transferencia Bancaria", reference: "", notes: "", destino: "cliente" });
   };
 
   const handlePrintReceipt = (vou: PaymentVoucher, clientName: string) => {
@@ -1910,6 +1921,31 @@ export default function CobranzasB2BPanel({
               </div>
 
               <div>
+                <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Destino del retiro</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setWithdrawForm(f => ({ ...f, destino: "cliente" }))}
+                    className={`px-2 py-2 rounded text-[10px] font-bold uppercase tracking-wider border cursor-pointer ${withdrawForm.destino === "cliente" ? "bg-emerald-700 text-white border-emerald-700" : "bg-white text-zinc-600 border-zinc-200"}`}
+                  >
+                    Reembolso al cliente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWithdrawForm(f => ({ ...f, destino: "empresa" }))}
+                    className={`px-2 py-2 rounded text-[10px] font-bold uppercase tracking-wider border cursor-pointer ${withdrawForm.destino === "empresa" ? "bg-zinc-900 text-white border-zinc-900" : "bg-white text-zinc-600 border-zinc-200"}`}
+                  >
+                    A favor de la empresa
+                  </button>
+                </div>
+                <p className="text-[9px] text-zinc-400 mt-1 leading-snug">
+                  {withdrawForm.destino === "empresa"
+                    ? "La empresa retiene este saldo (recuperación de penalidad / pérdida). No es salida de caja."
+                    : "Reembolso en efectivo al cliente (salida de caja)."}
+                </p>
+              </div>
+
+              <div>
                 <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Monto a retirar ({getCurrencySymbol()})</label>
                 <input
                   type="number"
@@ -1922,19 +1958,21 @@ export default function CobranzasB2BPanel({
                 />
               </div>
 
-              <div>
-                <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Método de devolución</label>
-                <select
-                  value={withdrawForm.method}
-                  onChange={e => setWithdrawForm(f => ({ ...f, method: e.target.value }))}
-                  className="w-full p-2.5 border border-zinc-200 rounded text-sm font-bold text-zinc-700 focus:outline-none"
-                >
-                  <option>Transferencia Bancaria</option>
-                  <option>Efectivo</option>
-                  <option>Cheque</option>
-                  <option>Nota de Crédito Manual</option>
-                </select>
-              </div>
+              {withdrawForm.destino === "cliente" && (
+                <div>
+                  <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Método de devolución</label>
+                  <select
+                    value={withdrawForm.method}
+                    onChange={e => setWithdrawForm(f => ({ ...f, method: e.target.value }))}
+                    className="w-full p-2.5 border border-zinc-200 rounded text-sm font-bold text-zinc-700 focus:outline-none"
+                  >
+                    <option>Transferencia Bancaria</option>
+                    <option>Efectivo</option>
+                    <option>Cheque</option>
+                    <option>Nota de Crédito Manual</option>
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Referencia / Número de transacción</label>
