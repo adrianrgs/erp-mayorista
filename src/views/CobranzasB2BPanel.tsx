@@ -190,18 +190,21 @@ export default function CobranzasB2BPanel({
     const result: Record<string, { paid: number; ncApplied: number; remaining: number }> = {};
     invoices.forEach(inv => {
       if (!inv.id.startsWith("FAC-") || inv.type !== "Cobro") return;
-      const paid = vouchers
+      const paid = round2(vouchers
         .filter(v => v.invoiceId === inv.id && v.status === "Verificado")
-        .reduce((s, v) => s + v.amount, 0);
-      let remaining = Math.max(0, inv.amount - paid);
+        .reduce((s, v) => s + v.amount, 0));
+      // Una factura ya "Pagado" no deja saldo: se ancla a 0 (sin residuos tipo 0.01).
+      let remaining = inv.status === "Pagado" ? 0 : round2(Math.max(0, inv.amount - paid));
       let ncApplied = 0;
       const isUnpaid = inv.status === "Facturado" || inv.status === "Vencido";
       const loc = extractLocator(inv.clientName);
       if (isUnpaid && loc && ncLeft[loc] > 0 && remaining > 0) {
-        ncApplied = Math.min(remaining, ncLeft[loc]);
-        remaining -= ncApplied;
-        ncLeft[loc] -= ncApplied;
+        ncApplied = round2(Math.min(remaining, ncLeft[loc]));
+        remaining = round2(remaining - ncApplied);
+        ncLeft[loc] = round2(ncLeft[loc] - ncApplied);
       }
+      // Colapsar cualquier residuo sub-centavo por debajo de 1 céntimo a 0.
+      if (remaining < 0.01) remaining = 0;
       result[inv.id] = { paid, ncApplied, remaining };
     });
     return result;

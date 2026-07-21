@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { CompanyConfig, ProjectView, CustomRate } from "../types";
+import { CompanyConfig, ProjectView, CustomRate, PayableObligation, FinancialInvoice } from "../types";
 import { getCurrencySymbol } from "../lib/taxEngine";
+import { round2 } from "../lib/money";
 import {
   Usuario, Rol, ReglaAutorizacion, SolicitudAutorizacion, RegistroAuditoria,
   AccionPermiso, ACCIONES_POR_MODULO, NOMBRE_MODULO, NOMBRE_ACCION,
@@ -53,6 +54,10 @@ interface ConfiguracionViewProps {
   onUpdateReglaAutorizacion: (regla: ReglaAutorizacion) => void;
   onResolveSolicitudAutorizacion: (id: string, dto: { estado: "Aprobada" | "Rechazada"; comentarioResolucion?: string; resolutorId: string }) => void;
   onAddRegistroAuditoria: (registro: Omit<RegistroAuditoria, "id" | "createdAt">) => void;
+  payableObligations: PayableObligation[];
+  onUpdateObligation: (updated: PayableObligation) => void;
+  invoices: FinancialInvoice[];
+  onUpdateInvoice: (updated: FinancialInvoice) => void;
 }
 
 type TabType = "empresa" | "tasas" | "usuarios" | "permisos" | "autorizaciones";
@@ -65,11 +70,60 @@ export default function ConfiguracionView({
   usuarios, roles, reglasAutorizacion, solicitudesAutorizacion, registrosAuditoria,
   onAddUsuario, onUpdateUsuario, onDeleteUsuario, onAddRol, onUpdateRol, onDeleteRol,
   onAddReglaAutorizacion, onUpdateReglaAutorizacion, onResolveSolicitudAutorizacion, onAddRegistroAuditoria,
+  payableObligations, onUpdateObligation, invoices, onUpdateInvoice,
 }: ConfiguracionViewProps) {
   const [activeTab, setActiveTab] = useState<TabType>("empresa");
   const [formData, setFormData] = useState<CompanyConfig>({ ...config });
   const [showToast, setShowToast] = useState(false);
   const { usuario: sesion } = useAuth();
+  const { showConfirm: showConfirmDialog, showAlert: showAlertDialog } = useDialog();
+  const [normalizing, setNormalizing] = useState(false);
+
+  // Normalizar montos: barrido único que ancla todo valor monetario guardado a 2 decimales
+  // exactos y, en obligaciones ya saldadas, reancla el pagado al TOTAL exacto (elimina residuos
+  // tipo 199.99). No inventa datos: solo redondea/ancla lo ya existente. Ver regla dinero-sin-drift.
+  const handleNormalizeMoney = () => {
+    let fixed = 0;
+    const r2opt = (v: number | undefined) => v === undefined ? v : round2(v);
+
+    payableObligations.forEach(o => {
+      const total = round2((o.netCost || 0) + (o.vatAmount ?? 0) - (o.vatWithheld ?? 0));
+      const cleanNet = round2(o.netCost || 0);
+      const cleanVat = r2opt(o.vatAmount);
+      const cleanWith = r2opt(o.vatWithheld);
+      const cleanPaid = o.status === "Pagado Total" ? total : round2(o.paidAmount || 0);
+      if (cleanNet !== o.netCost || cleanVat !== o.vatAmount || cleanWith !== o.vatWithheld || cleanPaid !== o.paidAmount) {
+        onUpdateObligation({ ...o, netCost: cleanNet, vatAmount: cleanVat, vatWithheld: cleanWith, paidAmount: cleanPaid });
+        fixed++;
+      }
+    });
+
+    invoices.forEach(inv => {
+      const patch: Partial<FinancialInvoice> = {};
+      let changed = false;
+      const numericFields: (keyof FinancialInvoice)[] = [
+        "amount", "vatAmount", "taxableBase", "surchargeAmount", "vatWithheld",
+        "incomeTaxWithheld", "localCurrencyAmount",
+      ];
+      numericFields.forEach(f => {
+        const v = (inv as any)[f];
+        if (typeof v === "number") {
+          const c = round2(v);
+          if (c !== v) { (patch as any)[f] = c; changed = true; }
+        }
+      });
+      if (changed) { onUpdateInvoice({ ...inv, ...patch }); fixed++; }
+    });
+
+    setNormalizing(false);
+    showAlertDialog({
+      title: "Normalización completada",
+      message: fixed === 0
+        ? "No se encontraron montos con residuos. Todo estaba correcto."
+        : `Se normalizaron ${fixed} registro(s) con montos ajustados a 2 decimales exactos.`,
+      type: "success",
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,7 +206,43 @@ export default function ConfiguracionView({
         {/* Right Column */}
         <div className="lg:col-span-9">
           {activeTab === "empresa" && (
-            <EmpresaTab formData={formData} onChange={handleInputChange} onSubmit={handleSubmit} />
+            <div className="space-y-6">
+              <EmpresaTab formData={formData} onChange={handleInputChange} onSubmit={handleSubmit} />
+
+              {/* Mantenimiento de datos: normalizador de montos */}
+              <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-xs">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 shrink-0">
+                    <Coins className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-extrabold text-zinc-950 text-sm uppercase tracking-wider">Normalizar montos</h4>
+                    <p className="text-[11.5px] text-zinc-500 font-medium mt-1 leading-relaxed max-w-2xl">
+                      Barrido único de mantenimiento: ancla todos los montos guardados a 2 decimales exactos y, en
+                      obligaciones ya saldadas ("Pagado Total"), reancla el importe pagado al total exacto. Elimina
+                      cualquier residuo de centavo (p.ej. 199.99 en un pago de 200) que pudiera haber quedado en datos
+                      antiguos. No modifica reservas ni inventa importes: solo redondea lo existente.
+                    </p>
+                    <div className="mt-4">
+                      <Button
+                        variant="primary"
+                        disabled={normalizing}
+                        onClick={() => showConfirmDialog({
+                          title: "Normalizar montos",
+                          message: `Se revisarán ${payableObligations.length} obligación(es) y ${invoices.length} factura(s), ajustando cualquier monto con residuos a 2 decimales exactos. ¿Continuar?`,
+                          type: "info",
+                          confirmText: "Normalizar ahora",
+                          onConfirm: () => { setNormalizing(true); handleNormalizeMoney(); },
+                        })}
+                        className="flex items-center gap-2"
+                      >
+                        <Coins className="w-4 h-4" /> {normalizing ? "Normalizando…" : "Normalizar montos"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           {activeTab === "tasas" && (

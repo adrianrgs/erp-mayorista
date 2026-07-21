@@ -2296,6 +2296,10 @@ onDeleteStopSale={handleDeleteStopSale}
                     onUpdateReglaAutorizacion={handleUpdateReglaAutorizacion}
                     onResolveSolicitudAutorizacion={handleResolveSolicitudAutorizacion}
                     onAddRegistroAuditoria={handleAddRegistroAuditoria}
+                    payableObligations={payableObligations}
+                    onUpdateObligation={handleUpdateObligation}
+                    invoices={invoices}
+                    onUpdateInvoice={handleUpdateInvoice}
                   />
                 )}
               </div>

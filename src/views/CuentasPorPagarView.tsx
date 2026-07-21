@@ -528,10 +528,16 @@ export default function CuentasPorPagarView({
       nextStatus = "Pagado Total";
     }
 
+    // Al saldar por completo, el importe pagado se ancla al TOTAL EXACTO de la obligación —
+    // nunca a un residuo tipo 199.99. Así un pago de 200 siempre queda como 200, sin drift.
+    const finalPaid = nextStatus === "Pagado Total"
+      ? Number(totalToPay.toFixed(2))
+      : Number(nextPaid.toFixed(2));
+
     // 1. Update global obligation state
     const updated: PayableObligation = {
       ...activeObligationForPayment,
-      paidAmount: Number(nextPaid.toFixed(2)),
+      paidAmount: finalPaid,
       status: nextStatus,
       paymentMethod: paymentForm.method,
       reference: paymentForm.reference || `REF-PAG-${Math.floor(100000 + Math.random() * 900000)}`,

@@ -805,6 +805,28 @@ export default function ReservasView({
   const totalPendientes = reservations.filter(r => r.status === "Pendiente" || r.status === "Pendiente de Pago" || r.status === "Petición Especial" || r.status === "Modificada").length;
   const totalCanceladas = reservations.filter(r => r.status === "Cancelada").length;
 
+  // "Pendiente de enviar a Facturación": el operador hizo un cambio en una reserva que YA tenía
+  // actividad de facturación (algo Facturado/Solicitado, un ajuste/variación en Borrador, o un
+  // servicio Rechazado) y quedó un ítem sin enviar. Detecta el "guardé y olvidé mandar a facturar".
+  // No marca cotizaciones nuevas nunca enviadas (sin actividad previa), para no llenar de ruido.
+  const tienePendienteEnviarFacturar = (r: Reservation): boolean => {
+    if (r.status === "Cancelada") return false;
+    const servicios = r.servicios || [];
+    const jf = boletos.filter(b => b.expedienteId === r.id && b.facturarConjunto);
+    const unsentVars = (r.variaciones || []).filter((v: any) => (v.type === "Suplemento" || v.type === "Credito") && v.status === "Borrador" && !v.invoiceId);
+    const hasUnsent =
+      servicios.some(s => s.statusFacturacion === "Borrador" || s.statusFacturacion === "Rechazado" || s.statusFacturacion === undefined) ||
+      jf.some(b => !b.expedienteAereo || b.expedienteAereo.status === "Borrador" || b.expedienteAereo.status === undefined) ||
+      unsentVars.length > 0;
+    if (!hasUnsent) return false;
+    const hasBillingActivity =
+      servicios.some(s => s.statusFacturacion === "Facturado" || s.statusFacturacion === "Solicitado" || s.statusFacturacion === "Rechazado") ||
+      jf.some(b => b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea" || b.expedienteAereo?.status === "Solicitado") ||
+      unsentVars.length > 0;
+    return hasBillingActivity;
+  };
+  const totalPorFacturar = reservations.filter(tienePendienteEnviarFacturar).length;
+
   const [activeTab, setActiveTab] = useState<"Activos" | "Canceladas">("Activos");
 
   // Filter and Sort (Level 1)
@@ -843,6 +865,8 @@ export default function ReservasView({
       } else if (filterStatus === "PorVencer") {
         const rc = receivableByRes.get(r.id);
         matchesStatus = !!rc && (rc.isNear || rc.isOverdue);
+      } else if (filterStatus === "PorFacturar") {
+        matchesStatus = tienePendienteEnviarFacturar(r);
       } else {
         matchesStatus = r.status === filterStatus;
       }
@@ -1950,7 +1974,7 @@ export default function ReservasView({
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <div 
               onClick={() => setFilterStatus("Todas")}
               className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
@@ -2039,6 +2063,25 @@ export default function ReservasView({
               </div>
               <div className={`p-2.5 rounded-md border ${filterStatus === "PorVencer" ? "bg-amber-200 border-amber-300 text-amber-700" : "bg-zinc-50 border-zinc-200 text-zinc-600"}`}>
                 <Clock className="w-5.5 h-5.5" />
+              </div>
+            </div>
+
+            <div
+              onClick={() => setFilterStatus("PorFacturar")}
+              className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
+                filterStatus === "PorFacturar"
+                  ? "bg-orange-100 border-orange-500 ring-2 ring-orange-500/20"
+                  : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-xs"
+              }`}
+              title="Reservas con cambios guardados que aún no se enviaron a Facturación (olvido de 'Enviar a Facturación')"
+            >
+              <div className="space-y-1">
+                <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block">Por Facturar</span>
+                <span className="text-2xl font-black text-orange-700 block">{totalPorFacturar}</span>
+                <span className="text-[9.5px] text-orange-600 font-semibold block">Cambios sin enviar</span>
+              </div>
+              <div className={`p-2.5 rounded-md border ${filterStatus === "PorFacturar" ? "bg-orange-200 border-orange-300 text-orange-700" : "bg-zinc-50 border-zinc-200 text-zinc-600"}`}>
+                <Send className="w-5.5 h-5.5" />
               </div>
             </div>
           </div>

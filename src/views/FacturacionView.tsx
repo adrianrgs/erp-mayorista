@@ -654,7 +654,9 @@ export default function FacturacionView({
     const hasBilled = billedCount > 0;
     const draftCount = services.filter(s => s.statusFacturacion === "Borrador").length;
     const pendingVariationSupplements = (r.variaciones || []).filter((v: any) => v.type === "Suplemento" && v.status === "Solicitado" && !v.invoiceId).length;
-    const pendingVariationCredits = (r.variaciones || []).filter((v: any) => v.type === "Credito" && v.status !== "Borrador" && !v.invoiceId).length;
+    // La anulación total la gestiona el panel de anulación (no el emisor de NC por variación), así que
+    // no cuenta como "nota de crédito por variación pendiente" — evita insignias descuadradas.
+    const pendingVariationCredits = (r.variaciones || []).filter((v: any) => v.type === "Credito" && v.status !== "Borrador" && !v.invoiceId && v.reason !== "Anulación total del expediente").length;
     const hasPendingSupplement = hasBilled && (draftCount > 0 || pendingVariationSupplements > 0);
     const hasPendingCreditNote = hasBilled && pendingVariationCredits > 0;
     const hasPendingExcessVerification = (r.variaciones || []).some((v: any) => (v.excessPendingVerification || 0) > 0);
@@ -2137,13 +2139,16 @@ export default function FacturacionView({
                 fueron enviados por el operador de Reservas ("Enviar a Facturación") — permanecen
                 ocultos aquí hasta entonces. Créditos por cancelación/anulación nunca tienen status,
                 así que siguen visibles de inmediato como antes. */}
-            {(activeRes.variaciones || []).some((v: any) => !v.invoiceId && v.status !== "Borrador") && (
+            {(activeRes.variaciones || []).some((v: any) => !v.invoiceId && v.status !== "Borrador" && v.reason !== "Anulación total del expediente") && (
               <div className="space-y-3 mt-4">
                 <h5 className="text-[10px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-1.5">
                   ⚠️ Ajustes y Modificaciones Pendientes de Facturación
                 </h5>
+                {/* La variación de "Anulación total del expediente" se excluye aquí: su reversión la
+                    gestiona en exclusiva el panel "Solicitud de Anulación y Reintegros". Mostrar su
+                    botón "Emitir Nota de Crédito" aquí duplicaba la NC (doble crédito al cliente). */}
                 <div className="divide-y divide-zinc-100 border border-amber-200 rounded overflow-hidden bg-amber-50/10">
-                  {(activeRes.variaciones || []).filter((v: any) => !v.invoiceId && v.status !== "Borrador").map((v: any) => {
+                  {(activeRes.variaciones || []).filter((v: any) => !v.invoiceId && v.status !== "Borrador" && v.reason !== "Anulación total del expediente").map((v: any) => {
                     const isPositive = v.amountSale > 0;
                     return (
                       <div key={v.id} className="p-3 bg-white space-y-1.5">

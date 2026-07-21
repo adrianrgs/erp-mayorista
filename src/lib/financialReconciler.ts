@@ -187,7 +187,9 @@ export function reconcileDossierUpdate(
         log.push(`[Cancelación Parcial] Servicio "${sOld.descripcion}" cancelado.`);
         applyCreditToClient(sOld.precioVenta, `Cancelación de servicio: ${sOld.descripcion}`);
 
-        // Register financial variation
+        // Register financial variation. Igual que las modificaciones de tarifa, la nota de crédito
+        // por eliminar un servicio facturado queda en "Borrador": NO se envía sola a Facturación.
+        // El operador de Reservas debe enviarla explícitamente con "Enviar a Facturación".
         const variation: FinancialVariation = {
           id: genId("VAR-CR"),
           reservationId: newRes.id,
@@ -196,7 +198,8 @@ export function reconcileDossierUpdate(
           amountNet: -sOld.precioNeto,
           amountSale: -sOld.precioVenta,
           reason: `Cancelación: ${sOld.descripcion}`,
-          date: new Date().toISOString().split("T")[0]
+          date: new Date().toISOString().split("T")[0],
+          status: "Borrador"
         };
         newVariations.push(variation);
         currentVariations.push(variation);
