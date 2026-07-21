@@ -117,7 +117,27 @@ export default function CobranzasDirectosPanel({
     attachedFile: ""
   });
 
+  // Cobro consolidado: pagar varias facturas bajo un mismo comprobante.
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<string>>(new Set());
+  const [showConsolidatedCollectModal, setShowConsolidatedCollectModal] = useState(false);
+  const [consolidatedCollectForm, setConsolidatedCollectForm] = useState({
+    method: "Transferencia Bancaria",
+    reference: "",
+    bankName: "",
+    date: new Date().toISOString().split("T")[0],
+    notes: "",
+    attachedFile: ""
+  });
+  const toggleInvoiceSelect = (id: string) => setSelectedInvoiceIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
   const activeClient = clients.find(c => c.id === selectedClientId);
+
+  // Al cambiar de cliente, limpiar la selección de facturas para no arrastrar ids ajenos.
+  React.useEffect(() => { setSelectedInvoiceIds(new Set()); }, [selectedClientId]);
 
   // ── Neteo de notas de crédito por localizador (ver CobranzasB2BPanel) ─────────
   // La deuda pendiente de una factura descuenta las NC- del mismo localizador (p.ej. reembolso aéreo).
@@ -367,6 +387,77 @@ export default function CobranzasDirectosPanel({
     } else {
       setStatusMessage(`✓ Cobro de ${formatCurrency(amountPaid, getOperatingCurrency())} registrado y conciliado exitosamente para ${activeClient.nombre}.`);
     }
+    setTimeout(() => setStatusMessage(""), 5000);
+  };
+
+  // Cobro consolidado: paga el pendiente completo de cada factura seleccionada bajo un mismo
+  // comprobante (un voucher por factura + un recibo consolidado). Para pagos parciales de una sola
+  // factura, usar "Registrar Pago".
+  const handleConsolidatedCollectSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeClient) return;
+    const selected = invoices.filter(i =>
+      selectedInvoiceIds.has(i.id) && (netByInvoice[i.id]?.remaining ?? i.amount) > 0.005
+    );
+    if (selected.length === 0) { alert("Seleccione al menos una factura pendiente."); return; }
+
+    const isWallet = consolidatedCollectForm.method === "Billetera Virtual Directo";
+    const totalToPay = Number(selected.reduce((s, i) => s + (netByInvoice[i.id]?.remaining ?? i.amount), 0).toFixed(2));
+    if (isWallet && totalToPay > activeClient.saldoFavor) {
+      alert("El saldo a favor disponible es insuficiente para cubrir las facturas seleccionadas.");
+      return;
+    }
+
+    const reference = consolidatedCollectForm.reference.trim() || `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+    const fecha = consolidatedCollectForm.date || new Date().toISOString().split("T")[0];
+    const vouIds = vouchers.map(v => v.id);
+
+    let nextSaldoDeber = activeClient.saldoDeber;
+    let nextSaldoFavor = activeClient.saldoFavor;
+
+    selected.forEach(inv => {
+      const rem = Number((netByInvoice[inv.id]?.remaining ?? inv.amount).toFixed(2));
+      const vId = nextSequentialId("VOU", vouIds); vouIds.push(vId);
+      onAddVoucher({
+        id: vId,
+        clientId: activeClient.id,
+        clientName: activeClient.nombre,
+        invoiceId: inv.id,
+        locatorId: inv.clientName.match(/Localizador\s+(\w+-\d+)/)?.[1] || undefined,
+        method: consolidatedCollectForm.method,
+        reference,
+        amount: rem,
+        date: fecha,
+        status: "Verificado",
+        bankName: consolidatedCollectForm.bankName || undefined,
+        notes: consolidatedCollectForm.notes || `Cobro consolidado (${selected.length} facturas)`,
+        attachedFile: consolidatedCollectForm.attachedFile || "comprobante_registrado.jpg"
+      });
+      onUpdateInvoice({ ...inv, status: "Pagado" as const });
+      nextSaldoDeber = Math.max(0, Number((nextSaldoDeber - rem).toFixed(2)));
+      if (isWallet) nextSaldoFavor = Number((nextSaldoFavor - rem).toFixed(2));
+    });
+
+    onUpdateClient({ ...activeClient, saldoDeber: nextSaldoDeber, saldoFavor: nextSaldoFavor });
+
+    if (onAddInvoice) {
+      onAddInvoice({
+        id: nextSequentialId("FAC", invoices.map(i => i.id)),
+        clientName: `Recibo de Cobro (Consolidado): ${activeClient.nombre} — ${selected.length} facturas [${selected.map(s => s.id).join(", ")}]`,
+        clientId: activeClient.id,
+        date: fecha,
+        dueDate: fecha,
+        amount: totalToPay,
+        vatAmount: 0,
+        type: "Cobro",
+        status: "Pagado"
+      });
+    }
+
+    setShowConsolidatedCollectModal(false);
+    setSelectedInvoiceIds(new Set());
+    setConsolidatedCollectForm(f => ({ ...f, reference: "", notes: "", attachedFile: "" }));
+    setStatusMessage(`✓ Cobro consolidado de ${formatCurrency(totalToPay, getOperatingCurrency())} registrado sobre ${selected.length} facturas de ${activeClient.nombre}.`);
     setTimeout(() => setStatusMessage(""), 5000);
   };
 
@@ -765,6 +856,10 @@ export default function CobranzasDirectosPanel({
                         && (netByInvoice[inv.id]?.remaining ?? inv.amount) > 0.005
                       );
 
+                      const selectedInFilter = filteredInvoices.filter(i => selectedInvoiceIds.has(i.id));
+                      const selectedTotal = selectedInFilter.reduce((s, i) => s + (netByInvoice[i.id]?.remaining ?? i.amount), 0);
+                      const allSelected = filteredInvoices.length > 0 && filteredInvoices.every(i => selectedInvoiceIds.has(i.id));
+
                       return (
                         <div className="space-y-4">
                           <div className="relative">
@@ -777,10 +872,46 @@ export default function CobranzasDirectosPanel({
                               onChange={(e) => setInvoiceSearchQuery(e.target.value)}
                             />
                           </div>
+
+                          {selectedInFilter.length > 0 && (
+                            <div className="flex items-center justify-between gap-3 p-3 bg-zinc-900 text-white rounded-lg">
+                              <span className="text-[11px] font-bold">
+                                {selectedInFilter.length} factura{selectedInFilter.length > 1 ? "s" : ""} seleccionada{selectedInFilter.length > 1 ? "s" : ""} · Total {formatCurrency(Number(selectedTotal.toFixed(2)), getOperatingCurrency())}
+                              </span>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => setSelectedInvoiceIds(new Set())}
+                                  className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all"
+                                >
+                                  Limpiar
+                                </button>
+                                <button
+                                  onClick={() => setShowConsolidatedCollectModal(true)}
+                                  className="px-3 py-1 bg-emerald-500 hover:bg-emerald-400 text-white rounded text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all"
+                                >
+                                  Cobrar seleccionadas
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
                           <div className="overflow-x-auto">
                             <table className="w-full text-left text-xs divide-y divide-zinc-200">
                               <thead>
                                 <tr className="text-zinc-500 font-bold bg-zinc-50 uppercase tracking-wider text-[9px] border-b border-zinc-200">
+                                  <th className="p-3 w-8">
+                                    <input
+                                      type="checkbox"
+                                      checked={allSelected}
+                                      onChange={(e) => setSelectedInvoiceIds(prev => {
+                                        const next = new Set(prev);
+                                        if (e.target.checked) filteredInvoices.forEach(i => next.add(i.id));
+                                        else filteredInvoices.forEach(i => next.delete(i.id));
+                                        return next;
+                                      })}
+                                      className="w-3.5 h-3.5 rounded border-zinc-300 accent-zinc-900 cursor-pointer align-middle"
+                                    />
+                                  </th>
                                   <th className="p-3">Factura</th>
                                   <th className="p-3">Detalle / Localizador</th>
                                   <th className="p-3">Emisión / Vence</th>
@@ -792,7 +923,7 @@ export default function CobranzasDirectosPanel({
                               <tbody className="divide-y divide-zinc-100 font-medium text-zinc-700">
                                 {filteredInvoices.length === 0 ? (
                                   <tr>
-                                    <td colSpan={6} className="p-6 text-center text-zinc-400 italic bg-zinc-50/20">
+                                    <td colSpan={7} className="p-6 text-center text-zinc-400 italic bg-zinc-50/20">
                                       {invoiceSearchQuery ? "No se encontraron facturas ni expedientes que coincidan con la búsqueda." : "Este cliente no posee facturas pendientes de cobro en cartera."}
                                     </td>
                                   </tr>
@@ -801,7 +932,15 @@ export default function CobranzasDirectosPanel({
                                     const locatorMatch = inv.clientName.match(/((?:RES|AER)-\d+)/);
                                     const locator = locatorMatch ? locatorMatch[1] : null;
                                     return (
-                                    <tr key={inv.id} className="hover:bg-zinc-50/50 transition-colors">
+                                    <tr key={inv.id} className={`hover:bg-zinc-50/50 transition-colors ${selectedInvoiceIds.has(inv.id) ? "bg-emerald-50/40" : ""}`}>
+                                      <td className="p-3">
+                                        <input
+                                          type="checkbox"
+                                          checked={selectedInvoiceIds.has(inv.id)}
+                                          onChange={() => toggleInvoiceSelect(inv.id)}
+                                          className="w-3.5 h-3.5 rounded border-zinc-300 accent-zinc-900 cursor-pointer align-middle"
+                                        />
+                                      </td>
                                       <td className="p-3 font-mono font-bold text-zinc-950">{inv.id}</td>
                                       <td className="p-3 text-zinc-800 leading-tight">
                                         {locator && (
@@ -1014,6 +1153,128 @@ export default function CobranzasDirectosPanel({
       </div>
 
       {/* REGISTER PAYMENT MODAL */}
+      {showConsolidatedCollectModal && activeClient && (() => {
+        const selected = invoices.filter(i => selectedInvoiceIds.has(i.id) && (netByInvoice[i.id]?.remaining ?? i.amount) > 0.005);
+        const total = Number(selected.reduce((s, i) => s + (netByInvoice[i.id]?.remaining ?? i.amount), 0).toFixed(2));
+        const isWallet = consolidatedCollectForm.method === "Billetera Virtual Directo";
+        const walletInsufficient = isWallet && total > activeClient.saldoFavor;
+        return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans">
+          <div className="bg-white border border-zinc-200 rounded-lg shadow-xl w-full max-w-lg overflow-hidden animate-fade-in flex flex-col max-h-[92vh]">
+            <div className="bg-zinc-950 text-white px-5 py-4 flex items-center justify-between shrink-0">
+              <div>
+                <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2">
+                  <CreditCard className="w-4.5 h-4.5" /> Cobro Consolidado
+                </h4>
+                <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">
+                  {selected.length} factura{selected.length > 1 ? "s" : ""} de {activeClient.nombre} bajo un mismo comprobante
+                </p>
+              </div>
+              <button onClick={() => setShowConsolidatedCollectModal(false)} className="text-zinc-400 hover:text-white cursor-pointer text-xl leading-none">×</button>
+            </div>
+            <form onSubmit={handleConsolidatedCollectSubmit} className="flex-1 overflow-y-auto p-5 space-y-4 text-left">
+              <div className="border border-zinc-200 rounded-lg divide-y divide-zinc-100 max-h-44 overflow-y-auto">
+                {selected.map(inv => (
+                  <div key={inv.id} className="flex items-center justify-between gap-2 px-3 py-2 text-[11px]">
+                    <span className="font-mono font-bold text-zinc-800 truncate">{inv.id}</span>
+                    <span className="font-mono font-black text-zinc-900 shrink-0">{formatCurrency(Number((netByInvoice[inv.id]?.remaining ?? inv.amount).toFixed(2)), getOperatingCurrency())}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2.5">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Total a cobrar</span>
+                <span className="text-lg font-black font-mono text-zinc-950">{formatCurrency(total, getOperatingCurrency())}</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Método de pago</label>
+                  <select
+                    value={consolidatedCollectForm.method}
+                    onChange={e => setConsolidatedCollectForm(f => ({ ...f, method: e.target.value }))}
+                    className="w-full p-2.5 border border-zinc-200 rounded text-sm font-bold text-zinc-700 focus:outline-none"
+                  >
+                    <option>Transferencia Bancaria</option>
+                    <option>Efectivo</option>
+                    <option>Cheque</option>
+                    <option>Pago Móvil</option>
+                    <option value="Billetera Virtual Directo" disabled={activeClient.saldoFavor <= 0}>
+                      Billetera Virtual (Saldo: {formatCurrency(activeClient.saldoFavor, getOperatingCurrency())})
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Fecha</label>
+                  <input
+                    type="date"
+                    value={consolidatedCollectForm.date}
+                    onChange={e => setConsolidatedCollectForm(f => ({ ...f, date: e.target.value }))}
+                    className="w-full p-2.5 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {walletInsufficient && (
+                <p className="text-[10.5px] font-bold text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
+                  Saldo a favor insuficiente ({formatCurrency(activeClient.saldoFavor, getOperatingCurrency())}) para cubrir {formatCurrency(total, getOperatingCurrency())}.
+                </p>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Referencia comprobante</label>
+                  <input
+                    type="text"
+                    placeholder="Nº transferencia / recibo"
+                    value={consolidatedCollectForm.reference}
+                    onChange={e => setConsolidatedCollectForm(f => ({ ...f, reference: e.target.value }))}
+                    className="w-full p-2.5 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Banco / Origen</label>
+                  <input
+                    type="text"
+                    placeholder="Opcional"
+                    value={consolidatedCollectForm.bankName}
+                    onChange={e => setConsolidatedCollectForm(f => ({ ...f, bankName: e.target.value }))}
+                    className="w-full p-2.5 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Notas</label>
+                <textarea
+                  rows={2}
+                  value={consolidatedCollectForm.notes}
+                  onChange={e => setConsolidatedCollectForm(f => ({ ...f, notes: e.target.value }))}
+                  className="w-full p-2.5 border border-zinc-200 rounded text-sm font-semibold text-zinc-900 focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowConsolidatedCollectModal(false)}
+                  className="flex-1 px-4 py-2.5 border border-zinc-200 rounded text-xs font-bold uppercase tracking-wider text-zinc-600 hover:bg-zinc-50 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={selected.length === 0 || walletInsufficient}
+                  className="flex-[2] px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-xs font-black uppercase tracking-wider cursor-pointer transition-all"
+                >
+                  Registrar cobro de {formatCurrency(total, getOperatingCurrency())}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+        );
+      })()}
+
       {showPaymentModal && activeClient && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans">
           <div className="bg-white border border-zinc-200 rounded-lg shadow-xl w-full max-w-lg overflow-hidden animate-fade-in">

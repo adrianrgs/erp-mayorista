@@ -54,57 +54,73 @@ export default function AdministracionView({
   // 1. KPI Calculations (Health Metrics)
   const activeReservations = reservations.filter(r => r.status !== "Cancelada");
 
-  // Total Gross Sales (B2B Billing Volume)
-  const totalGrossSales = activeReservations.reduce((sum, r) => sum + r.totalPrice, 0) +
-                          boletos.reduce((sum, b) => sum + b.precioVenta, 0);
-
-  // Total Net Costs (Cuentas por Pagar a Proveedores)
-  const totalNetCost = activeReservations.reduce((sum, r) => sum + r.netPrice, 0) +
-                       boletos.reduce((sum, b) => sum + (b.costoNeto || 0), 0);
-
-  // Dynamic PVP, B2B Commission & Profit Margin Calculations
-  let totalPvpSales = 0;
-  let totalB2BCommissions = 0;
-  let totalCompanyMarkup = 0;
+  // Ventas conectadas a la FACTURACIÓN REAL, no a la proyección de reservas. Un servicio
+  // cuenta como venta sólo cuando Facturación lo emitió (statusFacturacion === "Facturado").
+  // Los servicios aún no facturados (Borrador/Solicitado) forman el pipeline "Por Facturar".
+  // Los "Rechazado" (anulaciones/NC) quedan fuera automáticamente.
+  let totalGrossSales = 0;       // Venta B2B facturada
+  let totalNetCost = 0;          // Costo neto de lo facturado
+  let totalPvpSales = 0;         // PVP (tarifa retail) de lo facturado
+  let totalB2BCommissions = 0;   // Comisión cedida a la agencia sobre lo facturado
+  let totalCompanyMarkup = 0;    // Margen de la empresa sobre lo facturado
+  let pipelineB2BSales = 0;      // Reservas confirmadas aún NO facturadas (por facturar)
 
   activeReservations.forEach(r => {
     (r.servicios || []).forEach(s => {
       const pct = s.comisionB2B !== undefined ? s.comisionB2B : 10;
       const pvp = s.precioPvp !== undefined ? s.precioPvp : (s.precioVenta / (1 - pct / 100));
-      totalPvpSales += pvp;
-      totalB2BCommissions += (pvp - s.precioVenta);
-      totalCompanyMarkup += (s.precioVenta - s.precioNeto);
+      if (s.statusFacturacion === "Facturado") {
+        totalGrossSales += s.precioVenta;
+        totalNetCost += s.precioNeto;
+        totalPvpSales += pvp;
+        totalB2BCommissions += (pvp - s.precioVenta);
+        totalCompanyMarkup += (s.precioVenta - s.precioNeto);
+      } else if (s.statusFacturacion !== "Rechazado") {
+        pipelineB2BSales += s.precioVenta;
+      }
     });
   });
 
   boletos.forEach(b => {
     // Flights default to Venta (0% B2B commission unless otherwise noted)
-    const pvp = b.precioVenta;
-    totalPvpSales += pvp;
-    totalCompanyMarkup += (b.precioVenta - (b.costoNeto || 0));
+    const st = b.expedienteAereo?.status;
+    const facturado = !st || st === "Facturado" || st === "PagadoAerolinea";
+    const excluido = st === "Anulado" || st === "Reembolsado";
+    if (facturado) {
+      totalGrossSales += b.precioVenta;
+      totalNetCost += (b.costoNeto || 0);
+      totalPvpSales += b.precioVenta;
+      totalCompanyMarkup += (b.precioVenta - (b.costoNeto || 0));
+    } else if (!excluido) {
+      pipelineB2BSales += b.precioVenta;
+    }
   });
 
-  // Utilidad Neta Proyectada (Profit)
+  // Utilidad Neta sobre lo realmente facturado
   const projectedProfit = totalCompanyMarkup;
   const profitMarginPercent = totalGrossSales > 0 ? Math.round((projectedProfit / totalGrossSales) * 100) : 0;
 
   // Real Liquidity (Cobros verificados/pagados menos pagos reales a proveedores)
-  // Efectivo cobrado: excluye retiros (RET-) y notas de crédito (NC-, montos negativos de
-  // anulaciones/reintegros). Sin excluir la NC, una factura anulada dejaba la liquidez en negativo.
+  // Efectivo cobrado: facturas de Cobro efectivamente pagadas (contado + recibos de cobranza,
+  // que incluyen los pagos con saldo a favor ya aplicados). Excluye retiros (RET-) y notas de
+  // crédito (NC-, montos negativos de anulaciones/reintegros). El efectivo de billetera entra a
+  // la liquidez cuando se aplica a una factura (recibo/factura Pagado), no al momento del abono.
   const realCashCollected = invoices
     .filter(i => i.type === "Cobro" && i.status === "Pagado" && !i.id?.startsWith("RET-") && !i.id?.startsWith("NC-") && i.amount > 0)
     .reduce((sum, i) => sum + i.amount, 0);
 
-  // RET- invoices = saldoFavor cash withdrawals (outflow, must be subtracted)
+  // RET- invoices = saldoFavor cash withdrawals (outflow, must be subtracted).
+  // El retiro "a favor de la empresa" NO genera RET-, por lo que no reduce la liquidez.
   const realWithdrawals = invoices
     .filter(i => i.id?.startsWith("RET-") && i.status === "Pagado")
     .reduce((sum, i) => sum + i.amount, 0);
 
+  // Egresos reales a proveedores: TODO lo pagado en el libro de obligaciones (parcial + total),
+  // no sólo las obligaciones "Pagado Total". Un pago parcial también es salida de caja.
   const realPaymentsMade = invoices
     .filter(i => i.type === "Pago Proveedor" && i.status === "Pagado")
     .reduce((sum, i) => sum + i.amount, 0) +
     payableObligations
-      .filter(o => o.status === "Pagado Total")
       .reduce((sum, o) => sum + (o.paidAmount || 0), 0);
 
   const realLiquidity = realCashCollected - realPaymentsMade - realWithdrawals;
@@ -197,7 +213,7 @@ export default function AdministracionView({
       </div>
 
       {/* 1. KPIs DE SALUD FINANCIERA Y RENDIMIENTO COMERCIAL (Bento Premium Grid) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         
         {/* Ventas PVP Proyectadas (Público Final) */}
         <div className="bg-white border border-zinc-200 rounded-xl p-4.5 relative overflow-hidden shadow-2xs flex flex-col justify-between">
@@ -224,6 +240,20 @@ export default function AdministracionView({
           <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
             <span>Billed to B2B</span>
             <TrendingUp className="w-4 h-4 text-indigo-500" />
+          </div>
+        </div>
+
+        {/* Por Facturar (Pipeline) — reservas confirmadas aún no facturadas */}
+        <div className="bg-white border border-zinc-200 rounded-xl p-4.5 relative overflow-hidden shadow-2xs flex flex-col justify-between">
+          <div className="space-y-1">
+            <span className="text-[9px] uppercase font-black tracking-widest text-zinc-400 block">Por Facturar (Pipeline)</span>
+            <h3 className="text-2xl font-black text-zinc-900 tracking-tight text-sky-700">
+              {formatCurrency(Math.round(pipelineB2BSales), getOperatingCurrency())}
+            </h3>
+          </div>
+          <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
+            <span>Confirmado sin facturar</span>
+            <RefreshCw className="w-4 h-4 text-sky-500" />
           </div>
         </div>
 

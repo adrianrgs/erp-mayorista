@@ -1950,7 +1950,7 @@ export default function ReservasView({
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             <div 
               onClick={() => setFilterStatus("Todas")}
               className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
@@ -2005,25 +2005,7 @@ export default function ReservasView({
               </div>
             </div>
 
-            <div 
-              onClick={() => setFilterStatus("Cancelada")}
-              className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
-                filterStatus === "Cancelada"
-                  ? "bg-red-50/20 border-red-500 ring-2 ring-red-500/10"
-                  : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-xs"
-              }`}
-            >
-              <div className="space-y-1">
-                <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest block">Canceladas</span>
-                <span className="text-2xl font-black text-red-650 block">{totalCanceladas}</span>
-                <span className="text-[9.5px] text-red-500 font-semibold block">Créditos de anulación</span>
-              </div>
-              <div className={`p-2.5 rounded-md border ${filterStatus === "Cancelada" ? "bg-red-50 border-red-200 text-red-600" : "bg-zinc-50 border-zinc-200 text-zinc-600"}`}>
-                <XCircle className="w-5.5 h-5.5" />
-              </div>
-            </div>
-
-            <div 
+            <div
               onClick={() => setFilterStatus("Rechazadas")}
               className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
                 filterStatus === "Rechazadas"
