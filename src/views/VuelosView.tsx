@@ -29,7 +29,8 @@ import {
   Info,
   Printer,
   XCircle,
-  RefreshCw
+  RefreshCw,
+  UserCircle
 } from "lucide-react";
 import type { FlightLeg, B2BClient, DirectClient, CompanyConfig, PayableObligation, FinancialInvoice, PaymentVoucher } from "../types";
 import { nextSequentialId } from "../lib/idGenerator";
@@ -37,6 +38,7 @@ import { ProjectView } from "../types";
 import type { FlightTicket, Passenger, FlightSegment } from "../types/aereos";
 import { AccionPermiso } from "../types/usuarios";
 import { usePermissions } from "../hooks/usePermissions";
+import { useAuth } from "../context/AuthContext";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { parseGDS, buildRoute, formatGDSDate, SAMPLE_GDS_TEXT } from "../lib/parsers/pnrParser";
 import { useDialog } from "../components/ui/DialogProvider";
@@ -296,13 +298,26 @@ function ListadoView({
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const [activeTab, setActiveTab] = useState<"Activos" | "Anulados">("Activos");
   const { showConfirm } = useDialog();
-  const { puede } = usePermissions();
+  const { puede, esAdministrador } = usePermissions();
+  const { usuario } = useAuth();
+  const miUsername = usuario?.username;
+  // Filtro por asesor (username): "" = todos, "__SIN__" = sin asesor, o un username.
+  const [asesorFilter, setAsesorFilter] = useState<string>("");
+
+  const misBoletosCount = miUsername ? boletos.filter(b => b.asesor === miUsername).length : 0;
+  const asesoresConBoletos = Array.from(new Set(boletos.map(b => b.asesor).filter((a): a is string => !!a))).sort();
+  const sinAsesorCount = boletos.filter(b => !b.asesor).length;
 
   const filtered = boletos.filter((b) => {
     // filter tab
     const isAnulado = b.expedienteAereo?.status === "Anulado";
     if (activeTab === "Activos" && isAnulado) return false;
     if (activeTab === "Anulados" && !isAnulado) return false;
+
+    // filter asesor
+    if (asesorFilter) {
+      if (asesorFilter === "__SIN__" ? !!b.asesor : b.asesor !== asesorFilter) return false;
+    }
 
     // filter search
     const q = search.toLowerCase();
@@ -358,17 +373,49 @@ function ListadoView({
         </button>
       </div>
 
-      {/* Buscador */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-        <input
-          id="vuelos-search"
-          type="text"
-          placeholder="Buscar por PNR, expediente (AER-), pasajero o ruta..."
-          className="w-full pl-9 pr-4 py-2.5 border border-zinc-200 rounded text-xs bg-white focus:outline-none focus:border-zinc-500 font-medium"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Buscador + filtro por asesor */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <input
+            id="vuelos-search"
+            type="text"
+            placeholder="Buscar por PNR, expediente (AER-), pasajero o ruta..."
+            className="w-full pl-9 pr-4 py-2.5 border border-zinc-200 rounded text-xs bg-white focus:outline-none focus:border-zinc-500 font-medium"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {miUsername && (
+          <button
+            type="button"
+            onClick={() => setAsesorFilter(prev => prev === miUsername ? "" : miUsername)}
+            className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded text-[11px] font-bold uppercase tracking-wider border transition-all cursor-pointer whitespace-nowrap ${
+              asesorFilter === miUsername
+                ? "bg-violet-600 text-white border-violet-600"
+                : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300"
+            }`}
+            title="Ver solo los boletos que yo registré (control personal y comisiones)"
+          >
+            <UserCircle className="w-4 h-4" /> Mis Boletos ({misBoletosCount})
+          </button>
+        )}
+
+        {esAdministrador && (
+          <select
+            value={asesorFilter}
+            onChange={(e) => setAsesorFilter(e.target.value)}
+            className="px-2 py-2.5 border border-zinc-200 bg-white rounded text-[11px] font-semibold text-zinc-900 focus:outline-none cursor-pointer max-w-[190px]"
+            title="Filtrar boletos por asesor"
+          >
+            <option value="">TODOS LOS ASESORES</option>
+            {asesoresConBoletos.map(a => (
+              <option key={a} value={a}>{a === miUsername ? `${a} (yo)` : a}</option>
+            ))}
+            {sinAsesorCount > 0 && <option value="__SIN__">SIN ASESOR ({sinAsesorCount})</option>}
+          </select>
+        )}
       </div>
 
       {/* Tabla */}
@@ -417,6 +464,11 @@ function ListadoView({
                   {boleto.expedienteId && (
                     <span className="w-fit font-mono text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded tracking-wide inline-flex items-center gap-0.5">
                       <Link2 className="w-2.5 h-2.5" /> {boleto.expedienteId}
+                    </span>
+                  )}
+                  {boleto.asesor && (
+                    <span className="w-fit text-[9px] font-semibold text-violet-600 inline-flex items-center gap-0.5" title={`Asesor que registró el boleto: ${boleto.asesor}`}>
+                      <UserCircle className="w-2.5 h-2.5" /> {boleto.asesor}
                     </span>
                   )}
                 </div>

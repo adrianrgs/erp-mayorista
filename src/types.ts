@@ -80,6 +80,7 @@ export interface Reservation {
   clienteDirectoId?: string;
   // Localizador/ID propio de otro mayorista cuando este expediente fue comprado a través de él.
   localizadorProveedor?: string;
+  asesor?: string; // username del asesor que creó la reserva (control y comisiones)
   createdAt?: string; // YYYY-MM-DD
   mercado?: "NACIONAL" | "INTERNACIONAL";
   servicios?: ServiceItem[];

@@ -75,4 +75,9 @@ export class CreateReservationDto {
   @IsOptional()
   @IsString()
   localizadorProveedor?: string;
+
+  // Username del asesor que creó la reserva (para control y comisiones).
+  @IsOptional()
+  @IsString()
+  asesor?: string;
 }

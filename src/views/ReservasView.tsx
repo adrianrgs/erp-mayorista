@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient, DirectClient, DirectClientTipo, ClientStatus, FleetVehicle, CompanyConfig, ReservationPassenger, PassengerType, ProjectView } from "../types";
 import { AccionPermiso, ReglaAutorizacion, SolicitudAutorizacion, RegistroAuditoria } from "../types/usuarios";
 import { usePermissions } from "../hooks/usePermissions";
+import { useAuth } from "../context/AuthContext";
 import { useAutorizacion } from "../hooks/useAutorizacion";
 import { createEmptyPassenger, deriveHolderName, derivePassengersFromLegacyReservation, markTitular } from "../lib/passengers";
 import { Tabs } from "../components/reservas/Tabs";
@@ -46,7 +47,8 @@ import {
   Clock,
   ArrowRight,
   Activity,
-  History
+  History,
+  UserCircle
 } from "lucide-react";
 import { FinancialInvoice, PayableObligation, PaymentVoucher } from "../types";
 import { useDialog } from "../components/ui/DialogProvider";
@@ -228,7 +230,9 @@ export default function ReservasView({
 }: ReservasViewProps) {
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const { showAlert, showConfirm } = useDialog();
-  const { puede } = usePermissions();
+  const { puede, esAdministrador } = usePermissions();
+  const { usuario } = useAuth();
+  const miUsername = usuario?.username;
   const { intentarAccionSensible } = useAutorizacion(reglasAutorizacion, onCreateSolicitudAutorizacion, onAddRegistroAuditoria);
   // Navigation inside the module:
   // 1: List (dashboard), 2: Expediente unificado (Resumen/Datos Generales/Pasajeros/Servicios/Administración), 3: Configurar Servicio
@@ -246,6 +250,9 @@ export default function ReservasView({
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("Todas");
   const [sortBy, setSortBy] = useState<"ultimas" | "checkin" | "vencimiento">("ultimas");
+  // Filtro por asesor (username). "" = todos. Lo usan tanto la tarjeta "Mis Reservas" (mi username)
+  // como el selector de asesor (solo admin, para revisar el trabajo/comisiones de cualquiera).
+  const [asesorFilter, setAsesorFilter] = useState<string>("");
 
   // --- VISOR DE COMPROBANTE MODAL STATES ---
   const [showProvReceiptModal, setShowProvReceiptModal] = useState(false);
@@ -801,8 +808,10 @@ export default function ReservasView({
 
   // KPI Calculations (Level 1)
   const totalRes = reservations.length;
-  const totalConfirmadas = reservations.filter(r => r.status === "Confirmada").length;
-  const totalPendientes = reservations.filter(r => r.status === "Pendiente" || r.status === "Pendiente de Pago" || r.status === "Petición Especial" || r.status === "Modificada").length;
+  // Pendientes = expedientes que aún son COTIZACIÓN (no se han enviado a Facturación). Al enviarse,
+  // el expediente pasa a tipo "Reserva Real" (ver handleConfirmSendBilling), por lo que sale de aquí.
+  const esCotizacionPendiente = (r: Reservation) => r.tipo === "Cotización" && r.status !== "Cancelada";
+  const totalPendientes = reservations.filter(esCotizacionPendiente).length;
   const totalCanceladas = reservations.filter(r => r.status === "Cancelada").length;
 
   // "Pendiente de enviar a Facturación": el operador hizo un cambio en una reserva que YA tenía
@@ -826,6 +835,11 @@ export default function ReservasView({
     return hasBillingActivity;
   };
   const totalPorFacturar = reservations.filter(tienePendienteEnviarFacturar).length;
+
+  // Asesor: reservas del usuario logueado y lista de asesores con reservas (para el selector admin).
+  const misReservasCount = miUsername ? reservations.filter(r => r.asesor === miUsername).length : 0;
+  const asesoresConReservas = Array.from(new Set(reservations.map(r => r.asesor).filter((a): a is string => !!a))).sort();
+  const sinAsesorCount = reservations.filter(r => !r.asesor).length;
 
   const [activeTab, setActiveTab] = useState<"Activos" | "Canceladas">("Activos");
 
@@ -859,9 +873,9 @@ export default function ReservasView({
       if (filterStatus === "Todas") {
         matchesStatus = true;
       } else if (filterStatus === "Pendientes") {
-        matchesStatus = r.status === "Pendiente" || r.status === "Pendiente de Pago" || r.status === "Petición Especial" || r.status === "Modificada";
+        matchesStatus = esCotizacionPendiente(r);
       } else if (filterStatus === "Rechazadas") {
-        matchesStatus = !!r.facturacionRechazoMotivo || !!(r.servicios && r.servicios.some(s => s.statusFacturacion === "Rechazado"));
+        matchesStatus = r.status !== "Cancelada" && (!!r.facturacionRechazoMotivo || !!(r.servicios && r.servicios.some(s => s.statusFacturacion === "Rechazado")));
       } else if (filterStatus === "PorVencer") {
         const rc = receivableByRes.get(r.id);
         matchesStatus = !!rc && (rc.isNear || rc.isOverdue);
@@ -871,7 +885,11 @@ export default function ReservasView({
         matchesStatus = r.status === filterStatus;
       }
 
-      return matchesSearch && matchesStatus;
+      // Filtro por asesor: "__SIN__" = reservas sin asesor asignado; username = ese asesor.
+      const matchesAsesor = !asesorFilter
+        || (asesorFilter === "__SIN__" ? !r.asesor : r.asesor === asesorFilter);
+
+      return matchesSearch && matchesStatus && matchesAsesor;
     })
     .sort((a, b) => {
       if (sortBy === "vencimiento") {
@@ -1454,6 +1472,7 @@ export default function ReservasView({
     setSearch("");
     setFilterStatus("Todas");
     setSortBy("ultimas");
+    setAsesorFilter("");
   };
 
   // Carga el estado del carrito/borrador a partir de una reserva ya guardada.
@@ -1920,7 +1939,10 @@ export default function ReservasView({
     setTimeout(() => setSubmitSuccess(""), 4000);
   };
 
-  const rejectedReservations = reservations.filter(r => r.facturacionRechazoMotivo || (r.servicios && r.servicios.some(s => s.statusFacturacion === "Rechazado")));
+  // "Rechazadas" = Facturación devolvió/rechazó la solicitud de facturación. Se EXCLUYEN las
+  // anuladas: al anular una reserva, sus servicios también quedan en "Rechazado" (reversión de la
+  // NC), pero esas pertenecen a "Anuladas", no aquí. Sin esta exclusión se contaban doble.
+  const rejectedReservations = reservations.filter(r => r.status !== "Cancelada" && (r.facturacionRechazoMotivo || (r.servicios && r.servicios.some(s => s.statusFacturacion === "Rechazado"))));
 
   return (
     <div className="space-y-6 font-sans">
@@ -1974,7 +1996,7 @@ export default function ReservasView({
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             <div 
               onClick={() => setFilterStatus("Todas")}
               className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
@@ -1993,25 +2015,7 @@ export default function ReservasView({
               </div>
             </div>
 
-            <div 
-              onClick={() => setFilterStatus("Confirmada")}
-              className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
-                filterStatus === "Confirmada"
-                  ? "bg-emerald-50/20 border-emerald-500 ring-2 ring-emerald-500/10"
-                  : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-xs"
-              }`}
-            >
-              <div className="space-y-1">
-                <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest block">Confirmadas</span>
-                <span className="text-2xl font-black text-zinc-900 block">{totalConfirmadas}</span>
-                <span className="text-[9.5px] text-emerald-600 font-semibold block">Vouchers aprobados</span>
-              </div>
-              <div className={`p-2.5 rounded-md border ${filterStatus === "Confirmada" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-zinc-50 border-zinc-200 text-zinc-600"}`}>
-                <CheckCircle2 className="w-5.5 h-5.5" />
-              </div>
-            </div>
-
-            <div 
+            <div
               onClick={() => setFilterStatus("Pendientes")}
               className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
                 filterStatus === "Pendientes"
@@ -2022,7 +2026,7 @@ export default function ReservasView({
               <div className="space-y-1">
                 <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest block">Pendientes</span>
                 <span className="text-2xl font-black text-amber-700 block">{totalPendientes}</span>
-                <span className="text-[9.5px] text-amber-600 font-semibold block">Falta pago o cotización</span>
+                <span className="text-[9.5px] text-amber-600 font-semibold block">Cotizaciones sin enviar</span>
               </div>
               <div className={`p-2.5 rounded-md border ${filterStatus === "Pendientes" ? "bg-amber-50 border-amber-200 text-amber-750" : "bg-zinc-50 border-zinc-200 text-zinc-600"}`}>
                 <TrendingUp className="w-5.5 h-5.5" />
@@ -2084,49 +2088,93 @@ export default function ReservasView({
                 <Send className="w-5.5 h-5.5" />
               </div>
             </div>
+
+            {miUsername && (
+              <div
+                onClick={() => setAsesorFilter(prev => prev === miUsername ? "" : miUsername)}
+                className={`p-4.5 border rounded-lg flex items-center justify-between shadow-xs cursor-pointer transition-all ${
+                  asesorFilter === miUsername
+                    ? "bg-violet-100 border-violet-500 ring-2 ring-violet-500/20"
+                    : "bg-white border-zinc-200 hover:border-zinc-300 hover:shadow-xs"
+                }`}
+                title="Ver solo las reservas que yo registré (control personal y comisiones)"
+              >
+                <div className="space-y-1">
+                  <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest block">Mis Reservas</span>
+                  <span className="text-2xl font-black text-violet-700 block">{misReservasCount}</span>
+                  <span className="text-[9.5px] text-violet-600 font-semibold block truncate max-w-[120px]">{miUsername}</span>
+                </div>
+                <div className={`p-2.5 rounded-md border ${asesorFilter === miUsername ? "bg-violet-200 border-violet-300 text-violet-700" : "bg-zinc-50 border-zinc-200 text-zinc-600"}`}>
+                  <UserCircle className="w-5.5 h-5.5" />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Filtros */}
-          <div className="bg-white p-4 border border-zinc-200 rounded-lg flex flex-col md:flex-row items-center justify-between gap-4 shadow-xs">
-            <div className="relative w-full md:w-80">
+          <div className="bg-white p-4 border border-zinc-200 rounded-lg shadow-xs space-y-3">
+            {/* Fila 1: búsqueda a todo lo ancho */}
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
               <input
                 type="text"
-                placeholder="Buscar por localizador, titular, tfl, email..."
+                placeholder="Buscar por localizador, titular, teléfono, email..."
                 className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-500 font-semibold"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-              <div className="flex items-center gap-2">
-                <Filter className="w-3.5 h-3.5 text-zinc-400" />
-                <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Estatus:</span>
+            {/* Fila 2: selects (fluyen parejo y bajan de línea sin amontonarse) */}
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex flex-col gap-1 flex-1 min-w-[190px]">
+                <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider flex items-center gap-1.5">
+                  <Filter className="w-3 h-3" /> Estatus
+                </span>
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value)}
-                  className="p-1.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none cursor-pointer"
+                  className="w-full p-2 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none focus:border-zinc-500 cursor-pointer"
                 >
                   <option value="Todas">TODOS LOS ESTATUS</option>
+                  <option value="Pendientes">PENDIENTES (COTIZACIONES)</option>
                   <option value="Confirmada">CONFIRMADAS</option>
-                  <option value="Pendientes">PENDIENTES</option>
-                  <option value="Pendiente">PENDIENTE (COTIZACIÓN)</option>
                   <option value="Pendiente de Pago">PENDIENTES DE PAGO</option>
                   <option value="Petición Especial">PETICIÓN ESPECIAL</option>
                   <option value="Modificada">MODIFICADAS</option>
                   <option value="Cancelada">CANCELADAS</option>
                   <option value="PorVencer">POR VENCER (≤ {alertDays} DÍAS)</option>
+                  <option value="PorFacturar">POR FACTURAR (CAMBIOS SIN ENVIAR)</option>
                 </select>
               </div>
 
-              <div className="flex items-center gap-2">
-                <ArrowUpDown className="w-3.5 h-3.5 text-zinc-400" />
-                <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Ordenar:</span>
+              {esAdministrador && (
+                <div className="flex flex-col gap-1 flex-1 min-w-[190px]">
+                  <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider flex items-center gap-1.5">
+                    <UserCircle className="w-3 h-3" /> Asesor
+                  </span>
+                  <select
+                    value={asesorFilter}
+                    onChange={(e) => setAsesorFilter(e.target.value)}
+                    className="w-full p-2 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none focus:border-zinc-500 cursor-pointer"
+                  >
+                    <option value="">TODOS LOS ASESORES</option>
+                    {asesoresConReservas.map(a => (
+                      <option key={a} value={a}>{a === miUsername ? `${a} (yo)` : a}</option>
+                    ))}
+                    {sinAsesorCount > 0 && <option value="__SIN__">SIN ASESOR ({sinAsesorCount})</option>}
+                  </select>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1 flex-1 min-w-[190px]">
+                <span className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider flex items-center gap-1.5">
+                  <ArrowUpDown className="w-3 h-3" /> Ordenar
+                </span>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as "ultimas" | "checkin" | "vencimiento")}
-                  className="p-1.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none cursor-pointer"
+                  className="w-full p-2 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none focus:border-zinc-500 cursor-pointer"
                 >
                   <option value="ultimas">ÚLTIMAS AGREGADAS</option>
                   <option value="checkin">CHECK-IN MÁS PRÓXIMO</option>
@@ -2134,14 +2182,14 @@ export default function ReservasView({
                 </select>
               </div>
 
-              {(search !== "" || filterStatus !== "Todas" || sortBy !== "ultimas") && (
+              {(search !== "" || filterStatus !== "Todas" || sortBy !== "ultimas" || asesorFilter !== "") && (
                 <Button
                   onClick={clearFilters}
                   variant="secondary"
                   size="sm"
-                  className="uppercase tracking-wider"
+                  className="uppercase tracking-wider shrink-0"
                 >
-                  Limpiar Filtros
+                  Limpiar
                 </Button>
               )}
             </div>
@@ -2207,6 +2255,11 @@ export default function ReservasView({
                           {r.localizadorProveedor && (
                             <div className="font-mono font-semibold text-zinc-400 text-[9.5px] truncate normal-case">
                               Prov: {r.localizadorProveedor}
+                            </div>
+                          )}
+                          {r.asesor && (
+                            <div className="font-semibold text-violet-500 text-[9.5px] truncate normal-case flex items-center gap-1" title={`Asesor que registró la reserva: ${r.asesor}`}>
+                              <UserCircle className="w-2.5 h-2.5 flex-shrink-0" /> {r.asesor}
                             </div>
                           )}
                         </td>

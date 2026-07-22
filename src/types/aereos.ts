@@ -140,6 +140,8 @@ export interface FlightTicket {
   expedienteId?: string;
   /** Nombre del agente que registró el boleto */
   agenteNombre?: string;
+  /** Username del asesor (usuario del sistema) que creó el boleto — control y comisiones. */
+  asesor?: string;
   /** Timestamp de creación en Firestore (ISO string) */
   createdAt?: string;
   /** Número de ticket electrónico (si fue ticketeado). Ej: "045-2345678901" */

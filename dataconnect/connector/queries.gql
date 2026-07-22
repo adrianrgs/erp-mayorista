@@ -30,6 +30,7 @@ holder
     canalVenta
     clienteDirectoId
     localizadorProveedor
+    asesor
   }
 }
 
@@ -204,6 +205,7 @@ pnr
     impuestos
     notas
     expedienteAereo
+    asesor
   }
 }
 

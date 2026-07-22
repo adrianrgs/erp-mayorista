@@ -58,6 +58,7 @@ export class ReservationsService {
       canalVenta: dto.canalVenta || 'B2B',
       clienteDirectoId: dto.clienteDirectoId || null,
       localizadorProveedor: dto.localizadorProveedor || null,
+      asesor: dto.asesor || null,
       createdAt: now.split('T')[0],
       updatedAt: now,
     });

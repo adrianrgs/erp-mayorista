@@ -923,6 +923,9 @@ export default function App() {
   };
   const handleAddReservation = async (newRes: any) => {
     newRes.updatedAt = new Date().toISOString();
+    // Asesor: username del usuario logueado al momento de crear la reserva (control y comisiones).
+    // Se respeta si ya viniera asignado; si no hay sesión, queda sin asesor.
+    if (!newRes.asesor) newRes.asesor = usuario?.username || undefined;
     setReservations(prev => [newRes, ...prev]);
 
     try {
@@ -956,6 +959,7 @@ export default function App() {
         canalVenta: newRes.canalVenta,
         clienteDirectoId: newRes.clienteDirectoId,
         localizadorProveedor: newRes.localizadorProveedor,
+        asesor: newRes.asesor,
         updatedAt: newRes.updatedAt
       });
     } catch (e) {
@@ -1540,6 +1544,8 @@ export default function App() {
     const finalBol: FlightTicket = {
       ...newBol,
       id: nuevoId,
+      // Asesor: username del usuario logueado al crear el boleto (control y comisiones).
+      asesor: newBol.asesor || usuario?.username || undefined,
       costoNeto: round2(newBol.costoNeto || 0),
       precioVenta: round2(newBol.precioVenta || 0),
       precioPvp: newBol.precioPvp != null ? round2(newBol.precioPvp) : newBol.precioPvp,

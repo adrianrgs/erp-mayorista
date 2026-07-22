@@ -95,6 +95,7 @@ type Reservation @table {
   canalVenta: String
   clienteDirectoId: String
   localizadorProveedor: String
+  asesor: String
   updatedAt: String
 }
 
@@ -230,6 +231,7 @@ type FlightTicket @table {
   impuestos: Any
   notas: String
   expedienteAereo: Any
+  asesor: String
   updatedAt: String
 }
 
