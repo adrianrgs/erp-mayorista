@@ -2211,6 +2211,7 @@ onDeleteStopSale={handleDeleteStopSale}
                     clients={clients}
                     detailedProperties={detailedProperties}
                     payableObligations={payableObligations}
+                    usuarios={usuarios}
                   />
                 )}
                 {currentSection === ProjectView.CLIENTES && (

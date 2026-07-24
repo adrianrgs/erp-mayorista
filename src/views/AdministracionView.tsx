@@ -1,25 +1,27 @@
 import React, { useState } from "react";
 import { formatCurrency, getOperatingCurrency } from "../lib/taxEngine";
-import { 
-  FinancialInvoice, 
-  Reservation, 
-  B2BClient, 
-  PayableObligation, 
-  ServiceType 
+import { round2 } from "../lib/money";
+import {
+  FinancialInvoice,
+  Reservation,
+  B2BClient,
+  PayableObligation,
+  ServiceType
 } from "../types";
+import { Usuario } from "../types/usuarios";
 import { Property } from "../types/producto";
 import { FlightTicket } from "../types/aereos";
-import { 
-  TrendingUp, 
-  Wallet, 
-  DollarSign, 
-  ArrowUpRight, 
-  Users, 
-  Building, 
-  Globe, 
-  Check, 
-  Activity, 
-  Layers, 
+import {
+  TrendingUp,
+  Wallet,
+  DollarSign,
+  ArrowUpRight,
+  Users,
+  Building,
+  Globe,
+  Check,
+  Activity,
+  Layers,
   Star,
   Settings,
   ShieldCheck,
@@ -29,7 +31,9 @@ import {
   ArrowRight,
   RefreshCw,
   Plus,
-  Percent
+  Percent,
+  UserCircle,
+  Calendar
 } from "lucide-react";
 
 interface AdministracionViewProps {
@@ -40,6 +44,7 @@ interface AdministracionViewProps {
   clients?: B2BClient[];
   detailedProperties?: Property[];
   payableObligations?: PayableObligation[];
+  usuarios?: Usuario[];
 }
 
 export default function AdministracionView({
@@ -49,7 +54,8 @@ export default function AdministracionView({
   boletos = [],
   clients = [],
   detailedProperties = [],
-  payableObligations = []
+  payableObligations = [],
+  usuarios = []
 }: AdministracionViewProps) {
   // 1. KPI Calculations (Health Metrics)
   const activeReservations = reservations.filter(r => r.status !== "Cancelada");
@@ -196,6 +202,85 @@ export default function AdministracionView({
     .map(([name, stats]) => ({ name, ...stats }))
     .sort((a, b) => b.volume - a.volume)
     .slice(0, 5);
+
+  // ── Desempeño por Asesor (comisiones) ────────────────────────────────────────
+  // Ventas FACTURADAS atribuidas al asesor que las creó, filtradas por FECHA DE CREACIÓN.
+  // Reusa exactamente las fórmulas de PVP/Neto/Ganancia de las tarjetas KPI (arriba).
+  const hoyISO = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
+  const inicioMesISO = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toLocaleDateString("en-CA"); })();
+  const [asesorDesde, setAsesorDesde] = useState<string>(inicioMesISO);
+  const [asesorHasta, setAsesorHasta] = useState<string>(hoyISO);
+
+  // offset 0 = mes en curso (hasta hoy); -1 = mes anterior completo, etc.
+  const setRangoMes = (offset: number) => {
+    const base = new Date();
+    const y = base.getFullYear();
+    const m = base.getMonth() + offset;
+    setAsesorDesde(new Date(y, m, 1).toLocaleDateString("en-CA"));
+    setAsesorHasta(offset === 0 ? hoyISO : new Date(y, m + 1, 0).toLocaleDateString("en-CA"));
+  };
+
+  const usuarioNombre = (username?: string) =>
+    username ? (usuarios.find(u => u.username === username)?.nombre || username) : null;
+
+  // Reserva.createdAt = "YYYY-MM-DD"; Boleto.createdAt = ISO completo → primeros 10 chars.
+  const enRango = (createdAt?: string) => {
+    if (!createdAt) return false;
+    const d = createdAt.slice(0, 10);
+    return d >= asesorDesde && d <= asesorHasta;
+  };
+
+  type AsesorRow = { key: string; nombre: string; reservas: number; boletos: number; pvp: number; neto: number; ganancia: number };
+  const asesorMap: Record<string, AsesorRow> = {};
+  const getAsesorRow = (key: string): AsesorRow => {
+    if (!asesorMap[key]) {
+      asesorMap[key] = {
+        key,
+        nombre: key === "__SIN__" ? "Sin asesor" : (usuarioNombre(key) || key),
+        reservas: 0, boletos: 0, pvp: 0, neto: 0, ganancia: 0,
+      };
+    }
+    return asesorMap[key];
+  };
+
+  reservations.forEach(r => {
+    if (r.status === "Cancelada" || !enRango(r.createdAt)) return;
+    const key = r.asesor || "__SIN__";
+    let aporta = false;
+    (r.servicios || []).forEach(s => {
+      if (s.statusFacturacion !== "Facturado") return;
+      const pct = s.comisionB2B !== undefined ? s.comisionB2B : 10;
+      const pvp = s.precioPvp !== undefined ? s.precioPvp : (s.precioVenta / (1 - pct / 100));
+      const row = getAsesorRow(key);
+      row.pvp += pvp;
+      row.neto += s.precioNeto;
+      row.ganancia += (s.precioVenta - s.precioNeto);
+      aporta = true;
+    });
+    if (aporta) getAsesorRow(key).reservas += 1;
+  });
+
+  boletos.forEach(b => {
+    if (!enRango(b.createdAt)) return;
+    const st = b.expedienteAereo?.status;
+    const facturado = !st || st === "Facturado" || st === "PagadoAerolinea";
+    const excluido = st === "Anulado" || st === "Reembolsado";
+    if (!facturado || excluido) return;
+    const row = getAsesorRow(b.asesor || "__SIN__");
+    row.pvp += b.precioVenta;
+    row.neto += (b.costoNeto || 0);
+    row.ganancia += (b.precioVenta - (b.costoNeto || 0));
+    row.boletos += 1;
+  });
+
+  const asesorRows = Object.values(asesorMap).sort((a, b) => b.ganancia - a.ganancia);
+  const asesorTotals = asesorRows.reduce((t, r) => ({
+    reservas: t.reservas + r.reservas,
+    boletos: t.boletos + r.boletos,
+    pvp: t.pvp + r.pvp,
+    neto: t.neto + r.neto,
+    ganancia: t.ganancia + r.ganancia,
+  }), { reservas: 0, boletos: 0, pvp: 0, neto: 0, ganancia: 0 });
 
   return (
     <div className="space-y-8 font-sans pb-8">
@@ -448,6 +533,117 @@ export default function AdministracionView({
 
         </div>
 
+      </div>
+
+      {/* DESEMPEÑO POR ASESOR (base para comisiones) */}
+      <div className="bg-white border border-zinc-200 rounded-xl p-6 space-y-4 shadow-xs">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+          <div>
+            <h4 className="font-extrabold text-zinc-950 text-sm uppercase tracking-wider flex items-center gap-2">
+              <UserCircle className="w-4.5 h-4.5 text-violet-600" /> Desempeño por Asesor
+            </h4>
+            <p className="text-[10.5px] text-zinc-400 font-semibold mt-0.5 uppercase tracking-wide">
+              Ventas facturadas por asesor (base para comisiones) · atribuido por fecha de registro
+            </p>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <button
+              onClick={() => setRangoMes(0)}
+              className="px-2.5 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 cursor-pointer transition-all"
+            >
+              Mes actual
+            </button>
+            <button
+              onClick={() => setRangoMes(-1)}
+              className="px-2.5 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 cursor-pointer transition-all"
+            >
+              Mes anterior
+            </button>
+            <div className="flex flex-col gap-1">
+              <span className="text-[9px] font-bold uppercase text-zinc-400 tracking-wider flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> Desde
+              </span>
+              <input
+                type="date"
+                value={asesorDesde}
+                max={asesorHasta}
+                onChange={(e) => setAsesorDesde(e.target.value)}
+                className="p-1.5 border border-zinc-200 rounded text-xs font-semibold text-zinc-900 focus:outline-none focus:border-zinc-500 cursor-pointer"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[9px] font-bold uppercase text-zinc-400 tracking-wider">Hasta</span>
+              <input
+                type="date"
+                value={asesorHasta}
+                min={asesorDesde}
+                max={hoyISO}
+                onChange={(e) => setAsesorHasta(e.target.value)}
+                className="p-1.5 border border-zinc-200 rounded text-xs font-semibold text-zinc-900 focus:outline-none focus:border-zinc-500 cursor-pointer"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="text-zinc-500 font-bold bg-zinc-50 uppercase tracking-wider text-[9px] border-b border-zinc-200">
+                <th className="p-3">Asesor</th>
+                <th className="p-3 text-center">Reservas</th>
+                <th className="p-3 text-center">Boletos</th>
+                <th className="p-3 text-right">PVP (Retail)</th>
+                <th className="p-3 text-right">Neto (Costo)</th>
+                <th className="p-3 text-right">Ganancia Agencia</th>
+                <th className="p-3 text-right">Margen</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100">
+              {asesorRows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-6 text-center text-zinc-400 italic bg-zinc-50/20">
+                    No hay ventas facturadas en el rango seleccionado.
+                  </td>
+                </tr>
+              ) : (
+                asesorRows.map((row, i) => (
+                  <tr key={row.key} className="hover:bg-zinc-50/60 transition-colors">
+                    <td className="p-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-zinc-100 border border-zinc-200 text-[9px] font-black text-zinc-500 flex items-center justify-center flex-shrink-0">{i + 1}</span>
+                        <div className="leading-tight">
+                          <p className={`font-bold ${row.key === "__SIN__" ? "text-zinc-400 italic" : "text-zinc-900"}`}>{row.nombre}</p>
+                          {row.key !== "__SIN__" && row.nombre !== row.key && (
+                            <p className="text-[9px] font-mono text-zinc-400">{row.key}</p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-3 text-center font-bold text-zinc-700">{row.reservas}</td>
+                    <td className="p-3 text-center font-bold text-zinc-700">{row.boletos}</td>
+                    <td className="p-3 text-right font-mono text-zinc-900">{formatCurrency(round2(row.pvp), getOperatingCurrency())}</td>
+                    <td className="p-3 text-right font-mono text-zinc-500">{formatCurrency(round2(row.neto), getOperatingCurrency())}</td>
+                    <td className="p-3 text-right font-mono font-black text-emerald-700">{formatCurrency(round2(row.ganancia), getOperatingCurrency())}</td>
+                    <td className="p-3 text-right font-semibold text-zinc-500">{row.pvp > 0 ? Math.round((row.ganancia / row.pvp) * 100) : 0}%</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+            {asesorRows.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-zinc-200 bg-zinc-50 font-black text-zinc-900">
+                  <td className="p-3 uppercase text-[10px] tracking-wider">Totales</td>
+                  <td className="p-3 text-center">{asesorTotals.reservas}</td>
+                  <td className="p-3 text-center">{asesorTotals.boletos}</td>
+                  <td className="p-3 text-right font-mono">{formatCurrency(round2(asesorTotals.pvp), getOperatingCurrency())}</td>
+                  <td className="p-3 text-right font-mono">{formatCurrency(round2(asesorTotals.neto), getOperatingCurrency())}</td>
+                  <td className="p-3 text-right font-mono text-emerald-700">{formatCurrency(round2(asesorTotals.ganancia), getOperatingCurrency())}</td>
+                  <td className="p-3 text-right">{asesorTotals.pvp > 0 ? Math.round((asesorTotals.ganancia / asesorTotals.pvp) * 100) : 0}%</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
       </div>
 
     </div>
