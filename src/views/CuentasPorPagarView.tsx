@@ -122,7 +122,8 @@ export default function CuentasPorPagarView({
 
     // Compute fiscal fields
     const vatRate = (!newObligationForm.isExempt && jur.taxRate > 0) ? jur.taxRate : 0;
-    const vatAmt = vatRate > 0 ? parseFloat((cost * vatRate).toFixed(2)) : undefined;
+    // El costo ingresado YA incluye IVA → se EXTRAE (no se suma por encima).
+    const vatAmt = vatRate > 0 ? parseFloat((cost - cost / (1 + vatRate)).toFixed(2)) : undefined;
     const withholdPct = (!newObligationForm.isExempt && jur.hasWithholding && newObligationForm.vatWithheldPct)
       ? parseFloat(newObligationForm.vatWithheldPct) : 0;
     const vatWithheld = (vatAmt && withholdPct > 0) ? parseFloat((vatAmt * withholdPct / 100).toFixed(2)) : undefined;
@@ -325,8 +326,9 @@ export default function CuentasPorPagarView({
   }, [activeProviderStatements]);
 
   // ─── HANDLERS ──────────────────────────────────────────────────────────────
+  // El netCost YA incluye IVA. El total a pagar es el costo menos la retención (si es agente de retención real).
   const calcTotalToPay = (ob: PayableObligation) =>
-    ob.netCost + (ob.vatAmount ?? 0) - (ob.vatWithheld ?? 0);
+    ob.netCost - (ob.vatWithheld ?? 0);
 
   const remainingOf = (ob: PayableObligation) =>
     Math.max(0, calcTotalToPay(ob) - ob.paidAmount);
@@ -336,7 +338,7 @@ export default function CuentasPorPagarView({
   const providerPayables = useMemo(() => {
     return obligations.filter(o =>
       normalizeProviderName(o.providerName) === selectedProvider &&
-      !o.isFrozen && o.status !== "Congelado" && o.status !== "Pagado Total"
+      !o.isFrozen && o.status !== "Congelado" && o.status !== "Pagado Total" && o.status !== "Anulado"
     );
   }, [obligations, selectedProvider]);
 
@@ -361,22 +363,24 @@ export default function CuentasPorPagarView({
   // uniformemente a todas (mismo proveedor): IVA = netCost × taxRate, retención = IVA × pct.
   const consolidatedOverriding = consolidatedFiscal.isExempt || consolidatedFiscal.pct > 0;
   const consolidatedFiscalOf = (o: PayableObligation) => {
+    // El netCost incluye IVA: el IVA es informativo (crédito fiscal), NO se suma al pago.
+    const extractedVat = o.isExempt ? 0 : Number((o.netCost - o.netCost / (1 + jur.taxRate)).toFixed(2));
     let vat: number, withheld: number;
     if (!consolidatedOverriding) {
-      vat = o.vatAmount ?? 0;
+      vat = extractedVat;
       withheld = o.vatWithheld ?? 0;
     } else {
-      vat = consolidatedFiscal.isExempt ? 0 : Number((o.netCost * jur.taxRate).toFixed(2));
+      vat = consolidatedFiscal.isExempt ? 0 : extractedVat;
       withheld = Number((vat * consolidatedFiscal.pct / 100).toFixed(2));
     }
-    return { vat, withheld, remaining: Math.max(0, o.netCost + vat - withheld - o.paidAmount) };
+    return { vat, withheld, remaining: Math.max(0, o.netCost - withheld - o.paidAmount) };
   };
   const consolidatedNeto = selectedPayables.reduce((sum, o) => sum + o.netCost, 0);
   const consolidatedIVA = selectedPayables.reduce((sum, o) => sum + consolidatedFiscalOf(o).vat, 0);
   const consolidatedRetencion = selectedPayables.reduce((sum, o) => sum + consolidatedFiscalOf(o).withheld, 0);
   const consolidatedTotal = selectedPayables.reduce((sum, o) => sum + consolidatedFiscalOf(o).remaining, 0);
   // Porción ya abonada (pagos parciales previos) para que el desglose cuadre con el total a pagar.
-  const consolidatedAbonosPrevios = Math.max(0, (consolidatedNeto + consolidatedIVA - consolidatedRetencion) - consolidatedTotal);
+  const consolidatedAbonosPrevios = Math.max(0, (consolidatedNeto - consolidatedRetencion) - consolidatedTotal);
 
   // Al cambiar de proveedor, limpiar la selección y el buscador de facturas.
   useEffect(() => {
@@ -419,7 +423,7 @@ export default function CuentasPorPagarView({
     let total = 0;
     toPay.forEach(o => {
       const f = consolidatedFiscalOf(o);
-      const totalFactura = o.netCost + f.vat - f.withheld;
+      const totalFactura = o.netCost - f.withheld;
       total += f.remaining;
       // Si el usuario aplicó un tratamiento (exento/retención), lo persistimos en la obligación;
       // si no, se respeta el fiscal ya guardado.
@@ -496,7 +500,8 @@ export default function CuentasPorPagarView({
     const remaining = calcTotalToPay(obligation) - obligation.paidAmount;
     setPaymentForm({
       method: "Transferencia Bancaria",
-      currency: obligation.currency || getOperatingCurrency(),
+      // Por defecto, la moneda configurada en Ajustes (getOperatingCurrency).
+      currency: getOperatingCurrency(),
       amount: Math.max(0, remaining).toFixed(2),
       reference: "",
       notes: "",
@@ -1071,8 +1076,8 @@ export default function CuentasPorPagarView({
                       <span className="text-lg font-black font-mono">{formatCurrency(Number(consolidatedTotal.toFixed(2)), getOperatingCurrency())}</span>
                       {(consolidatedIVA > 0 || consolidatedRetencion > 0) && (
                         <span className={`text-[9.5px] font-semibold tracking-wide block mt-0.5 ${selectedPayables.length > 0 ? "text-zinc-300" : "text-zinc-400"}`}>
-                          Neto {formatCurrency(Number(consolidatedNeto.toFixed(2)), getOperatingCurrency())}
-                          {consolidatedIVA > 0 && <> · +{jur.taxName || "IVA"} {formatCurrency(Number(consolidatedIVA.toFixed(2)), getOperatingCurrency())}</>}
+                          Costo {formatCurrency(Number(consolidatedNeto.toFixed(2)), getOperatingCurrency())}
+                          {consolidatedIVA > 0 && <> · {jur.taxName || "IVA"} incl. {formatCurrency(Number(consolidatedIVA.toFixed(2)), getOperatingCurrency())}</>}
                           {consolidatedRetencion > 0 && <> · −Ret. {jur.taxName || "IVA"} {formatCurrency(Number(consolidatedRetencion.toFixed(2)), getOperatingCurrency())}</>}
                         </span>
                       )}
@@ -1223,13 +1228,13 @@ export default function CuentasPorPagarView({
                 )}
                 <div className="pt-1 font-mono space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-zinc-500">Costo base:</span>
+                    <span className="text-zinc-500">Costo (IVA incl.):</span>
                     <span className="font-bold text-zinc-900">{formatCurrency(activeObligationForPayment.netCost, activeObligationForPayment.currency || getOperatingCurrency())}</span>
                   </div>
                   {activeObligationForPayment.vatAmount != null && activeObligationForPayment.vatAmount > 0 && (
                     <div className="flex justify-between">
-                      <span className="text-zinc-500">{jur.taxName}:</span>
-                      <span className="font-bold text-zinc-700">+{formatCurrency(activeObligationForPayment.vatAmount, activeObligationForPayment.currency || getOperatingCurrency())}</span>
+                      <span className="text-zinc-500">{jur.taxName} incluido:</span>
+                      <span className="font-bold text-zinc-700">{formatCurrency(activeObligationForPayment.vatAmount, activeObligationForPayment.currency || getOperatingCurrency())}</span>
                     </div>
                   )}
                   {activeObligationForPayment.vatWithheld != null && activeObligationForPayment.vatWithheld > 0 && (
@@ -1238,7 +1243,7 @@ export default function CuentasPorPagarView({
                       <span className="font-bold text-red-600">-{formatCurrency(activeObligationForPayment.vatWithheld, activeObligationForPayment.currency || getOperatingCurrency())}</span>
                     </div>
                   )}
-                  {(activeObligationForPayment.vatAmount ?? 0) > 0 && (
+                  {(activeObligationForPayment.vatWithheld ?? 0) > 0 && (
                     <div className="flex justify-between border-t border-zinc-100 pt-1">
                       <span className="text-zinc-600 font-semibold">Total a pagar:</span>
                       <span className="font-bold text-zinc-900">{formatCurrency(calcTotalToPay(activeObligationForPayment), activeObligationForPayment.currency || getOperatingCurrency())}</span>
@@ -1291,7 +1296,7 @@ export default function CuentasPorPagarView({
                         const isExempt = e.target.checked;
                         const vatAmount = isExempt
                           ? undefined
-                          : parseFloat((activeObligationForPayment.netCost * jur.taxRate).toFixed(2));
+                          : parseFloat((activeObligationForPayment.netCost - activeObligationForPayment.netCost / (1 + jur.taxRate)).toFixed(2));
                         const updated: PayableObligation = {
                           ...activeObligationForPayment,
                           isExempt: isExempt || undefined,
@@ -1316,7 +1321,7 @@ export default function CuentasPorPagarView({
                   {/* Campos IVA cuando no es exento */}
                   {!activeObligationForPayment.isExempt && (() => {
                     const vatAmt = activeObligationForPayment.vatAmount
-                      ?? parseFloat((activeObligationForPayment.netCost * jur.taxRate).toFixed(2));
+                      ?? parseFloat((activeObligationForPayment.netCost - activeObligationForPayment.netCost / (1 + jur.taxRate)).toFixed(2));
                     const pct = activeObligationForPayment.vatWithheldPct ?? 0;
                     const withheld = parseFloat((vatAmt * pct / 100).toFixed(2));
                     const cur = activeObligationForPayment.currency || getOperatingCurrency();
@@ -1331,7 +1336,7 @@ export default function CuentasPorPagarView({
                               value={pct > 0 ? String(pct) : ""}
                               onChange={e => {
                                 const newPct = parseFloat(e.target.value) || 0;
-                                const computedVat = parseFloat((activeObligationForPayment.netCost * jur.taxRate).toFixed(2));
+                                const computedVat = parseFloat((activeObligationForPayment.netCost - activeObligationForPayment.netCost / (1 + jur.taxRate)).toFixed(2));
                                 const newVatAmt = activeObligationForPayment.vatAmount ?? computedVat;
                                 const newWithheld = parseFloat((newVatAmt * newPct / 100).toFixed(2));
                                 const updated: PayableObligation = {
@@ -1359,16 +1364,16 @@ export default function CuentasPorPagarView({
                         {/* Resumen fiscal */}
                         <div className="bg-white border border-zinc-200 rounded p-2.5 text-[10.5px] font-mono space-y-1">
                           <div className="flex justify-between text-zinc-600">
-                            <span>Costo base:</span>
+                            <span>Costo (IVA incl.):</span>
                             <span>{formatCurrency(activeObligationForPayment.netCost, cur)}</span>
                           </div>
-                          <div className="flex justify-between text-zinc-600">
-                            <span>{jur.taxName} ({(jur.taxRate * 100).toFixed(0)}%):</span>
-                            <span>+{formatCurrency(vatAmt, cur)}</span>
+                          <div className="flex justify-between text-zinc-400">
+                            <span>{jur.taxName} ({(jur.taxRate * 100).toFixed(0)}%) incluido:</span>
+                            <span>{formatCurrency(vatAmt, cur)}</span>
                           </div>
                           <div className="flex justify-between font-bold text-zinc-800 border-t border-zinc-100 pt-1">
                             <span>Total Factura:</span>
-                            <span>{formatCurrency(activeObligationForPayment.netCost + vatAmt, cur)}</span>
+                            <span>{formatCurrency(activeObligationForPayment.netCost, cur)}</span>
                           </div>
                           {withheld > 0 && (
                             <>
@@ -1378,7 +1383,7 @@ export default function CuentasPorPagarView({
                               </div>
                               <div className="flex justify-between font-black text-zinc-900 border-t border-zinc-100 pt-1">
                                 <span>A Pagar al Proveedor:</span>
-                                <span>{formatCurrency(activeObligationForPayment.netCost + vatAmt - withheld, cur)}</span>
+                                <span>{formatCurrency(activeObligationForPayment.netCost - withheld, cur)}</span>
                               </div>
                             </>
                           )}
@@ -1398,9 +1403,10 @@ export default function CuentasPorPagarView({
                     value={paymentForm.currency}
                     onChange={(e) => setPaymentForm(prev => ({ ...prev, currency: e.target.value }))}
                   >
-                    <option value="USD">Dólar (USD)</option>
-                    <option value="EUR">Euro (EUR)</option>
-                    <option value="VES">Bolívar (VES)</option>
+                    {/* La moneda configurada en Ajustes va primera (default); el resto quedan disponibles. */}
+                    {Array.from(new Set([getOperatingCurrency(), paymentForm.currency, jur.localCurrency, "USD", "EUR", "VES", "COP", "MXN", "CLP", "ARS", "PEN"].filter(Boolean))).map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -1529,13 +1535,13 @@ export default function CuentasPorPagarView({
                 {/* Desglose fiscal consolidado */}
                 <div className="border-t border-zinc-200 pt-2 space-y-1">
                   <div className="flex justify-between items-center text-[11px] text-zinc-500 font-semibold">
-                    <span>Subtotal Neto</span>
+                    <span>Costo (IVA incl.)</span>
                     <span className="font-mono text-zinc-700">{formatCurrency(Number(consolidatedNeto.toFixed(2)), getOperatingCurrency())}</span>
                   </div>
                   {consolidatedIVA > 0 && (
-                    <div className="flex justify-between items-center text-[11px] text-zinc-500 font-semibold">
-                      <span>{jur.taxName || "IVA"}</span>
-                      <span className="font-mono text-zinc-700">+{formatCurrency(Number(consolidatedIVA.toFixed(2)), getOperatingCurrency())}</span>
+                    <div className="flex justify-between items-center text-[11px] text-zinc-400 font-semibold">
+                      <span>{jur.taxName || "IVA"} incluido</span>
+                      <span className="font-mono text-zinc-500">{formatCurrency(Number(consolidatedIVA.toFixed(2)), getOperatingCurrency())}</span>
                     </div>
                   )}
                   {consolidatedRetencion > 0 && (
@@ -1942,7 +1948,7 @@ export default function CuentasPorPagarView({
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">Monto Neto *</label>
+                  <label className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 block mb-1">Monto (IVA incl.) *</label>
                   <input
                     type="number"
                     min="0"
@@ -2018,12 +2024,14 @@ export default function CuentasPorPagarView({
                     </label>
 
                     {!newObligationForm.isExempt && (() => {
-                      const base = parseFloat(newObligationForm.netCost || "0");
-                      const vat = parseFloat((base * jur.taxRate).toFixed(2));
-                      const total = base + vat;
+                      // El monto ingresado YA incluye IVA → se extrae la base (Subtotal + IVA = Total).
+                      const costo = parseFloat(newObligationForm.netCost || "0");
+                      const base = parseFloat((costo / (1 + jur.taxRate)).toFixed(2));
+                      const vat = parseFloat((costo - base).toFixed(2));
+                      const total = costo;
                       const pct = parseFloat(newObligationForm.vatWithheldPct) || 0;
                       const withheld = parseFloat((vat * pct / 100).toFixed(2));
-                      const toPay = total - withheld;
+                      const toPay = costo - withheld;
                       return (
                         <>
                           <div className={`grid gap-3 pt-2 border-t border-zinc-200 ${jur.hasWithholding ? "grid-cols-2" : "grid-cols-1"}`}>

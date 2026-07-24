@@ -882,10 +882,14 @@ export default function CobranzasDirectosPanel({
                       // matching por nombre/localizador, ver CobranzasB2BPanel.tsx), esta es
                       // plumbing nueva sin datos históricos que forcen un matching difuso.
                       const unpaidInvoices = invoices.filter(inv => {
-                        const matchesClient = inv.clientId === activeClient.id;
                         const isUnpaid = inv.status === "Facturado" || inv.status === "Vencido";
                         const isCollection = inv.type === "Cobro";
-                        return matchesClient && isUnpaid && isCollection;
+                        if (!isUnpaid || !isCollection) return false;
+                        // Match principal por clientId. Respaldo para facturas antiguas SIN clientId
+                        // (p.ej. suplementos creados antes del fix) que referencian al cliente por nombre.
+                        const byId = inv.clientId === activeClient.id;
+                        const byNameLegacy = !inv.clientId && !!activeClient.nombre && (inv.clientName ?? "").includes(activeClient.nombre);
+                        return byId || byNameLegacy;
                       });
 
                       const filteredInvoices = unpaidInvoices.filter(inv =>

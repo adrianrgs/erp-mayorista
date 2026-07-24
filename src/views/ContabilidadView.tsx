@@ -661,15 +661,14 @@ export default function ContabilidadView({
               .filter(o => o.status !== "Congelado")
               .map(o => ({ ...o, date: o.date ?? o.dueDate }))
           );
-          // Desglose fiscal de una obligación de compra. El IVA se EXTRAE del costo (que ya lo
-          // incluye, igual que en ventas), no se suma por encima. Casos:
+          // Desglose fiscal de una obligación de compra. El IVA se EXTRAE del costo (que SIEMPRE lo
+          // incluye, igual que en ventas), no se suma por encima. Así el desglose es idéntico antes
+          // y después de recargar (el vatAmount aditivo del alta transitoria no altera el cálculo).
           //  - Exento: sin IVA (base = costo).
-          //  - Con vatAmount explícito (obligación manual: netCost es base + IVA aparte): se respeta.
-          //  - Desde reserva (netCost = costo total con IVA incluido): se extrae la base.
+          //  - Resto: netCost = costo total con IVA incluido → base = netCost/(1+tasa), IVA = resto.
           const r2 = (n: number) => Math.round(n * 100) / 100;
           const purchaseVat = (o: any) => {
             if (o.isExempt) return { base: o.netCost, iva: 0, total: o.netCost };
-            if (o.vatAmount != null) return { base: o.netCost, iva: r2(o.vatAmount), total: r2(o.netCost + o.vatAmount) };
             const base = r2(o.netCost / (1 + jurisdiction.taxRate));
             return { base, iva: r2(o.netCost - base), total: o.netCost };
           };

@@ -859,6 +859,8 @@ export default function FacturacionView({
     const newInvoice: FinancialInvoice = {
       id: nextSequentialId("SUP", invoices.map(i => i.id)),
       clientName: `${activeRes.holder} - Localizador ${activeRes.id} (Suplemento: ${variation.reason})`,
+      clientId: _varSaleClient.client?.id,
+      reservationId: activeRes.id,
       date: new Date().toISOString().split("T")[0],
       dueDate: activeRes.checkIn,
       amount: variation.amountSale,
