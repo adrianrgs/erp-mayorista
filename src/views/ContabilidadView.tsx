@@ -30,7 +30,9 @@ import {
   JournalEntry,
   FinancialInvoice,
   PayableObligation,
+  PaymentVoucher,
 } from "../types";
+import { buildLedger } from "../lib/journal";
 
 interface ContabilidadViewProps {
   jurisdiction: TaxJurisdiction;
@@ -41,6 +43,7 @@ interface ContabilidadViewProps {
   journalEntries: JournalEntry[];
   invoices: FinancialInvoice[];
   payableObligations: PayableObligation[];
+  vouchers: PaymentVoucher[];
 }
 
 type TabId =
@@ -82,8 +85,21 @@ export default function ContabilidadView({
   journalEntries,
   invoices,
   payableObligations,
+  vouchers,
 }: ContabilidadViewProps) {
   const [activeTab, setActiveTab] = useState<TabId>("config");
+
+  // Libro Diario DERIVADO en vivo de facturas + cobros + pagos + retenciones.
+  // Se combina con cualquier asiento heredado/persistido (journalEntries), dedup por id.
+  const derivedLedger = React.useMemo<JournalEntry[]>(
+    () => buildLedger(invoices, vouchers, payableObligations, withholdingCertificates, jurisdiction, exchangeRates),
+    [invoices, vouchers, payableObligations, withholdingCertificates, jurisdiction, exchangeRates]
+  );
+  const ledger = React.useMemo<JournalEntry[]>(() => {
+    const ids = new Set(derivedLedger.map(e => e.id));
+    const legacy = (journalEntries ?? []).filter(e => !ids.has(e.id));
+    return [...derivedLedger, ...legacy].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  }, [derivedLedger, journalEntries]);
 
   // Filtro de período GLOBAL (rango de fechas) — aplica a todas las pestañas contables.
   const hoyISO = new Date().toLocaleDateString("en-CA");
@@ -884,30 +900,57 @@ export default function ContabilidadView({
         )}
 
         {/* ─── TAB: Libro Diario ───────────────────────────────────────────── */}
-        {activeTab === "journal" && (
+        {activeTab === "journal" && (() => {
+          const journalRows = ledger.filter(e => enRango(e.date)).sort((a, b) => b.date.localeCompare(a.date));
+          const totalDebit = journalRows.reduce((s, e) => s + e.lines.reduce((x, l) => x + l.debit, 0), 0);
+          const totalCredit = journalRows.reduce((s, e) => s + e.lines.reduce((x, l) => x + l.credit, 0), 0);
+          const cuadra = Math.abs(totalDebit - totalCredit) < 0.005;
+          const TYPE_LABEL: Record<string, string> = {
+            INCOME_RECOGNITION: "Venta",
+            DEPOSIT: "Cobro",
+            SUPPLIER_PAYMENT: "Pago proveedor",
+            WITHHOLDING: "Retención",
+          };
+          const TYPE_COLOR: Record<string, string> = {
+            INCOME_RECOGNITION: "bg-indigo-100 text-indigo-700",
+            DEPOSIT: "bg-emerald-100 text-emerald-700",
+            SUPPLIER_PAYMENT: "bg-amber-100 text-amber-700",
+            WITHHOLDING: "bg-blue-100 text-blue-700",
+          };
+          return (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-sm font-black uppercase text-zinc-800">Libro Diario — Asientos Contables</h2>
+              <div>
+                <h2 className="text-sm font-black uppercase text-zinc-800">Libro Diario — Asientos Contables</h2>
+                <p className="text-[10px] text-zinc-400 mt-0.5">
+                  Generado automáticamente desde ventas, cobros, pagos a proveedor y retenciones. Cada asiento cuadra (Débito = Crédito).
+                </p>
+              </div>
+              {journalRows.length > 0 && (
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-md text-[10px] font-bold ${cuadra ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                  {cuadra ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                  Débitos {formatCurrency(totalDebit, getOperatingCurrency())} · Créditos {formatCurrency(totalCredit, getOperatingCurrency())} {cuadra ? "· Cuadrado" : "· Descuadre"}
+                </div>
+              )}
             </div>
 
-            {filterByPeriod(journalEntries).length === 0 ? (
+            {journalRows.length === 0 ? (
               <div className="bg-white border border-zinc-200 rounded-lg p-8 text-center text-zinc-400 text-xs">
                 Sin asientos contables para el período {periodoLabel}
               </div>
             ) : (
               <div className="space-y-3">
-                {filterByPeriod(journalEntries)
-                  .sort((a, b) => b.date.localeCompare(a.date))
+                {journalRows
                   .map(entry => (
                     <div key={entry.id} className="bg-white border border-zinc-200 rounded-lg overflow-hidden">
                       <div className="bg-zinc-50 border-b border-zinc-200 px-4 py-2.5 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <span className="font-mono text-[10px] text-zinc-500">{entry.date}</span>
-                          <span className="px-1.5 py-0.5 bg-zinc-200 rounded text-[8px] font-bold uppercase text-zinc-600">{entry.type}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${TYPE_COLOR[entry.type] ?? "bg-zinc-200 text-zinc-600"}`}>{TYPE_LABEL[entry.type] ?? entry.type}</span>
                           <span className="text-xs font-semibold text-zinc-800">{entry.description}</span>
                         </div>
                         <div className="text-[9px] text-zinc-500 font-mono">
-                          Ref: {entry.reference} · TC: {entry.exchangeRate}
+                          Ref: {entry.reference}{entry.exchangeRate ? ` · TC: ${entry.exchangeRate}` : ""}
                         </div>
                       </div>
                       <table className="w-full text-xs">
@@ -935,7 +978,8 @@ export default function ContabilidadView({
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
       </div>
     </div>

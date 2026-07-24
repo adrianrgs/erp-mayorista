@@ -2269,6 +2269,7 @@ onDeleteStopSale={handleDeleteStopSale}
                     journalEntries={journalEntries}
                     invoices={invoices}
                     payableObligations={payableObligations}
+                    vouchers={vouchers}
                   />
                 )}
                 {currentSection === ProjectView.CUENTAS_PAGAR && (

@@ -121,6 +121,10 @@ export default function CobranzasView({
           companyConfig={companyConfig}
           walletTransactions={walletTransactions}
           onAddWalletTransaction={onAddWalletTransaction}
+          withholdingCertificates={withholdingCertificates}
+          onAddWithholdingCertificate={onAddWithholdingCertificate}
+          onDeleteWithholdingCertificate={onDeleteWithholdingCertificate}
+          jurisdiction={jurisdiction}
         />
       )}
     </div>

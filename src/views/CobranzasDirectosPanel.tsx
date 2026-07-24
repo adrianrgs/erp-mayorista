@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
-import { Reservation, FinancialInvoice, DirectClient, PaymentVoucher, CompanyConfig, WalletTransaction } from "../types";
+import { Reservation, FinancialInvoice, DirectClient, PaymentVoucher, CompanyConfig, WalletTransaction, WithholdingCertificate } from "../types";
+import { TaxJurisdiction } from "../lib/taxEngine";
+import WithholdingClienteSection from "../components/WithholdingClienteSection";
 import type { FlightTicket } from "../types/aereos";
 import { round2 } from "../lib/money";
 import { facturasConReciboDeCobro, esFacturaCobradaPorRecibo } from "../lib/receivables";
@@ -55,6 +57,10 @@ interface CobranzasDirectosPanelProps {
   companyConfig: CompanyConfig;
   walletTransactions?: WalletTransaction[];
   onAddWalletTransaction?: (tx: WalletTransaction) => void;
+  withholdingCertificates?: WithholdingCertificate[];
+  onAddWithholdingCertificate?: (cert: WithholdingCertificate) => void;
+  onDeleteWithholdingCertificate?: (id: string) => void;
+  jurisdiction?: TaxJurisdiction;
 }
 
 export default function CobranzasDirectosPanel({
@@ -71,6 +77,10 @@ export default function CobranzasDirectosPanel({
   companyConfig,
   walletTransactions = [],
   onAddWalletTransaction,
+  withholdingCertificates = [],
+  onAddWithholdingCertificate,
+  onDeleteWithholdingCertificate,
+  jurisdiction,
 }: CobranzasDirectosPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [invoiceSearchQuery, setInvoiceSearchQuery] = useState("");
@@ -80,7 +90,7 @@ export default function CobranzasDirectosPanel({
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<FinancialInvoice | null>(null);
 
   // Tab states for the client details card
-  const [activeTab, setActiveTab] = useState<"facturas" | "comprobantes">("facturas");
+  const [activeTab, setActiveTab] = useState<"facturas" | "comprobantes" | "retenciones">("facturas");
 
   // Notification state
   const [statusMessage, setStatusMessage] = useState("");
@@ -840,11 +850,33 @@ export default function CobranzasDirectosPanel({
                       </span>
                     )}
                   </button>
+                  {jurisdiction?.hasWithholding && (
+                    <button
+                      onClick={() => setActiveTab("retenciones")}
+                      className={`px-5 py-3.5 border-r border-zinc-200 transition-all cursor-pointer flex items-center gap-1.5 ${
+                        activeTab === "retenciones"
+                          ? "bg-white text-zinc-950 border-b-2 border-b-zinc-950 font-black"
+                          : "text-zinc-400 hover:text-zinc-800"
+                      }`}
+                    >
+                      <ShieldCheck className="w-4 h-4" /> Retenciones
+                    </button>
+                  )}
                 </div>
 
                 {/* Tab content */}
                 <div className="p-5">
-                  {activeTab === "facturas" ? (
+                  {activeTab === "retenciones" ? (
+                    <WithholdingClienteSection
+                      clientId={activeClient.id}
+                      clientName={activeClient.nombre}
+                      clientTaxId={activeClient.cedula ?? ""}
+                      certs={withholdingCertificates}
+                      jurisdiction={jurisdiction}
+                      onAdd={onAddWithholdingCertificate}
+                      onDelete={onDeleteWithholdingCertificate}
+                    />
+                  ) : activeTab === "facturas" ? (
                     (() => {
                       // Match limpio por clientId — a diferencia del panel B2B (que hereda un
                       // matching por nombre/localizador, ver CobranzasB2BPanel.tsx), esta es
