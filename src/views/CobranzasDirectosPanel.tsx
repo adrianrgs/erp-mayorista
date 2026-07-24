@@ -3,6 +3,7 @@ import { formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/
 import { Reservation, FinancialInvoice, DirectClient, PaymentVoucher, CompanyConfig, WalletTransaction } from "../types";
 import type { FlightTicket } from "../types/aereos";
 import { round2 } from "../lib/money";
+import { facturasConReciboDeCobro, esFacturaCobradaPorRecibo } from "../lib/receivables";
 import WalletClienteModal from "../components/WalletClienteModal";
 import { nextSequentialId } from "../lib/idGenerator";
 import { printElementById } from "../lib/print";
@@ -183,9 +184,12 @@ export default function CobranzasDirectosPanel({
     .filter(i => i.type === "Cobro" && (i.status === "Facturado" || i.status === "Vencido"))
     .reduce((sum, i) => sum + (netByInvoice[i.id]?.remaining ?? i.amount), 0);
 
-  // Cobros conciliados = ingresos reales; excluye notas de crédito (NC-, montos negativos).
+  // Cobros conciliados = ingresos reales; excluye NC- y facturas ya cobradas vía "Recibo de Cobro"
+  // (para no contar la factura Y el recibo → doble conteo).
+  const facsConReciboDir = facturasConReciboDeCobro(invoices);
   const collectionsMtd = invoices
-    .filter(i => i.type === "Cobro" && i.status === "Pagado" && !i.id.startsWith("NC-") && i.amount > 0)
+    .filter(i => i.type === "Cobro" && i.status === "Pagado" && !i.id.startsWith("NC-") && i.amount > 0
+      && !esFacturaCobradaPorRecibo(i, facsConReciboDir))
     .reduce((sum, item) => sum + item.amount, 0);
 
   // Number of clients with active debt

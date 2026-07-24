@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { formatCurrency, getOperatingCurrency, TaxJurisdiction, DEFAULT_JURISDICTION } from "../lib/taxEngine";
 import { round2 } from "../lib/money";
 import { netoSinIVA } from "../lib/quoteVat";
+import { facturasConReciboDeCobro, esFacturaCobradaPorRecibo } from "../lib/receivables";
 import {
   FinancialInvoice,
   Reservation,
@@ -62,18 +63,43 @@ export default function AdministracionView({
 }: AdministracionViewProps) {
   // Tasa de IVA vigente — para excluir el IVA del cálculo de comisiones/ganancias.
   const ivaRate = (jurisdiction ?? DEFAULT_JURISDICTION).taxRate;
+
+  // ── Filtro de período GLOBAL del panel ───────────────────────────────────────
+  // Aplica a las tarjetas de ventas/utilidad/liquidez, a la inteligencia comercial y al
+  // desempeño por asesor. Vacío = "Todo" (histórico completo). Filtra por fecha de creación
+  // (reservas/boletos) o de emisión (facturas/obligaciones).
+  const hoyISO = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
+  const [periodoDesde, setPeriodoDesde] = useState<string>("");
+  const [periodoHasta, setPeriodoHasta] = useState<string>("");
+  const periodoActivo = !!(periodoDesde || periodoHasta);
+  const setRangoMes = (offset: number) => {
+    const base = new Date();
+    const y = base.getFullYear();
+    const m = base.getMonth() + offset;
+    setPeriodoDesde(new Date(y, m, 1).toLocaleDateString("en-CA"));
+    setPeriodoHasta(offset === 0 ? hoyISO : new Date(y, m + 1, 0).toLocaleDateString("en-CA"));
+  };
+  const enRango = (dateStr?: string) => {
+    if (!periodoActivo) return true;
+    if (!dateStr) return false;
+    const d = dateStr.slice(0, 10);
+    return (!periodoDesde || d >= periodoDesde) && (!periodoHasta || d <= periodoHasta);
+  };
+
   // 1. KPI Calculations (Health Metrics)
-  const activeReservations = reservations.filter(r => r.status !== "Cancelada");
+  const activeReservations = reservations.filter(r => r.status !== "Cancelada" && enRango(r.createdAt));
 
   // Ventas conectadas a la FACTURACIÓN REAL, no a la proyección de reservas. Un servicio
   // cuenta como venta sólo cuando Facturación lo emitió (statusFacturacion === "Facturado").
   // Los servicios aún no facturados (Borrador/Solicitado) forman el pipeline "Por Facturar".
   // Los "Rechazado" (anulaciones/NC) quedan fuera automáticamente.
-  let totalGrossSales = 0;       // Venta B2B facturada
-  let totalNetCost = 0;          // Costo neto de lo facturado
-  let totalPvpSales = 0;         // PVP (tarifa retail) de lo facturado
+  let totalGrossSales = 0;       // Venta B2B facturada (con IVA)
+  let totalNetCost = 0;          // Costo del proveedor de lo facturado (con IVA)
+  let totalPvpSales = 0;         // PVP (tarifa retail) de lo facturado (con IVA)
   let totalB2BCommissions = 0;   // Comisión cedida a la agencia sobre lo facturado
-  let totalCompanyMarkup = 0;    // Margen de la empresa sobre lo facturado
+  let totalCompanyMarkup = 0;    // Margen bruto de la empresa (venta − costo, con IVA)
+  let totalUtilidadNeta = 0;     // Utilidad REAL después de IVA (venta neta − costo neto)
+  let totalVentaNeta = 0;        // Venta sin IVA (base del margen %)
   let pipelineB2BSales = 0;      // Reservas confirmadas aún NO facturadas (por facturar)
 
   activeReservations.forEach(r => {
@@ -86,6 +112,10 @@ export default function AdministracionView({
         totalPvpSales += pvp;
         totalB2BCommissions += (pvp - s.precioVenta);
         totalCompanyMarkup += (s.precioVenta - s.precioNeto);
+        // Utilidad real = venta y costo SIN IVA (el IVA es un impuesto que se traslada).
+        const vNeta = netoSinIVA(s.precioVenta, s.tratamientoIVA, ivaRate);
+        totalVentaNeta += vNeta;
+        totalUtilidadNeta += (vNeta - netoSinIVA(s.precioNeto, s.tratamientoIVA, ivaRate));
       } else if (s.statusFacturacion !== "Rechazado") {
         pipelineB2BSales += s.precioVenta;
       }
@@ -93,6 +123,7 @@ export default function AdministracionView({
   });
 
   boletos.forEach(b => {
+    if (!enRango(b.createdAt)) return;
     // Flights default to Venta (0% B2B commission unless otherwise noted)
     const st = b.expedienteAereo?.status;
     const facturado = !st || st === "Facturado" || st === "PagadoAerolinea";
@@ -102,36 +133,47 @@ export default function AdministracionView({
       totalNetCost += (b.costoNeto || 0);
       totalPvpSales += b.precioVenta;
       totalCompanyMarkup += (b.precioVenta - (b.costoNeto || 0));
+      const vNeta = netoSinIVA(b.precioVenta, undefined, ivaRate);
+      totalVentaNeta += vNeta;
+      totalUtilidadNeta += (vNeta - netoSinIVA(b.costoNeto || 0, undefined, ivaRate));
     } else if (!excluido) {
       pipelineB2BSales += b.precioVenta;
     }
   });
 
-  // Utilidad Neta sobre lo realmente facturado
-  const projectedProfit = totalCompanyMarkup;
-  const profitMarginPercent = totalGrossSales > 0 ? Math.round((projectedProfit / totalGrossSales) * 100) : 0;
+  // Utilidad Neta = ganancia REAL después de IVA (venta neta − costo neto). El margen se calcula
+  // sobre la venta sin IVA. `totalCompanyMarkup` (bruto) queda disponible por si se necesita.
+  const projectedProfit = round2(totalUtilidadNeta);
+  const profitMarginPercent = totalVentaNeta > 0 ? Math.round((projectedProfit / totalVentaNeta) * 100) : 0;
 
   // Real Liquidity (Cobros verificados/pagados menos pagos reales a proveedores)
   // Efectivo cobrado: facturas de Cobro efectivamente pagadas (contado + recibos de cobranza,
   // que incluyen los pagos con saldo a favor ya aplicados). Excluye retiros (RET-) y notas de
   // crédito (NC-, montos negativos de anulaciones/reintegros). El efectivo de billetera entra a
   // la liquidez cuando se aplica a una factura (recibo/factura Pagado), no al momento del abono.
+  // Se excluyen además las facturas de venta ya cobradas vía "Recibo de Cobro" (para no contar la
+  // factura Y su recibo → doble conteo del efectivo).
+  // Con un período activo, la liquidez es el FLUJO de caja neto de ese período (cobros/pagos con
+  // fecha en el rango); sin período, es el saldo total de caja.
+  const facsConReciboAdm = facturasConReciboDeCobro(invoices);
   const realCashCollected = invoices
-    .filter(i => i.type === "Cobro" && i.status === "Pagado" && !i.id?.startsWith("RET-") && !i.id?.startsWith("NC-") && i.amount > 0)
+    .filter(i => i.type === "Cobro" && i.status === "Pagado" && !i.id?.startsWith("RET-") && !i.id?.startsWith("NC-") && i.amount > 0
+      && !esFacturaCobradaPorRecibo(i, facsConReciboAdm) && enRango(i.date))
     .reduce((sum, i) => sum + i.amount, 0);
 
   // RET- invoices = saldoFavor cash withdrawals (outflow, must be subtracted).
   // El retiro "a favor de la empresa" NO genera RET-, por lo que no reduce la liquidez.
   const realWithdrawals = invoices
-    .filter(i => i.id?.startsWith("RET-") && i.status === "Pagado")
+    .filter(i => i.id?.startsWith("RET-") && i.status === "Pagado" && enRango(i.date))
     .reduce((sum, i) => sum + i.amount, 0);
 
   // Egresos reales a proveedores: TODO lo pagado en el libro de obligaciones (parcial + total),
   // no sólo las obligaciones "Pagado Total". Un pago parcial también es salida de caja.
   const realPaymentsMade = invoices
-    .filter(i => i.type === "Pago Proveedor" && i.status === "Pagado")
+    .filter(i => i.type === "Pago Proveedor" && i.status === "Pagado" && enRango(i.date))
     .reduce((sum, i) => sum + i.amount, 0) +
     payableObligations
+      .filter(o => enRango(o.date ?? o.dueDate))
       .reduce((sum, o) => sum + (o.paidAmount || 0), 0);
 
   const realLiquidity = realCashCollected - realPaymentsMade - realWithdrawals;
@@ -148,6 +190,7 @@ export default function AdministracionView({
     agencyStats[agency].count += 1;
   });
   boletos.forEach(b => {
+    if (!enRango(b.createdAt)) return;
     const agency = b.expedienteAereo?.clienteB2BNombre || "Canal Directo";
     if (!agencyStats[agency]) {
       agencyStats[agency] = { volume: 0, count: 0 };
@@ -209,31 +252,10 @@ export default function AdministracionView({
     .slice(0, 5);
 
   // ── Desempeño por Asesor (comisiones) ────────────────────────────────────────
-  // Ventas FACTURADAS atribuidas al asesor que las creó, filtradas por FECHA DE CREACIÓN.
-  // Reusa exactamente las fórmulas de PVP/Neto/Ganancia de las tarjetas KPI (arriba).
-  const hoyISO = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
-  const inicioMesISO = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toLocaleDateString("en-CA"); })();
-  const [asesorDesde, setAsesorDesde] = useState<string>(inicioMesISO);
-  const [asesorHasta, setAsesorHasta] = useState<string>(hoyISO);
-
-  // offset 0 = mes en curso (hasta hoy); -1 = mes anterior completo, etc.
-  const setRangoMes = (offset: number) => {
-    const base = new Date();
-    const y = base.getFullYear();
-    const m = base.getMonth() + offset;
-    setAsesorDesde(new Date(y, m, 1).toLocaleDateString("en-CA"));
-    setAsesorHasta(offset === 0 ? hoyISO : new Date(y, m + 1, 0).toLocaleDateString("en-CA"));
-  };
-
+  // Usa el filtro de período GLOBAL (arriba) y su propio filtro por asesor.
+  const [asesorFiltro, setAsesorFiltro] = useState<string>(""); // "" = todos
   const usuarioNombre = (username?: string) =>
     username ? (usuarios.find(u => u.username === username)?.nombre || username) : null;
-
-  // Reserva.createdAt = "YYYY-MM-DD"; Boleto.createdAt = ISO completo → primeros 10 chars.
-  const enRango = (createdAt?: string) => {
-    if (!createdAt) return false;
-    const d = createdAt.slice(0, 10);
-    return d >= asesorDesde && d <= asesorHasta;
-  };
 
   type AsesorRow = { key: string; nombre: string; reservas: number; boletos: number; pvp: number; neto: number; ganancia: number };
   const asesorMap: Record<string, AsesorRow> = {};
@@ -256,14 +278,16 @@ export default function AdministracionView({
       if (s.statusFacturacion !== "Facturado") return;
       const pct = s.comisionB2B !== undefined ? s.comisionB2B : 10;
       const pvpGross = s.precioPvp !== undefined ? s.precioPvp : (s.precioVenta / (1 - pct / 100));
-      // El IVA NO se considera en comisiones/ganancias: se calcula sobre el NETO (base sin IVA),
-      // extrayendo el IVA de PVP y precio de venta según el tratamiento del servicio.
+      // El IVA NO se considera en comisiones/ganancias: se calcula sobre el NETO (base sin IVA).
+      // Se extrae el IVA de PVP, venta Y COSTO (el precio del proveedor también lo incluye) según
+      // el tratamiento del servicio — así se compara neto contra neto (antes daba ganancia negativa).
       const pvpNeto = netoSinIVA(pvpGross, s.tratamientoIVA, ivaRate);
       const ventaNeta = netoSinIVA(s.precioVenta, s.tratamientoIVA, ivaRate);
+      const netoCostoNeto = netoSinIVA(s.precioNeto, s.tratamientoIVA, ivaRate);
       const row = getAsesorRow(key);
       row.pvp += pvpNeto;
-      row.neto += s.precioNeto;
-      row.ganancia += (ventaNeta - s.precioNeto);
+      row.neto += netoCostoNeto;
+      row.ganancia += (ventaNeta - netoCostoNeto);
       aporta = true;
     });
     if (aporta) getAsesorRow(key).reservas += 1;
@@ -276,14 +300,20 @@ export default function AdministracionView({
     const excluido = st === "Anulado" || st === "Reembolsado";
     if (!facturado || excluido) return;
     const ventaNeta = netoSinIVA(b.precioVenta, undefined, ivaRate);
+    const costoNetoNeto = netoSinIVA(b.costoNeto || 0, undefined, ivaRate);
     const row = getAsesorRow(b.asesor || "__SIN__");
     row.pvp += ventaNeta;
-    row.neto += (b.costoNeto || 0);
-    row.ganancia += (ventaNeta - (b.costoNeto || 0));
+    row.neto += costoNetoNeto;
+    row.ganancia += (ventaNeta - costoNetoNeto);
     row.boletos += 1;
   });
 
-  const asesorRows = Object.values(asesorMap).sort((a, b) => b.ganancia - a.ganancia);
+  const asesorRowsAll = Object.values(asesorMap).sort((a, b) => b.ganancia - a.ganancia);
+  // Filtro por asesor: texto libre (nombre o username), con sugerencias. "" = todos.
+  const asesorQuery = asesorFiltro.trim().toLowerCase();
+  const asesorRows = asesorQuery
+    ? asesorRowsAll.filter(r => r.nombre.toLowerCase().includes(asesorQuery) || r.key.toLowerCase().includes(asesorQuery))
+    : asesorRowsAll;
   const asesorTotals = asesorRows.reduce((t, r) => ({
     reservas: t.reservas + r.reservas,
     boletos: t.boletos + r.boletos,
@@ -301,9 +331,46 @@ export default function AdministracionView({
           <h2 className="text-zinc-950 font-black text-2xl tracking-tight uppercase">BI & Comando Directivo</h2>
           <p className="text-xs text-zinc-500 font-semibold mt-0.5 uppercase tracking-wider">Monitoreo de Salud Financiera y Rendimiento Comercial Mayorista</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-          <span className="text-[10px] uppercase font-black tracking-widest text-zinc-500">Datos Actualizados en Tiempo Real</span>
+        {/* Filtro de período GLOBAL — aplica a todas las tarjetas, inteligencia comercial y desempeño. */}
+        <div className="flex flex-wrap items-end gap-2">
+          <button
+            onClick={() => { setPeriodoDesde(""); setPeriodoHasta(""); }}
+            className={`px-2.5 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider border cursor-pointer transition-all ${!periodoActivo ? "bg-zinc-900 text-white border-zinc-900" : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300"}`}
+          >
+            Todo
+          </button>
+          <button
+            onClick={() => setRangoMes(0)}
+            className="px-2.5 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 cursor-pointer transition-all"
+          >
+            Mes actual
+          </button>
+          <button
+            onClick={() => setRangoMes(-1)}
+            className="px-2.5 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 cursor-pointer transition-all"
+          >
+            Mes anterior
+          </button>
+          <div className="flex flex-col gap-1">
+            <span className="text-[9px] font-bold uppercase text-zinc-400 tracking-wider flex items-center gap-1"><Calendar className="w-3 h-3" /> Desde</span>
+            <input
+              type="date"
+              value={periodoDesde}
+              max={periodoHasta || hoyISO}
+              onChange={(e) => setPeriodoDesde(e.target.value)}
+              className="p-1.5 border border-zinc-200 rounded text-xs font-semibold text-zinc-900 focus:outline-none focus:border-zinc-500 cursor-pointer"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-[9px] font-bold uppercase text-zinc-400 tracking-wider">Hasta</span>
+            <input
+              type="date"
+              value={periodoHasta}
+              min={periodoDesde}
+              onChange={(e) => setPeriodoHasta(e.target.value)}
+              className="p-1.5 border border-zinc-200 rounded text-xs font-semibold text-zinc-900 focus:outline-none focus:border-zinc-500 cursor-pointer"
+            />
+          </div>
         </div>
       </div>
 
@@ -369,13 +436,13 @@ export default function AdministracionView({
         {/* Utilidad Neta Mayorista (Margen Propio Foratour) */}
         <div className="bg-white border border-zinc-200 rounded-xl p-4.5 relative overflow-hidden shadow-2xs flex flex-col justify-between">
           <div className="space-y-1">
-            <span className="text-[9px] uppercase font-black tracking-widest text-zinc-400 block">Utilidad Neta (Neto)</span>
+            <span className="text-[9px] uppercase font-black tracking-widest text-zinc-400 block">Utilidad Neta (después de IVA)</span>
             <h3 className="text-2xl font-black text-zinc-900 tracking-tight text-emerald-700">
               {formatCurrency(projectedProfit, getOperatingCurrency())}
             </h3>
           </div>
           <div className="mt-4 pt-3 border-t border-zinc-100 flex items-center justify-between text-[11px] text-zinc-400 font-semibold">
-            <span>Markup: {profitMarginPercent}%</span>
+            <span>Margen: {profitMarginPercent}%</span>
             <Wallet className="w-4 h-4 text-emerald-500" />
           </div>
         </div>
@@ -557,41 +624,37 @@ export default function AdministracionView({
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
-            <button
-              onClick={() => setRangoMes(0)}
-              className="px-2.5 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 cursor-pointer transition-all"
-            >
-              Mes actual
-            </button>
-            <button
-              onClick={() => setRangoMes(-1)}
-              className="px-2.5 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 cursor-pointer transition-all"
-            >
-              Mes anterior
-            </button>
             <div className="flex flex-col gap-1">
               <span className="text-[9px] font-bold uppercase text-zinc-400 tracking-wider flex items-center gap-1">
-                <Calendar className="w-3 h-3" /> Desde
+                <UserCircle className="w-3 h-3" /> Asesor
               </span>
-              <input
-                type="date"
-                value={asesorDesde}
-                max={asesorHasta}
-                onChange={(e) => setAsesorDesde(e.target.value)}
-                className="p-1.5 border border-zinc-200 rounded text-xs font-semibold text-zinc-900 focus:outline-none focus:border-zinc-500 cursor-pointer"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  list="asesores-datalist"
+                  value={asesorFiltro}
+                  onChange={(e) => setAsesorFiltro(e.target.value)}
+                  placeholder="Todos — escribe o elige…"
+                  className="p-1.5 pr-6 border border-zinc-200 rounded text-xs font-semibold text-zinc-900 focus:outline-none focus:border-zinc-500 w-[200px]"
+                />
+                {asesorFiltro && (
+                  <button
+                    type="button"
+                    onClick={() => setAsesorFiltro("")}
+                    title="Limpiar"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 cursor-pointer text-sm leading-none"
+                  >
+                    ×
+                  </button>
+                )}
+                <datalist id="asesores-datalist">
+                  {asesorRowsAll.map(r => (
+                    <option key={r.key} value={r.nombre}>{r.key === "__SIN__" ? "" : r.key}</option>
+                  ))}
+                </datalist>
+              </div>
             </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-[9px] font-bold uppercase text-zinc-400 tracking-wider">Hasta</span>
-              <input
-                type="date"
-                value={asesorHasta}
-                min={asesorDesde}
-                max={hoyISO}
-                onChange={(e) => setAsesorHasta(e.target.value)}
-                className="p-1.5 border border-zinc-200 rounded text-xs font-semibold text-zinc-900 focus:outline-none focus:border-zinc-500 cursor-pointer"
-              />
-            </div>
+            <p className="text-[9px] text-zinc-400 font-semibold self-center">El período se controla con el filtro global (arriba).</p>
           </div>
         </div>
 

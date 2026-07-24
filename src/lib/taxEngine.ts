@@ -179,8 +179,11 @@ export function calculateTaxes(
   // vatInclusive: si `amount` YA incluye el IVA (precio final), la base se EXTRAE (base = amount/(1+tasa))
   // y el total = amount. Si es false (default), `amount` es la base neta y el IVA se SUMA por encima.
   vatInclusive: boolean = false,
+  // forceExempt: exención EXPLÍCITA (casilla "Facturar sin IVA" o servicio marcado "Exento"). Exenta
+  // SIEMPRE, sin depender de `hasExemptZone` (que es solo para la exención geográfica del cliente).
+  forceExempt: boolean = false,
 ): TaxCalculation {
-  const isExempt = clientProfile.isInExemptZone && jurisdiction.hasExemptZone;
+  const isExempt = forceExempt || (clientProfile.isInExemptZone && jurisdiction.hasExemptZone);
   const appliedRate = isExempt ? jurisdiction.reducedTaxRate : jurisdiction.taxRate;
 
   // Base gravable: exento → 0; precio con IVA incluido → se extrae; neto → es el propio amount.

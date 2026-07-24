@@ -84,10 +84,20 @@ export default function ContabilidadView({
   payableObligations,
 }: ContabilidadViewProps) {
   const [activeTab, setActiveTab] = useState<TabId>("config");
-  const [periodFilter, setPeriodFilter] = useState(() => {
-    const now = new Date();
-    return `${String(now.getMonth() + 1).padStart(2, "0")}-${now.getFullYear()}`;
-  });
+
+  // Filtro de período GLOBAL (rango de fechas) — aplica a todas las pestañas contables.
+  const hoyISO = new Date().toLocaleDateString("en-CA");
+  const monthRange = (offset: number) => {
+    const base = new Date();
+    const y = base.getFullYear();
+    const m = base.getMonth() + offset;
+    return {
+      desde: new Date(y, m, 1).toLocaleDateString("en-CA"),
+      hasta: offset === 0 ? hoyISO : new Date(y, m + 1, 0).toLocaleDateString("en-CA"),
+    };
+  };
+  const [periodoDesde, setPeriodoDesde] = useState<string>(() => monthRange(0).desde);
+  const [periodoHasta, setPeriodoHasta] = useState<string>(() => monthRange(0).hasta);
 
   // Config tab state
   const [editingConfig, setEditingConfig] = useState(false);
@@ -107,12 +117,41 @@ export default function ContabilidadView({
 
   const visibleTabs = TABS.filter(t => !t.condition || t.condition(jurisdiction));
 
-  // Helpers
-  const filterByPeriod = <T extends { date: string }>(list: T[]) => {
-    if (!periodFilter) return list;
-    const [month, year] = periodFilter.split("-");
-    return list.filter(item => item.date?.startsWith(`${year}-${month}`));
+  // Helpers de período (rango global)
+  const periodoActivo = !!(periodoDesde || periodoHasta);
+  const setRangoMes = (offset: number) => {
+    const r = monthRange(offset);
+    setPeriodoDesde(r.desde);
+    setPeriodoHasta(r.hasta);
   };
+  const esMesActivo = (offset: number) => {
+    const r = monthRange(offset);
+    return periodoDesde === r.desde && periodoHasta === r.hasta;
+  };
+  const enRango = (dateStr?: string) => {
+    if (!periodoActivo) return true;
+    if (!dateStr) return false;
+    const d = dateStr.slice(0, 10);
+    return (!periodoDesde || d >= periodoDesde) && (!periodoHasta || d <= periodoHasta);
+  };
+  // Un comprobante con período "MM-YYYY" cae en el rango si su mes se solapa con [desde, hasta].
+  const mesEnRango = (period?: string) => {
+    if (!periodoActivo) return true;
+    if (!period) return false;
+    const [mm, yyyy] = period.split("-");
+    if (!mm || !yyyy) return false;
+    const ini = `${yyyy}-${mm}-01`;
+    const fin = `${yyyy}-${mm}-31`;
+    return (!periodoHasta || ini <= periodoHasta) && (!periodoDesde || fin >= periodoDesde);
+  };
+  const periodoLabel = !periodoActivo ? "todo" : `${periodoDesde || "inicio"} → ${periodoHasta || "hoy"}`;
+  const periodoSlug = !periodoActivo ? "todo" : `${periodoDesde || "inicio"}_${periodoHasta || "hoy"}`;
+  const filterByPeriod = <T extends { date: string }>(list: T[]) => list.filter(item => enRango(item.date));
+
+  const presetBtn = (active: boolean) =>
+    `px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider transition-all ${
+      active ? "bg-zinc-950 text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+    }`;
 
   const exportCSV = (rows: string[][], filename: string) => {
     const content = rows.map(r => r.join(",")).join("\n");
@@ -166,6 +205,36 @@ export default function ContabilidadView({
             </button>
           ))}
         </div>
+
+        {/* Filtro de período GLOBAL — aplica a Ventas, Compras, Retenciones, Recargos y Libro Diario */}
+        {["sales", "purchases", "withholding", "surcharge", "journal"].includes(activeTab) && (
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-zinc-100">
+            <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400">Período</span>
+            <button onClick={() => { setPeriodoDesde(""); setPeriodoHasta(""); }} className={presetBtn(!periodoActivo)}>Todo</button>
+            <button onClick={() => setRangoMes(0)} className={presetBtn(esMesActivo(0))}>Mes actual</button>
+            <button onClick={() => setRangoMes(-1)} className={presetBtn(esMesActivo(-1))}>Mes anterior</button>
+            <div className="flex items-center gap-1.5 ml-1">
+              <input
+                type="date"
+                value={periodoDesde}
+                max={periodoHasta || undefined}
+                onChange={e => setPeriodoDesde(e.target.value)}
+                className="text-xs border border-zinc-200 rounded px-2 py-1"
+              />
+              <span className="text-zinc-400 text-xs">→</span>
+              <input
+                type="date"
+                value={periodoHasta}
+                min={periodoDesde || undefined}
+                onChange={e => setPeriodoHasta(e.target.value)}
+                className="text-xs border border-zinc-200 rounded px-2 py-1"
+              />
+            </div>
+            <span className="text-[9px] text-zinc-400 ml-auto">
+              {periodoActivo ? periodoLabel : "Mostrando todos los movimientos"}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -455,8 +524,18 @@ export default function ContabilidadView({
 
         {/* ─── TAB: Registro de Ventas ─────────────────────────────────────── */}
         {activeTab === "sales" && (() => {
+          // Libro de Ventas = documentos FISCALES de venta (facturación). Se EXCLUYEN:
+          //  - "Recibo de Cobro" (FAC- de cobranza): es un comprobante de pago, no una venta —
+          //    la venta ya está en su FAC- original; incluirlo duplicaba el total.
+          //  - ABO- (abonos a saldo a favor) y RET- (retiros): no son ventas.
           const filteredInvoices = filterByPeriod(
-            invoices.filter(i => i.type === "Cobro" && i.amount > 0)
+            invoices.filter(i =>
+              i.type === "Cobro" &&
+              i.amount > 0 &&
+              !(i.clientName ?? "").startsWith("Recibo de Cobro") &&
+              !(i.id ?? "").startsWith("ABO-") &&
+              !(i.id ?? "").startsWith("RET-")
+            )
           );
           const totalBase = filteredInvoices.reduce((s, i) => s + (i.taxableBase ?? i.amount), 0);
           const totalVAT  = filteredInvoices.reduce((s, i) => s + (i.vatAmount ?? 0), 0);
@@ -469,17 +548,6 @@ export default function ContabilidadView({
                 {jurisdiction.country === "VE" ? "Libro de Ventas" : "Registro de Ventas"}
               </h2>
               <div className="flex items-center gap-2">
-                <input
-                  type="month"
-                  value={periodFilter ? `${periodFilter.split("-")[1]}-${periodFilter.split("-")[0]}` : ""}
-                  onChange={e => {
-                    if (e.target.value) {
-                      const [y, m] = e.target.value.split("-");
-                      setPeriodFilter(`${m}-${y}`);
-                    }
-                  }}
-                  className="text-xs border border-zinc-200 rounded px-2 py-1.5"
-                />
                 <button
                   onClick={() => {
                     const rows = filteredInvoices.map(inv => [
@@ -492,7 +560,7 @@ export default function ContabilidadView({
                     ]);
                     exportCSV(
                       [["Fecha", "N° Doc", "Cliente", `Base ${jurisdiction.taxName}`, jurisdiction.taxName, jurisdiction.surchargeName ?? "", "Total USD", `Total ${jurisdiction.localCurrency}`], ...rows],
-                      `registro-ventas-${periodFilter}.csv`
+                      `registro-ventas-${periodoSlug}.csv`
                     );
                   }}
                   className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 text-white rounded text-[9px] font-bold uppercase"
@@ -547,7 +615,7 @@ export default function ContabilidadView({
                     <tfoot>
                       <tr className="bg-zinc-50 border-t-2 border-zinc-200 font-black text-xs">
                         <td colSpan={3} className="px-4 py-3 text-zinc-600 uppercase text-[9px] tracking-wider">
-                          Totales del período {periodFilter}
+                          Totales del período {periodoLabel}
                         </td>
                         <td className="px-4 py-3 text-right font-mono">{formatCurrency(totalBase, getOperatingCurrency())}</td>
                         <td className="px-4 py-3 text-right font-mono">{formatCurrency(totalVAT, getOperatingCurrency())}</td>
@@ -563,7 +631,7 @@ export default function ContabilidadView({
                     </tfoot>
                   </table>
                   {filteredInvoices.length === 0 && (
-                    <div className="text-center py-10 text-zinc-400 text-xs">Sin facturas para el período {periodFilter}</div>
+                    <div className="text-center py-10 text-zinc-400 text-xs">Sin facturas para el período {periodoLabel}</div>
                   )}
                 </div>
           </div>
@@ -599,17 +667,6 @@ export default function ContabilidadView({
                 {jurisdiction.country === "VE" ? "Libro de Compras" : "Registro de Compras"}
               </h2>
               <div className="flex items-center gap-2">
-                <input
-                  type="month"
-                  value={periodFilter ? `${periodFilter.split("-")[1]}-${periodFilter.split("-")[0]}` : ""}
-                  onChange={e => {
-                    if (e.target.value) {
-                      const [y, m] = e.target.value.split("-");
-                      setPeriodFilter(`${m}-${y}`);
-                    }
-                  }}
-                  className="text-xs border border-zinc-200 rounded px-2 py-1.5"
-                />
                 <button
                   onClick={() => {
                     const rows = filteredObligations.map(o => {
@@ -624,7 +681,7 @@ export default function ContabilidadView({
                     });
                     exportCSV(
                       [["Fecha", "Proveedor", "Concepto", `Base ${jurisdiction.taxName}`, `${jurisdiction.taxName} Crédito`, "Total USD", "Estado"], ...rows],
-                      `registro-compras-${periodFilter}.csv`
+                      `registro-compras-${periodoSlug}.csv`
                     );
                   }}
                   className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 text-white rounded text-[9px] font-bold uppercase"
@@ -677,7 +734,7 @@ export default function ContabilidadView({
                 <tfoot>
                   <tr className="bg-zinc-50 border-t-2 border-zinc-200 font-black text-xs">
                     <td colSpan={3} className="px-4 py-3 text-zinc-600 uppercase text-[9px] tracking-wider">
-                      Totales del período {periodFilter}
+                      Totales del período {periodoLabel}
                     </td>
                     <td className="px-4 py-3 text-right font-mono">{formatCurrency(totalBaseCompra, getOperatingCurrency())}</td>
                     <td className="px-4 py-3 text-right font-mono text-emerald-700">{formatCurrency(totalIVACredito, getOperatingCurrency())}</td>
@@ -687,7 +744,7 @@ export default function ContabilidadView({
                 </tfoot>
               </table>
               {filteredObligations.length === 0 && (
-                <div className="text-center py-10 text-zinc-400 text-xs">Sin obligaciones para el período {periodFilter}</div>
+                <div className="text-center py-10 text-zinc-400 text-xs">Sin obligaciones para el período {periodoLabel}</div>
               )}
             </div>
             <p className="text-[10px] text-zinc-400">
@@ -704,23 +761,10 @@ export default function ContabilidadView({
               <h2 className="text-sm font-black uppercase text-zinc-800">
                 Registro de Retenciones — {jurisdiction.withholdingLabel}
               </h2>
-              <div className="flex items-center gap-2">
-                <input
-                  type="month"
-                  value={periodFilter ? `${periodFilter.split("-")[1]}-${periodFilter.split("-")[0]}` : ""}
-                  onChange={e => {
-                    if (e.target.value) {
-                      const [y, m] = e.target.value.split("-");
-                      setPeriodFilter(`${m}-${y}`);
-                    }
-                  }}
-                  className="text-xs border border-zinc-200 rounded px-2 py-1.5"
-                />
-              </div>
             </div>
 
             {(() => {
-              const certs = withholdingCertificates.filter(c => !periodFilter || c.period === periodFilter);
+              const certs = withholdingCertificates.filter(c => mesEnRango(c.period));
               const totalWithheld = certs.reduce((s, c) => s + c.amountWithheld, 0);
 
               return (
@@ -762,7 +806,7 @@ export default function ContabilidadView({
                       <tfoot>
                         <tr className="bg-zinc-50 border-t-2 border-zinc-200 font-black text-xs">
                           <td colSpan={7} className="px-4 py-3 text-zinc-600 uppercase text-[9px] tracking-wider">
-                            Total retenido período {periodFilter}
+                            Total retenido período {periodoLabel}
                           </td>
                           <td className="px-4 py-3 text-right font-mono text-red-700">{formatCurrency(totalWithheld, getOperatingCurrency())}</td>
                           <td />
@@ -771,7 +815,7 @@ export default function ContabilidadView({
                     )}
                   </table>
                   {certs.length === 0 && (
-                    <div className="text-center py-10 text-zinc-400 text-xs">Sin comprobantes de retención para el período {periodFilter}</div>
+                    <div className="text-center py-10 text-zinc-400 text-xs">Sin comprobantes de retención para el período {periodoLabel}</div>
                   )}
                 </div>
               );
@@ -786,17 +830,6 @@ export default function ContabilidadView({
               <h2 className="text-sm font-black uppercase text-zinc-800">
                 Relación de {jurisdiction.surchargeName} — {(((jurisdiction.surchargeRate ?? 0)) * 100).toFixed(0)}%
               </h2>
-              <input
-                type="month"
-                value={periodFilter ? `${periodFilter.split("-")[1]}-${periodFilter.split("-")[0]}` : ""}
-                onChange={e => {
-                  if (e.target.value) {
-                    const [y, m] = e.target.value.split("-");
-                    setPeriodFilter(`${m}-${y}`);
-                  }
-                }}
-                className="text-xs border border-zinc-200 rounded px-2 py-1.5"
-              />
             </div>
 
             {(() => {
@@ -832,7 +865,7 @@ export default function ContabilidadView({
                       <tfoot>
                         <tr className="bg-zinc-50 border-t-2 border-zinc-200 font-black text-xs">
                           <td colSpan={5} className="px-4 py-3 text-zinc-600 uppercase text-[9px] tracking-wider">
-                            Total {jurisdiction.surchargeName} período {periodFilter}
+                            Total {jurisdiction.surchargeName} período {periodoLabel}
                           </td>
                           <td className="px-4 py-3 text-right font-mono text-amber-700">{formatCurrency(totalSurcharge, getOperatingCurrency())}</td>
                         </tr>
@@ -841,7 +874,7 @@ export default function ContabilidadView({
                   </table>
                   {withSurcharge.length === 0 && (
                     <div className="text-center py-10 text-zinc-400 text-xs">
-                      Sin operaciones con {jurisdiction.surchargeName} para el período {periodFilter}
+                      Sin operaciones con {jurisdiction.surchargeName} para el período {periodoLabel}
                     </div>
                   )}
                 </div>
@@ -855,22 +888,11 @@ export default function ContabilidadView({
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-sm font-black uppercase text-zinc-800">Libro Diario — Asientos Contables</h2>
-              <input
-                type="month"
-                value={periodFilter ? `${periodFilter.split("-")[1]}-${periodFilter.split("-")[0]}` : ""}
-                onChange={e => {
-                  if (e.target.value) {
-                    const [y, m] = e.target.value.split("-");
-                    setPeriodFilter(`${m}-${y}`);
-                  }
-                }}
-                className="text-xs border border-zinc-200 rounded px-2 py-1.5"
-              />
             </div>
 
             {filterByPeriod(journalEntries).length === 0 ? (
               <div className="bg-white border border-zinc-200 rounded-lg p-8 text-center text-zinc-400 text-xs">
-                Sin asientos contables para el período {periodFilter}
+                Sin asientos contables para el período {periodoLabel}
               </div>
             ) : (
               <div className="space-y-3">

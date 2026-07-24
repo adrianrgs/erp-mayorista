@@ -133,7 +133,6 @@ export default function FacturacionView({
 
   const computeTax = (amount: number, res?: Reservation, client?: B2BClient | DirectClient | null, forceExempt?: boolean, vatInclusive?: boolean) => {
     const profile = buildClientProfile(client);
-    if (forceExempt) profile.isInExemptZone = true;
     return calculateTaxes(
       amount,
       res?.comprobanteMetodo ?? '',
@@ -141,6 +140,7 @@ export default function FacturacionView({
       profile,
       currentExchangeRate,
       vatInclusive ?? preciosIncluyenIVA,
+      forceExempt ?? false,
     );
   };
 
@@ -165,11 +165,12 @@ export default function FacturacionView({
     flights: { precioVenta: number }[],
     agencyRecord: B2BClient | DirectClient | null,
   ) => {
-    const exemptZone = (agencyRecord as B2BClient | null)?.isInExemptZone || false;
     let base = 0, vat = 0, exempt = 0, surcharge = 0, vatWithheld = 0, incomeTaxWithheld = 0, localCurrencyAmount = 0;
     const addOne = (amount: number, mode: "incluido" | "aparte" | "exento") => {
       const inclusive = mode === "incluido";
-      const forceExempt = mode === "exento" || overrideExempt || exemptZone;
+      // Exención forzada: servicio "exento" o casilla "Facturar sin IVA". La exención por ZONA del
+      // cliente la resuelve el motor con su perfil (isInExemptZone && hasExemptZone).
+      const forceExempt = mode === "exento" || overrideExempt;
       const t = computeTax(amount, activeRes || undefined, agencyRecord, forceExempt, inclusive);
       base += t.taxableBase; vat += t.vatAmount; exempt += t.exemptBase; surcharge += t.surchargeAmount;
       vatWithheld += t.vatWithheld; incomeTaxWithheld += t.incomeTaxWithheld; localCurrencyAmount += t.localCurrencyAmount;
@@ -190,10 +191,9 @@ export default function FacturacionView({
   // factura (evita descuadres en facturas divididas por saldo a favor, donde se cae al agregado).
   const computeInvoiceLines = (inv: FinancialInvoice) => {
     const saleClient = activeRes ? resolveSaleClient(activeRes, clients, directClients).client : null;
-    const exemptZone = (saleClient as B2BClient | null)?.isInExemptZone || false;
     const buildLine = (desc: string, tipo: string, precioVenta: number, mode: "incluido" | "aparte" | "exento") => {
       const inclusive = mode === "incluido";
-      const forceExempt = mode === "exento" || overrideExempt || exemptZone;
+      const forceExempt = mode === "exento" || overrideExempt;
       const t = computeTax(precioVenta, activeRes || undefined, saleClient, forceExempt, inclusive);
       return { desc, tipo, base: round2(t.taxableBase + t.exemptBase), iva: round2(t.vatAmount), exento: t.vatAmount === 0, total: round2(t.taxableBase + t.exemptBase + t.vatAmount) };
     };

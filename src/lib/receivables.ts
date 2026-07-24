@@ -6,6 +6,27 @@ export function extractLocator(name: string): string {
   return m ? m[1].toUpperCase() : "";
 }
 
+// Ids de facturas de venta (FAC-) que fueron cobradas mediante un "Recibo de Cobro" (referenciadas
+// en el nombre del recibo). Al pagar una factura a crédito se marca la FAC como Pagada Y se crea un
+// recibo (también Pagado); esto permite NO contar las dos como cobros distintos (doble conteo).
+export function facturasConReciboDeCobro(invoices: FinancialInvoice[]): Set<string> {
+  const set = new Set<string>();
+  invoices.forEach(i => {
+    if ((i.clientName ?? "").startsWith("Recibo de Cobro")) {
+      (i.clientName.match(/FAC-\d+/g) || []).forEach(ref => set.add(ref));
+    }
+  });
+  return set;
+}
+
+// ¿Esta factura de venta (FAC-) debe EXCLUIRSE del conteo de cobros porque su cobro ya está
+// representado por un "Recibo de Cobro"? (Evita contar la factura Y el recibo.)
+export function esFacturaCobradaPorRecibo(inv: FinancialInvoice, facsConRecibo: Set<string>): boolean {
+  return (inv.id ?? "").startsWith("FAC-")
+    && !(inv.clientName ?? "").startsWith("Recibo de Cobro")
+    && facsConRecibo.has(inv.id);
+}
+
 export interface InvoiceNet { paid: number; ncApplied: number; remaining: number; }
 
 // Neto por factura: descuenta pagos verificados y notas de crédito (NC-) por localizador.

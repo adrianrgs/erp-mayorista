@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Reservation, FinancialInvoice, B2BClient, PaymentVoucher, CompanyConfig, WithholdingCertificate, WalletTransaction } from "../types";
 import { round2 } from "../lib/money";
+import { facturasConReciboDeCobro, esFacturaCobradaPorRecibo } from "../lib/receivables";
 import WalletClienteModal from "../components/WalletClienteModal";
 import type { FlightTicket } from "../types/aereos";
 import { TaxJurisdiction, formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
@@ -219,10 +220,12 @@ export default function CobranzasB2BPanel({
     .filter(i => i.type === "Cobro" && (i.status === "Facturado" || i.status === "Vencido"))
     .reduce((sum, i) => sum + (netByInvoice[i.id]?.remaining ?? i.amount), 0);
 
-  // Cobros conciliados = ingresos reales; excluye las notas de crédito (NC-, montos negativos de
-  // anulaciones/reintegros) que antes daban un total negativo.
+  // Cobros conciliados = ingresos reales; excluye NC- (montos negativos) y las facturas de venta
+  // que ya se cobraron vía un "Recibo de Cobro" (para no contar la factura Y el recibo → doble).
+  const facsConReciboB2B = facturasConReciboDeCobro(invoices);
   const collectionsMtd = invoices
-    .filter(i => i.type === "Cobro" && i.status === "Pagado" && !i.id.startsWith("NC-") && i.amount > 0)
+    .filter(i => i.type === "Cobro" && i.status === "Pagado" && !i.id.startsWith("NC-") && i.amount > 0
+      && !esFacturaCobradaPorRecibo(i, facsConReciboB2B))
     .reduce((sum, item) => sum + item.amount, 0);
 
   // Number of clients with active debt

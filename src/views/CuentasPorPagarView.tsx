@@ -634,7 +634,12 @@ export default function CuentasPorPagarView({
           <>
             <div className="w-px h-8 bg-zinc-200 hidden sm:block" />
             <button
-              onClick={() => setShowNewObligationForm(true)}
+              onClick={() => {
+                // Refresca los defaults al abrir: la moneda toma la configurada en el sistema ahora.
+                const hoy = new Date().toISOString().slice(0, 10);
+                setNewObligationForm(p => ({ ...p, currency: getOperatingCurrency(), date: hoy, dueDate: hoy }));
+                setShowNewObligationForm(true);
+              }}
               className="flex items-center gap-1.5 px-4 py-2 bg-zinc-900 text-white rounded text-xs font-bold whitespace-nowrap hover:bg-zinc-700 transition-colors shadow-3xs"
             >
               <Plus className="w-3.5 h-3.5" /> Nueva Obligación
@@ -1955,11 +1960,9 @@ export default function CuentasPorPagarView({
                     onChange={e => setNewObligationForm(p => ({ ...p, currency: e.target.value }))}
                     className="w-full text-xs border border-zinc-200 rounded px-3 py-2"
                   >
-                    <option>USD</option>
-                    <option>EUR</option>
-                    <option>VES</option>
-                    <option>COP</option>
-                    <option>MXN</option>
+                    {Array.from(new Set([getOperatingCurrency(), jur.localCurrency, "USD", "EUR", "VES", "COP", "MXN"].filter(Boolean))).map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
