@@ -487,7 +487,7 @@ export default function ContabilidadView({
                       String(inv.taxableBase ?? inv.amount),
                       String(inv.vatAmount),
                       String(inv.surchargeAmount ?? 0),
-                      String(inv.amount + inv.vatAmount),
+                      String(inv.amount),
                       jurisdiction.localCurrency !== getOperatingCurrency() ? String(inv.localCurrencyAmount ?? "") : "",
                     ]);
                     exportCSV(
@@ -577,8 +577,21 @@ export default function ContabilidadView({
               .filter(o => o.status !== "Congelado")
               .map(o => ({ ...o, date: o.date ?? o.dueDate }))
           );
-          const totalNeto = filteredObligations.reduce((s, o) => s + o.netCost, 0);
-          const totalIVACredito = filteredObligations.reduce((s, o) => s + Math.round(o.netCost * jurisdiction.taxRate * 100) / 100, 0);
+          // Desglose fiscal de una obligación de compra. El IVA se EXTRAE del costo (que ya lo
+          // incluye, igual que en ventas), no se suma por encima. Casos:
+          //  - Exento: sin IVA (base = costo).
+          //  - Con vatAmount explícito (obligación manual: netCost es base + IVA aparte): se respeta.
+          //  - Desde reserva (netCost = costo total con IVA incluido): se extrae la base.
+          const r2 = (n: number) => Math.round(n * 100) / 100;
+          const purchaseVat = (o: any) => {
+            if (o.isExempt) return { base: o.netCost, iva: 0, total: o.netCost };
+            if (o.vatAmount != null) return { base: o.netCost, iva: r2(o.vatAmount), total: r2(o.netCost + o.vatAmount) };
+            const base = r2(o.netCost / (1 + jurisdiction.taxRate));
+            return { base, iva: r2(o.netCost - base), total: o.netCost };
+          };
+          const totalBaseCompra = filteredObligations.reduce((s, o) => s + purchaseVat(o).base, 0);
+          const totalIVACredito = filteredObligations.reduce((s, o) => s + purchaseVat(o).iva, 0);
+          const totalCompra = filteredObligations.reduce((s, o) => s + purchaseVat(o).total, 0);
           return (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -599,15 +612,18 @@ export default function ContabilidadView({
                 />
                 <button
                   onClick={() => {
-                    const rows = filteredObligations.map(o => [
-                      o.date ?? o.dueDate, o.providerName, o.serviceDetail,
-                      String(o.netCost),
-                      String(Math.round(o.netCost * jurisdiction.taxRate * 100) / 100),
-                      String(o.netCost + Math.round(o.netCost * jurisdiction.taxRate * 100) / 100),
-                      o.status,
-                    ]);
+                    const rows = filteredObligations.map(o => {
+                      const pv = purchaseVat(o);
+                      return [
+                        o.date ?? o.dueDate, o.providerName, o.serviceDetail,
+                        String(pv.base),
+                        String(pv.iva),
+                        String(pv.total),
+                        o.status,
+                      ];
+                    });
                     exportCSV(
-                      [["Fecha", "Proveedor", "Concepto", `Neto USD`, `${jurisdiction.taxName} Crédito`, "Total USD", "Estado"], ...rows],
+                      [["Fecha", "Proveedor", "Concepto", `Base ${jurisdiction.taxName}`, `${jurisdiction.taxName} Crédito`, "Total USD", "Estado"], ...rows],
                       `registro-compras-${periodFilter}.csv`
                     );
                   }}
@@ -624,7 +640,7 @@ export default function ContabilidadView({
                     <th className="px-4 py-3">Fecha</th>
                     <th className="px-4 py-3">Proveedor</th>
                     <th className="px-4 py-3">Concepto / Localizador</th>
-                    <th className="px-4 py-3 text-right">Neto {getOperatingCurrency()}</th>
+                    <th className="px-4 py-3 text-right">Base {jurisdiction.taxName}</th>
                     <th className="px-4 py-3 text-right">{jurisdiction.taxName} Crédito</th>
                     <th className="px-4 py-3 text-right">Total</th>
                     <th className="px-4 py-3 text-center">Estado</th>
@@ -632,7 +648,7 @@ export default function ContabilidadView({
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
                   {filteredObligations.map(o => {
-                    const ivaCredito = Math.round(o.netCost * jurisdiction.taxRate * 100) / 100;
+                    const pv = purchaseVat(o);
                     return (
                       <tr key={o.id} className="hover:bg-zinc-50">
                         <td className="px-4 py-2.5 font-mono text-zinc-700">{o.date ?? o.dueDate}</td>
@@ -641,9 +657,9 @@ export default function ContabilidadView({
                           {o.serviceDetail}
                           {o.locatorId && <span className="ml-1 text-[9px] text-zinc-400 font-mono">· {o.locatorId}</span>}
                         </td>
-                        <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(o.netCost, getOperatingCurrency())}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-emerald-700">{formatCurrency(ivaCredito, getOperatingCurrency())}</td>
-                        <td className="px-4 py-2.5 text-right font-mono font-bold">{formatCurrency((o.netCost + ivaCredito), getOperatingCurrency())}</td>
+                        <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(pv.base, getOperatingCurrency())}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-emerald-700">{formatCurrency(pv.iva, getOperatingCurrency())}</td>
+                        <td className="px-4 py-2.5 text-right font-mono font-bold">{formatCurrency(pv.total, getOperatingCurrency())}</td>
                         <td className="px-4 py-2.5 text-center">
                           <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
                             o.status === "Pagado Total" ? "bg-emerald-100 text-emerald-700" :
@@ -663,9 +679,9 @@ export default function ContabilidadView({
                     <td colSpan={3} className="px-4 py-3 text-zinc-600 uppercase text-[9px] tracking-wider">
                       Totales del período {periodFilter}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono">{formatCurrency(totalNeto, getOperatingCurrency())}</td>
+                    <td className="px-4 py-3 text-right font-mono">{formatCurrency(totalBaseCompra, getOperatingCurrency())}</td>
                     <td className="px-4 py-3 text-right font-mono text-emerald-700">{formatCurrency(totalIVACredito, getOperatingCurrency())}</td>
-                    <td className="px-4 py-3 text-right font-mono">{formatCurrency((totalNeto + totalIVACredito), getOperatingCurrency())}</td>
+                    <td className="px-4 py-3 text-right font-mono">{formatCurrency(totalCompra, getOperatingCurrency())}</td>
                     <td />
                   </tr>
                 </tfoot>
@@ -675,7 +691,7 @@ export default function ContabilidadView({
               )}
             </div>
             <p className="text-[10px] text-zinc-400">
-              Datos sincronizados desde Tesorería → Obligaciones. El {jurisdiction.taxName} crédito es estimado ({(jurisdiction.taxRate * 100).toFixed(0)}%) — ajusta según la factura real del proveedor.
+              Datos sincronizados desde Tesorería → Obligaciones. El {jurisdiction.taxName} crédito se EXTRAE del costo (asume precio con {jurisdiction.taxName} incluido, {(jurisdiction.taxRate * 100).toFixed(0)}%). Para proveedores exentos o con {jurisdiction.taxName} por fuera, ajusta la obligación en Cuentas por Pagar.
             </p>
           </div>
           );

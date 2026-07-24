@@ -354,7 +354,8 @@ export default function PropiedadesView({
     fechaFin: "",
     tipoCobro: TipoCobro.POR_HABITACION,
     politicasCancelacion: "Cancelación sin cargos hasta 5 días hábiles antes de la llegada.",
-    comisionCedidaB2B: ""
+    comisionCedidaB2B: "",
+    tratamientoIVA: "" as "" | "incluido" | "aparte" | "exento"
   });
 
   const [activeMercadoTab, setActiveMercadoTab] = useState<"NACIONAL" | "INTERNACIONAL">("NACIONAL");
@@ -623,7 +624,8 @@ export default function PropiedadesView({
         tarifaExtraNino: parseFloat(pricing.tarifaExtraNino) || 0,
         politicasCancelacion: newRateForm.politicasCancelacion,
         mercado: activeMercadoTab,
-        comisionCedidaB2B: newRateForm.comisionCedidaB2B === "" ? undefined : parseFloat(newRateForm.comisionCedidaB2B)
+        comisionCedidaB2B: newRateForm.comisionCedidaB2B === "" ? undefined : parseFloat(newRateForm.comisionCedidaB2B),
+        tratamientoIVA: (newRateForm.tratamientoIVA || undefined) as RatePlan["tratamientoIVA"]
       };
     });
 
@@ -647,7 +649,8 @@ export default function PropiedadesView({
       fechaFin: firstRate?.fechaFin || "",
       tipoCobro: firstRate?.tipoCobro || TipoCobro.POR_HABITACION,
       politicasCancelacion: firstRate?.politicasCancelacion || "Cancelación sin cargos hasta 5 días hábiles antes de la llegada.",
-      comisionCedidaB2B: firstRate?.comisionCedidaB2B !== undefined ? String(firstRate.comisionCedidaB2B) : ""
+      comisionCedidaB2B: firstRate?.comisionCedidaB2B !== undefined ? String(firstRate.comisionCedidaB2B) : "",
+      tratamientoIVA: (firstRate?.tratamientoIVA || "") as "" | "incluido" | "aparte" | "exento"
     });
     setActiveMercadoTab((firstRate?.mercado as "NACIONAL" | "INTERNACIONAL") || "NACIONAL");
 
@@ -1821,6 +1824,22 @@ export default function PropiedadesView({
                         ? `Comisión bruta del hotel: ${activeProperty.comisionBruta}%. El resto (no cedido) queda para tu propia agencia.`
                         : "Este hotel no tiene Comisión Bruta configurada aún (pestaña Políticas) — sin ella, Reservas no podrá autocompletar la comisión."}
                     </p>
+                  </div>
+
+                  {/* Tratamiento de IVA del plan — el servicio de alojamiento lo hereda al agregarse. */}
+                  <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg space-y-1.5">
+                    <label className="text-[9px] font-bold text-sky-700 uppercase tracking-widest block">Tratamiento de IVA — aplica a todo el plan</label>
+                    <select
+                      value={newRateForm.tratamientoIVA}
+                      onChange={(e) => setNewRateForm(prev => ({ ...prev, tratamientoIVA: e.target.value as "" | "incluido" | "aparte" | "exento" }))}
+                      className="w-full sm:w-64 p-2.5 border border-zinc-200 rounded text-xs bg-white text-zinc-900 font-bold focus:outline-none"
+                    >
+                      <option value="">Según la emisión (default)</option>
+                      <option value="incluido">Precio incluye IVA</option>
+                      <option value="aparte">IVA por fuera (se suma)</option>
+                      <option value="exento">Exento (sin IVA)</option>
+                    </select>
+                    <p className="text-[9px] text-sky-700 font-medium">Se hereda al facturar. Si se deja en "default", usa el modo elegido al emitir la factura.</p>
                   </div>
 
                   <div className="flex items-center justify-between pt-1">

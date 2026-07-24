@@ -8,6 +8,8 @@ import { computeDueDate } from "../lib/dueDate";
 import { RoomType, RatePlan, Property, TipoCobro } from "../types/producto";
 import type { FlightTicket } from "../types/aereos";
 import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile, getOperatingCurrency, formatCurrency, getCurrencySymbol } from "../lib/taxEngine";
+import { round2 } from "../lib/money";
+import { printElementById } from "../lib/print";
 import { nextSequentialId } from "../lib/idGenerator";
 import { formatGDSDate } from "../lib/parsers/pnrParser";
 import { 
@@ -37,7 +39,14 @@ import {
   CheckCircle2,
   ShieldCheck,
   ShieldAlert,
-  Calculator
+  Calculator,
+  ChevronDown,
+  ChevronUp,
+  BedDouble,
+  Car,
+  Plane,
+  ShieldCheck as ShieldIcon,
+  Package
 } from "lucide-react";
 import { useDialog } from "../components/ui/DialogProvider";
 import { Tabs } from "../components/reservas/Tabs";
@@ -122,7 +131,7 @@ export default function FacturacionView({
     };
   };
 
-  const computeTax = (amount: number, res?: Reservation, client?: B2BClient | DirectClient | null, forceExempt?: boolean) => {
+  const computeTax = (amount: number, res?: Reservation, client?: B2BClient | DirectClient | null, forceExempt?: boolean, vatInclusive?: boolean) => {
     const profile = buildClientProfile(client);
     if (forceExempt) profile.isInExemptZone = true;
     return calculateTaxes(
@@ -131,10 +140,83 @@ export default function FacturacionView({
       activeJurisdiction,
       profile,
       currentExchangeRate,
+      vatInclusive ?? preciosIncluyenIVA,
     );
   };
 
+  // Modo de IVA efectivo de un servicio: su tratamiento propio, o el default de la emisión.
+  const serviceVatMode = (s: ServiceItem): "incluido" | "aparte" | "exento" =>
+    s.tratamientoIVA || (overrideExempt ? "exento" : (preciosIncluyenIVA ? "incluido" : "aparte"));
+
+  // Override manual del tratamiento de IVA de un servicio desde Facturación (persiste en la reserva).
+  const setServiceVatTreatment = (serviceId: string, value: string) => {
+    if (!activeRes) return;
+    const updated = (activeRes.servicios || []).map(s =>
+      s.id === serviceId ? { ...s, tratamientoIVA: (value || undefined) as ServiceItem["tratamientoIVA"] } : s
+    );
+    onUpdateReservation({ ...activeRes, servicios: updated });
+  };
+
+  // Agrega el cálculo fiscal de varios servicios/boletos, cada uno con SU tratamiento de IVA
+  // (incluido/aparte/exento). Devuelve los campos ya sumados. Permite facturas mixtas: parte
+  // gravada + parte exenta en un mismo documento. `gross` es el total sin recargo (IGTF).
+  const computeAggregateTax = (
+    services: ServiceItem[],
+    flights: { precioVenta: number }[],
+    agencyRecord: B2BClient | DirectClient | null,
+  ) => {
+    const exemptZone = (agencyRecord as B2BClient | null)?.isInExemptZone || false;
+    let base = 0, vat = 0, exempt = 0, surcharge = 0, vatWithheld = 0, incomeTaxWithheld = 0, localCurrencyAmount = 0;
+    const addOne = (amount: number, mode: "incluido" | "aparte" | "exento") => {
+      const inclusive = mode === "incluido";
+      const forceExempt = mode === "exento" || overrideExempt || exemptZone;
+      const t = computeTax(amount, activeRes || undefined, agencyRecord, forceExempt, inclusive);
+      base += t.taxableBase; vat += t.vatAmount; exempt += t.exemptBase; surcharge += t.surchargeAmount;
+      vatWithheld += t.vatWithheld; incomeTaxWithheld += t.incomeTaxWithheld; localCurrencyAmount += t.localCurrencyAmount;
+    };
+    services.forEach(s => addOne(s.precioVenta, serviceVatMode(s)));
+    const flightMode: "incluido" | "aparte" | "exento" = overrideExempt ? "exento" : (preciosIncluyenIVA ? "incluido" : "aparte");
+    flights.forEach(b => addOne(b.precioVenta, flightMode));
+    return {
+      base: round2(base), vat: round2(vat), exempt: round2(exempt), surcharge: round2(surcharge),
+      vatWithheld: round2(vatWithheld), incomeTaxWithheld: round2(incomeTaxWithheld),
+      localCurrencyAmount: round2(localCurrencyAmount), exchangeRate: currentExchangeRate,
+      gross: round2(base + vat + exempt),
+    };
+  };
+
+  // Líneas por servicio para el PDF de la factura: cada servicio facturado (y boleto conjunto) con
+  // su base/IVA/total según su tratamiento. Solo se itemiza si la suma cuadra con el total de la
+  // factura (evita descuadres en facturas divididas por saldo a favor, donde se cae al agregado).
+  const computeInvoiceLines = (inv: FinancialInvoice) => {
+    const saleClient = activeRes ? resolveSaleClient(activeRes, clients, directClients).client : null;
+    const exemptZone = (saleClient as B2BClient | null)?.isInExemptZone || false;
+    const buildLine = (desc: string, tipo: string, precioVenta: number, mode: "incluido" | "aparte" | "exento") => {
+      const inclusive = mode === "incluido";
+      const forceExempt = mode === "exento" || overrideExempt || exemptZone;
+      const t = computeTax(precioVenta, activeRes || undefined, saleClient, forceExempt, inclusive);
+      return { desc, tipo, base: round2(t.taxableBase + t.exemptBase), iva: round2(t.vatAmount), exento: t.vatAmount === 0, total: round2(t.taxableBase + t.exemptBase + t.vatAmount) };
+    };
+    const svcLines = (activeRes?.servicios || []).filter(s => s.statusFacturacion === "Facturado").map(s => buildLine(s.descripcion, s.tipo, s.precioVenta, serviceVatMode(s)));
+    const flightMode: "incluido" | "aparte" | "exento" = overrideExempt ? "exento" : (preciosIncluyenIVA ? "incluido" : "aparte");
+    const flightLines = boletos.filter(b => b.expedienteId === activeRes?.id && b.facturarConjunto && (b.expedienteAereo?.status === "Facturado" || b.expedienteAereo?.status === "PagadoAerolinea")).map(b => buildLine(`Boleto Aéreo · PNR ${b.pnr}`, "Aéreo", b.precioVenta, flightMode));
+    const lineItems = [...svcLines, ...flightLines];
+    const linesSum = round2(lineItems.reduce((a, l) => a + l.total, 0));
+    const canItemize = lineItems.length > 0 && Math.abs(linesSum - inv.amount) < 0.02;
+    return { lineItems, canItemize };
+  };
+
   const [overrideExempt, setOverrideExempt] = useState(false);
+  // Modo IVA de la emisión: true = los precios YA incluyen IVA (se extrae); false = neto + IVA.
+  // Default true porque hoy la deuda/cobranzas tratan el monto como total final (IVA incluido).
+  const [preciosIncluyenIVA, setPreciosIncluyenIVA] = useState(true);
+  // Detalle operativo colapsable por servicio en el desglose (limpia la revisión de facturación).
+  const [expandedDetails, setExpandedDetails] = useState<Set<string>>(new Set());
+  const toggleDetail = (id: string) => setExpandedDetails(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
   const [activeTab, setActiveTab] = useState<"solicitudes" | "historial">("solicitudes");
   const [search, setSearch] = useState("");
   const [selectedResId, setSelectedResId] = useState<string | null>(null);
@@ -157,30 +239,8 @@ export default function FacturacionView({
   const [isRejecting, setIsRejecting] = useState(false);
   const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState<FinancialInvoice | null>(null);
 
-  const handlePrintInvoice = () => {
-    const printContent = document.getElementById("printable-invoice-doc");
-    const root = document.getElementById("root");
-    if (!printContent || !root) return;
-    
-    const clone = printContent.cloneNode(true) as HTMLElement;
-    clone.id = "print-clone";
-    clone.style.position = "absolute";
-    clone.style.top = "0";
-    clone.style.left = "0";
-    clone.style.width = "100%";
-    clone.style.backgroundColor = "white";
-    clone.style.zIndex = "999999";
-    clone.style.padding = "20px";
-    
-    root.style.display = "none";
-    document.body.appendChild(clone);
-    
-    setTimeout(() => {
-      window.print();
-      document.body.removeChild(clone);
-      root.style.display = "";
-    }, 150);
-  };
+  // Reutiliza el helper compartido (clona el nodo, oculta #root, imprime y restaura).
+  const handlePrintInvoice = () => printElementById("printable-invoice-doc");
 
   const formatDate = (dateStr?: string): string => {
     if (!dateStr) return '';
@@ -523,6 +583,50 @@ export default function FacturacionView({
       }
       default:
         return null;
+    }
+  };
+
+  // ── Helpers de presentación del desglose (renovación visual) ─────────────────
+  // Meta visual por tipo de servicio: color de acento/insignia + icono.
+  const serviceTypeMeta = (tipo?: string): { icon: any; badge: string; accent: string } => {
+    switch (tipo) {
+      case ServiceType.ALOJAMIENTO: return { icon: BedDouble, badge: "bg-indigo-50 border-indigo-200 text-indigo-700", accent: "bg-indigo-400" };
+      case ServiceType.TRASLADO:    return { icon: Car,       badge: "bg-amber-50 border-amber-200 text-amber-700",    accent: "bg-amber-400" };
+      case ServiceType.AEREO:       return { icon: Plane,     badge: "bg-blue-50 border-blue-200 text-blue-700",       accent: "bg-blue-500" };
+      case ServiceType.SEGURO:      return { icon: ShieldIcon,badge: "bg-emerald-50 border-emerald-200 text-emerald-700", accent: "bg-emerald-400" };
+      default:                      return { icon: Package,   badge: "bg-zinc-100 border-zinc-200 text-zinc-600",      accent: "bg-zinc-300" };
+    }
+  };
+
+  // Pill de estado de facturación uniforme (servicios y boletos).
+  const statusPill = (status?: string) => {
+    const s = status || "Borrador";
+    if (s === "Facturado" || s === "PagadoAerolinea") return <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-emerald-50 border border-emerald-250 text-emerald-700 inline-flex items-center gap-1">● Facturado</span>;
+    if (s === "Solicitado") return <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-blue-50 border border-blue-250 text-blue-750 inline-flex items-center gap-1">● En revisión</span>;
+    if (s === "Rechazado") return <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-red-50 border border-red-200 text-red-655 inline-flex items-center gap-1">● Rechazado</span>;
+    return <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-bold uppercase bg-amber-50 border border-amber-200 text-amber-750 inline-flex items-center gap-1">● Borrador</span>;
+  };
+
+  // Resumen conciso de una línea con los datos que importan al revisar (sin el detalle operativo).
+  const serviceSummary = (s: ServiceItem): string => {
+    const det: any = s.detalles || {};
+    const join = (parts: (string | undefined | false)[]) => parts.filter(Boolean).join("  ·  ");
+    switch (s.tipo) {
+      case ServiceType.ALOJAMIENTO: {
+        const ci = det.checkInDate, co = det.checkOutDate;
+        const start = new Date(ci), end = new Date(co);
+        let nights = 1;
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) nights = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000));
+        const rooms = det.lodgingRooms?.length || 1;
+        const pax = det.lodgingRooms?.reduce((sum: number, r: any) => sum + (r.adultsCount || 0) + (r.childrenCount || 0), 0) || 0;
+        return join([`${nights} noche(s)`, ci && co && `${formatDate(ci)} → ${formatDate(co)}`, `${rooms} Hab / ${pax} Pax`, det.selectedPromoName && det.selectedPromoName !== "Ninguna" && det.selectedPromoName]);
+      }
+      case ServiceType.TRASLADO:
+        return join([det.transPickup && det.transDropoff && `${det.transPickup} → ${det.transDropoff}`, det.transDate && formatDate(det.transDate), `${det.transPax || 1} Pax`, det.transServiceType === "privado" ? "Privado" : "Compartido", det.transTripType === "round-trip" ? "Ida y vuelta" : "Solo ida"]);
+      case ServiceType.SEGURO:
+        return join([det.insPlan || "Plan estándar", det.insPax && `${det.insPax} Pax`]);
+      default:
+        return "";
     }
   };
 
@@ -958,9 +1062,12 @@ export default function FacturacionView({
     const alcance = plan.alcance || "todo";
 
     // 1. Emitir la nota de crédito (ahora sí aprobada por el operador).
+    // El IVA se EXTRAE del monto reembolsado según el perfil fiscal del cliente (antes se forzaba
+    // vatAmount: 0 siempre, ignorando el IVA del boleto). montoNC incluye IVA → inclusive.
     let ncId: string | undefined;
     if (onAddInvoice && montoNC > 0) {
       ncId = nextSequentialId("NC", invoices.map(i => i.id));
+      const _aereoTax = computeTax(montoNC, undefined, cliB2B || cliDir, false, true);
       onAddInvoice({
         id: ncId,
         clientName: `${cliNombre} - Localizador ${exp.id} · Boleto ${boleto.pnr} (Nota de Crédito por reembolso aéreo${plan.motivo ? ": " + plan.motivo : ""})`,
@@ -969,7 +1076,11 @@ export default function FacturacionView({
         date: new Date().toISOString().split("T")[0],
         dueDate: new Date().toISOString().split("T")[0],
         amount: -montoNC,
-        vatAmount: 0,
+        vatAmount: -_aereoTax.vatAmount,
+        taxableBase: -_aereoTax.taxableBase,
+        exchangeRate: _aereoTax.exchangeRate,
+        localCurrencyAmount: -_aereoTax.localCurrencyAmount,
+        isExempt: _aereoTax.exemptBase > 0,
         type: "Cobro",
         status: "Pagado",
       } as FinancialInvoice);
@@ -1102,8 +1213,18 @@ export default function FacturacionView({
     const saleClient = resolveSaleClient(activeRes, clients, directClients);
     const agencyRecord = saleClient.client;
     const agencyExemptZone = (agencyRecord as B2BClient | null)?.isInExemptZone;
-    const appliedSaldoFavor = (useSaldoFavor && agencyRecord) ? Math.min(pendingTotal, agencyRecord.saldoFavor) : 0;
-    const remainingToPay = pendingTotal - appliedSaldoFavor;
+
+    // Total REAL a facturar (base gravable + IVA + base exenta). En modo "precios incluyen IVA"
+    // grossTotal == pendingTotal (el IVA se extrae del precio); en modo aditivo grossTotal = neto + IVA.
+    // Se excluye el recargo (IGTF), que se mantiene informativo en la factura como hasta ahora.
+    // Todo el flujo de cobranza (saldo, deuda, recibo, excedente) opera sobre este total con IVA.
+    // Cálculo fiscal AGREGADO por servicio: cada servicio aporta su base/IVA/exenta según su
+    // tratamiento (incluido/aparte/exento). Soporta facturas mixtas. grossTotal = total con IVA.
+    const agg = computeAggregateTax(pendingServices, jointFlights, agencyRecord);
+    const grossTotal = agg.gross;
+
+    const appliedSaldoFavor = (useSaldoFavor && agencyRecord) ? Math.min(grossTotal, agencyRecord.saldoFavor) : 0;
+    const remainingToPay = round2(grossTotal - appliedSaldoFavor);
 
     const isCredit = selectedFacturacionTipo === "Crédito";
 
@@ -1111,7 +1232,7 @@ export default function FacturacionView({
     if (remainingToPay > 0 && !isCredit) {
       const receiptAmount = activeRes.comprobanteMonto || 0;
       if (receiptAmount < remainingToPay) {
-        showAlert({ title: "Pago insuficiente", message: `Pago insuficiente. El comprobante adjunto (${formatCurrency(receiptAmount, getOperatingCurrency())}) más el saldo a favor usado (${formatCurrency(appliedSaldoFavor, getOperatingCurrency())}) no cubren el total (${formatCurrency(pendingTotal, getOperatingCurrency())}).`, type: "danger" });
+        showAlert({ title: "Pago insuficiente", message: `Pago insuficiente. El comprobante adjunto (${formatCurrency(receiptAmount, getOperatingCurrency())}) más el saldo a favor usado (${formatCurrency(appliedSaldoFavor, getOperatingCurrency())}) no cubren el total con IVA (${formatCurrency(grossTotal, getOperatingCurrency())}).`, type: "danger" });
         return;
       }
     }
@@ -1316,10 +1437,21 @@ export default function FacturacionView({
 
     const newFacIds: string[] = invoices.map(i => i.id);
 
+    // Factura totalmente exenta solo si NO hay IVA en toda la agregación.
+    const invIsExempt = agg.vat === 0;
+
     if (onAddInvoice) {
       if (appliedSaldoFavor > 0 && remainingToPay > 0) {
-        // Splitting into two invoices: one paid via credit, one for the remaining amount
-        const taxSaldo = computeTax(appliedSaldoFavor, activeRes, agencyRecord, overrideExempt);
+        // Split en dos facturas (una cubierta por saldo, otra por el resto). Los campos fiscales
+        // agregados se PRORRATEAN por la fracción cubierta, para no recalcular tratamientos mixtos.
+        const fracPaid = grossTotal > 0 ? appliedSaldoFavor / grossTotal : 0;
+        const paidBase = round2(agg.base * fracPaid);
+        const paidVat = round2(agg.vat * fracPaid);
+        const paidSur = round2(agg.surcharge * fracPaid);
+        const paidWht = round2(agg.vatWithheld * fracPaid);
+        const paidIsr = round2(agg.incomeTaxWithheld * fracPaid);
+        const paidLoc = round2(agg.localCurrencyAmount * fracPaid);
+
         const invoicePaidId = nextSequentialId("FAC", newFacIds);
         newFacIds.push(invoicePaidId);
         const invoicePaid: FinancialInvoice = {
@@ -1330,21 +1462,20 @@ export default function FacturacionView({
           date: new Date().toISOString().split("T")[0],
           dueDate: invoiceDueDate || activeRes.checkIn,
           amount: appliedSaldoFavor,
-          vatAmount: taxSaldo.vatAmount,
-          taxableBase: taxSaldo.taxableBase,
-          surchargeAmount: taxSaldo.surchargeAmount,
-          vatWithheld: taxSaldo.vatWithheld,
-          incomeTaxWithheld: taxSaldo.incomeTaxWithheld,
-          exchangeRate: taxSaldo.exchangeRate,
-          localCurrencyAmount: taxSaldo.localCurrencyAmount,
+          vatAmount: paidVat,
+          taxableBase: paidBase,
+          surchargeAmount: paidSur,
+          vatWithheld: paidWht,
+          incomeTaxWithheld: paidIsr,
+          exchangeRate: agg.exchangeRate,
+          localCurrencyAmount: paidLoc,
           paymentMethod: activeRes.comprobanteMetodo,
-          isExempt: overrideExempt || agencyExemptZone,
+          isExempt: invIsExempt,
           type: "Cobro",
           status: "Pagado"
         };
         onAddInvoice(invoicePaid);
 
-        const taxRemaining = computeTax(remainingToPay, activeRes, agencyRecord, overrideExempt);
         const invoiceRemainingId = nextSequentialId("FAC", newFacIds);
         newFacIds.push(invoiceRemainingId);
         const invoiceRemaining: FinancialInvoice = {
@@ -1355,22 +1486,21 @@ export default function FacturacionView({
           date: new Date().toISOString().split("T")[0],
           dueDate: invoiceDueDate || activeRes.checkIn,
           amount: remainingToPay,
-          vatAmount: taxRemaining.vatAmount,
-          taxableBase: taxRemaining.taxableBase,
-          surchargeAmount: taxRemaining.surchargeAmount,
-          vatWithheld: taxRemaining.vatWithheld,
-          incomeTaxWithheld: taxRemaining.incomeTaxWithheld,
-          exchangeRate: taxRemaining.exchangeRate,
-          localCurrencyAmount: taxRemaining.localCurrencyAmount,
+          vatAmount: round2(agg.vat - paidVat),
+          taxableBase: round2(agg.base - paidBase),
+          surchargeAmount: round2(agg.surcharge - paidSur),
+          vatWithheld: round2(agg.vatWithheld - paidWht),
+          incomeTaxWithheld: round2(agg.incomeTaxWithheld - paidIsr),
+          exchangeRate: agg.exchangeRate,
+          localCurrencyAmount: round2(agg.localCurrencyAmount - paidLoc),
           paymentMethod: activeRes.comprobanteMetodo,
-          isExempt: overrideExempt || agencyExemptZone,
+          isExempt: invIsExempt,
           type: "Cobro",
           status: invoiceStatus
         };
         onAddInvoice(invoiceRemaining);
       } else {
-        // Single invoice
-        const taxMain = computeTax(pendingTotal, activeRes, agencyRecord, overrideExempt);
+        // Factura única — amount es el total CON IVA (grossTotal); base/IVA vienen de la agregación.
         const newInvoiceId = nextSequentialId("FAC", newFacIds);
         newFacIds.push(newInvoiceId);
         const newInvoice: FinancialInvoice = {
@@ -1380,16 +1510,16 @@ export default function FacturacionView({
           reservationId: activeRes.id,
           date: new Date().toISOString().split("T")[0],
           dueDate: invoiceDueDate || activeRes.checkIn,
-          amount: pendingTotal,
-          vatAmount: taxMain.vatAmount,
-          taxableBase: taxMain.taxableBase,
-          surchargeAmount: taxMain.surchargeAmount,
-          vatWithheld: taxMain.vatWithheld,
-          incomeTaxWithheld: taxMain.incomeTaxWithheld,
-          exchangeRate: taxMain.exchangeRate,
-          localCurrencyAmount: taxMain.localCurrencyAmount,
+          amount: grossTotal,
+          vatAmount: agg.vat,
+          taxableBase: agg.base,
+          surchargeAmount: agg.surcharge,
+          vatWithheld: agg.vatWithheld,
+          incomeTaxWithheld: agg.incomeTaxWithheld,
+          exchangeRate: agg.exchangeRate,
+          localCurrencyAmount: agg.localCurrencyAmount,
           paymentMethod: activeRes.comprobanteMetodo,
-          isExempt: overrideExempt || agencyExemptZone,
+          isExempt: invIsExempt,
           type: "Cobro",
           status: appliedSaldoFavor > 0 ? "Pagado" : invoiceStatus
         };
@@ -1615,9 +1745,12 @@ export default function FacturacionView({
     const _cancelSaleClient = resolveSaleClient(activeRes, clients, directClients);
     const _cancelAgency = _cancelSaleClient.client;
 
-    // Emit Credit Note in Financial Log for the amount reversed (invoiced minus retained penalty)
+    // Emit Credit Note in Financial Log for the amount reversed (invoiced minus retained penalty).
+    // La NC debe ESPEJAR la(s) factura(s) que revierte: si fueron exentas, la NC también (IVA 0).
+    // reversedAmount es una porción del total facturado (con IVA), por eso se extrae (inclusive).
     if (onAddInvoice && reversedAmount > 0) {
-      const _cancelTax = computeTax(reversedAmount, activeRes, _cancelAgency);
+      const cancelExempt = associatedInvoices.some(i => i.id.startsWith("FAC-") && (i.isExempt || i.vatAmount === 0));
+      const _cancelTax = computeTax(reversedAmount, activeRes, _cancelAgency, cancelExempt, true);
       const creditNote: FinancialInvoice = {
         id: nextSequentialId("NC", invoices.map(i => i.id)),
         clientName: `Anulación: ${activeRes.holder} - Localizador ${activeRes.id}${penaltyRetained > 0 ? ` (penalidad retenida: ${formatCurrency(penaltyRetained, getOperatingCurrency())})` : ""}`,
@@ -1628,9 +1761,11 @@ export default function FacturacionView({
         amount: -reversedAmount,
         vatAmount: -_cancelTax.vatAmount,
         taxableBase: -_cancelTax.taxableBase,
+        surchargeAmount: -_cancelTax.surchargeAmount,
         exchangeRate: _cancelTax.exchangeRate,
         localCurrencyAmount: -_cancelTax.localCurrencyAmount,
         paymentMethod: activeRes.comprobanteMetodo,
+        isExempt: cancelExempt,
         type: "Cobro",
         status: "Pagado"
       };
@@ -2050,83 +2185,112 @@ export default function FacturacionView({
               </div>
             )}
 
-            {/* Breakdown of services */}
+            {/* Breakdown of services — tarjetas limpias: tipo, descripción, monto y estado a la vista;
+                el detalle operativo (contrato, habitaciones, pasajeros) queda colapsado por defecto. */}
             <div className="space-y-3">
-              <h5 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Desglose de Servicios y Estado de Cobros</h5>
-              <div className="divide-y divide-zinc-100 border border-zinc-200 rounded overflow-hidden">
+              {(() => {
+                const svcs = activeRes.servicios || [];
+                const flights = boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto);
+                const total = svcs.length + flights.length;
+                return (
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Desglose de Servicios</h5>
+                    <span className="text-[9.5px] font-semibold text-zinc-400">{total} ítem{total !== 1 ? "s" : ""}</span>
+                  </div>
+                );
+              })()}
+
+              <div className="space-y-2">
                 {(activeRes.servicios || []).map((s) => {
-                  const status = s.statusFacturacion || "Borrador";
+                  const meta = serviceTypeMeta(s.tipo);
+                  const Icon = meta.icon;
+                  const summary = serviceSummary(s);
+                  const detail = renderServiceDetails(s);
+                  const expanded = expandedDetails.has(s.id);
                   return (
-                    <div key={s.id} className="p-3 bg-white flex items-start justify-between gap-4">
-                      <div className="space-y-0.5 flex-1 text-left">
-                        <div className="flex items-center gap-1.5">
-                          <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-zinc-100 border border-zinc-200 text-zinc-700">
-                            {s.tipo}
-                          </span>
-                          <span className="text-[9px] font-mono text-zinc-400">{s.id}</span>
+                    <div key={s.id} className="border border-zinc-200 rounded-lg bg-white overflow-hidden flex shadow-2xs">
+                      <div className={`w-1 shrink-0 ${meta.accent}`} />
+                      <div className="flex-1 p-3.5 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1 text-left">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider border ${meta.badge}`}>
+                                <Icon className="w-2.5 h-2.5" /> {s.tipo}
+                              </span>
+                              <span className="text-[9px] font-mono text-zinc-400">{s.id}</span>
+                              {(() => {
+                                const editable = s.statusFacturacion !== "Facturado" && s.statusFacturacion !== "Rechazado";
+                                if (editable) {
+                                  return (
+                                    <select
+                                      value={s.tratamientoIVA || ""}
+                                      onChange={(e) => setServiceVatTreatment(s.id, e.target.value)}
+                                      title="Tratamiento de IVA de esta línea (hereda del producto; se puede ajustar aquí)"
+                                      className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded border border-sky-200 bg-sky-50 text-sky-700 focus:outline-none cursor-pointer no-print"
+                                    >
+                                      <option value="">IVA: default</option>
+                                      <option value="incluido">IVA incluido</option>
+                                      <option value="aparte">IVA por fuera</option>
+                                      <option value="exento">Exento</option>
+                                    </select>
+                                  );
+                                }
+                                return s.tratamientoIVA ? (
+                                  <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${s.tratamientoIVA === "exento" ? "bg-zinc-100 border-zinc-200 text-zinc-500" : "bg-sky-50 border-sky-200 text-sky-700"}`}>
+                                    {s.tratamientoIVA === "incluido" ? "IVA incl." : s.tratamientoIVA === "aparte" ? "IVA aparte" : "Exento"}
+                                  </span>
+                                ) : null;
+                              })()}
+                            </div>
+                            <p className="text-[13px] font-bold text-zinc-900 leading-snug mt-1.5 line-clamp-1" title={s.descripcion}>{s.descripcion}</p>
+                            {summary && <p className="text-[10.5px] text-zinc-500 font-medium mt-0.5 leading-snug">{summary}</p>}
+                          </div>
+                          <div className="text-right shrink-0">
+                            {statusPill(s.statusFacturacion)}
+                            <p className="text-sm font-black text-zinc-950 font-mono mt-1.5">{formatCurrency(s.precioVenta, getOperatingCurrency())}</p>
+                          </div>
                         </div>
-                        <p className="text-xs font-bold text-zinc-900 leading-snug mt-1">{s.descripcion}</p>
-                        <span className="text-zinc-950 text-xs font-black block mt-0.5">{formatCurrency(s.precioVenta, getOperatingCurrency())}</span>
-                        {renderServiceDetails(s)}
-                      </div>
-                      
-                      <div className="flex-shrink-0">
-                        {status === "Facturado" ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-emerald-50 border border-emerald-250 text-emerald-700 inline-flex items-center gap-1">
-                            ● Aprobado
-                          </span>
-                        ) : status === "Solicitado" ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-blue-50 border border-blue-250 text-blue-750 inline-flex items-center gap-1 animate-pulse">
-                            ● Solicitado
-                          </span>
-                        ) : status === "Rechazado" ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-red-50 border border-red-200 text-red-655 inline-flex items-center gap-1">
-                            ● Rechazado
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-bold uppercase bg-amber-50 border border-amber-200 text-amber-750 inline-flex items-center gap-1">
-                            ● Borrador
-                          </span>
+                        {detail && (
+                          <>
+                            <button
+                              onClick={() => toggleDetail(s.id)}
+                              className="mt-2.5 text-[9.5px] font-bold text-zinc-400 hover:text-zinc-700 inline-flex items-center gap-1 uppercase tracking-wider cursor-pointer transition-colors no-print"
+                            >
+                              {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              {expanded ? "Ocultar detalle" : "Ver detalle operativo"}
+                            </button>
+                            {expanded && detail}
+                          </>
                         )}
                       </div>
                     </div>
                   );
                 })}
+
                 {boletos.filter(b => b.expedienteId === activeRes.id && b.facturarConjunto).map((vuelo) => {
-                  const status = (vuelo.expedienteAereo?.status || "Borrador") as any;
+                  const meta = serviceTypeMeta(ServiceType.AEREO);
+                  const Icon = meta.icon;
                   const origin = vuelo.segmentos?.[0]?.origen || "";
-                  const dest = vuelo.segmentos && vuelo.segmentos.length > 0 ? vuelo.segmentos[vuelo.segmentos.length-1].destino : "";
+                  const dest = vuelo.segmentos && vuelo.segmentos.length > 0 ? vuelo.segmentos[vuelo.segmentos.length - 1].destino : "";
                   return (
-                    <div key={vuelo.id} className="p-3 bg-white flex items-start justify-between gap-4 border-t border-zinc-100 bg-blue-50/10">
-                      <div className="space-y-0.5 flex-1 text-left">
-                        <div className="flex items-center gap-1.5">
-                          <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-blue-900 text-white">
-                            AÉREO
-                          </span>
-                          <span className="text-[9px] font-mono text-zinc-400">PNR: {vuelo.pnr}</span>
+                    <div key={vuelo.id} className="border border-zinc-200 rounded-lg bg-white overflow-hidden flex shadow-2xs">
+                      <div className={`w-1 shrink-0 ${meta.accent}`} />
+                      <div className="flex-1 p-3.5 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1 text-left">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[8.5px] font-black uppercase tracking-wider border ${meta.badge}`}>
+                                <Icon className="w-2.5 h-2.5" /> Aéreo
+                              </span>
+                              <span className="text-[9px] font-mono text-zinc-400">PNR: {vuelo.pnr}</span>
+                            </div>
+                            <p className="text-[13px] font-bold text-zinc-900 leading-snug mt-1.5">Boleto Aéreo{origin && dest ? ` · ${origin} → ${dest}` : ""}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            {statusPill(vuelo.expedienteAereo?.status)}
+                            <p className="text-sm font-black text-zinc-950 font-mono mt-1.5">{formatCurrency(vuelo.precioVenta, getOperatingCurrency())}</p>
+                          </div>
                         </div>
-                        <p className="text-xs font-bold text-zinc-900 leading-snug mt-1">Boleto Aéreo GDS - Ruta: {origin}-{dest}</p>
-                        <span className="text-zinc-950 text-xs font-black block mt-0.5">{formatCurrency(vuelo.precioVenta, getOperatingCurrency())}</span>
-                      </div>
-                      
-                      <div className="flex-shrink-0">
-                        {status === "Facturado" || status === "PagadoAerolinea" ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-emerald-50 border border-emerald-250 text-emerald-700 inline-flex items-center gap-1">
-                            ● Aprobado
-                          </span>
-                        ) : status === "Solicitado" ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-blue-50 border border-blue-250 text-blue-750 inline-flex items-center gap-1 animate-pulse">
-                            ● Solicitado
-                          </span>
-                        ) : status === "Rechazado" ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase bg-red-50 border border-red-200 text-red-655 inline-flex items-center gap-1">
-                            ● Rechazado
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded-full text-[8.5px] font-bold uppercase bg-amber-50 border border-amber-200 text-amber-750 inline-flex items-center gap-1">
-                            ● Borrador
-                          </span>
-                        )}
                       </div>
                     </div>
                   );
@@ -2403,8 +2567,13 @@ export default function FacturacionView({
 
               const agencyRecord = resolveSaleClient(activeRes, clients, directClients).client;
               const hasSaldoFavor = agencyRecord && agencyRecord.saldoFavor > 0;
-              const appliedSaldoFavor = (useSaldoFavor && agencyRecord) ? Math.min(requestedTotal, agencyRecord.saldoFavor) : 0;
-              const remainingToPay = requestedTotal - appliedSaldoFavor;
+              // Desglose fiscal del importe solicitado (mismo criterio que la emisión).
+              // Desglose fiscal AGREGADO por servicio (soporta tratamientos mixtos en una factura).
+              const previewAgg = computeAggregateTax(requestedServices, jointFlights, agencyRecord);
+              const previewGross = previewAgg.gross;
+              const isExemptPreview = previewAgg.vat === 0 && previewAgg.exempt > 0;
+              const appliedSaldoFavor = (useSaldoFavor && agencyRecord) ? Math.min(previewGross, agencyRecord.saldoFavor) : 0;
+              const remainingToPay = round2(previewGross - appliedSaldoFavor);
 
               const isCredit = selectedFacturacionTipo === "Crédito";
               const isContado = selectedFacturacionTipo === "Pago Contado";
@@ -2423,7 +2592,7 @@ export default function FacturacionView({
                       <div>
                         <p className="font-bold uppercase text-[9px] tracking-wider text-red-750">Pago Restante Insuficiente</p>
                         <p className="text-[11px] leading-snug mt-0.5">
-                          El saldo neto a liquidar es de <strong>{formatCurrency(remainingToPay, getOperatingCurrency())}</strong> (Total: {formatCurrency(requestedTotal, getOperatingCurrency())}
+                          El saldo neto a liquidar es de <strong>{formatCurrency(remainingToPay, getOperatingCurrency())}</strong> (Total con IVA: {formatCurrency(previewGross, getOperatingCurrency())}
                           {appliedSaldoFavor > 0 && ` - Saldo Favor: ${formatCurrency(appliedSaldoFavor, getOperatingCurrency())}`}).
                         </p>
                         <p className="text-[11px] leading-snug mt-1 font-medium text-red-900">
@@ -2515,22 +2684,59 @@ export default function FacturacionView({
                     </div>
                   )}
 
-                  {hasRequests && useSaldoFavor && (
-                    <div className="space-y-1 text-xs font-semibold text-zinc-500 border-b border-zinc-200/50 pb-2 text-left">
+                  {/* Desglose fiscal: base gravable + base exenta (si mixto), IVA, retenciones y total. */}
+                  {hasRequests && (
+                    <div className="space-y-1 text-xs font-semibold text-zinc-600 border-b border-zinc-200/50 pb-2.5 text-left">
+                      {previewAgg.base > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500">Base gravable:</span>
+                          <span className="font-mono text-zinc-900">{formatCurrency(previewAgg.base, getOperatingCurrency())}</span>
+                        </div>
+                      )}
+                      {previewAgg.exempt > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500">Base exenta:</span>
+                          <span className="font-mono text-zinc-900">{formatCurrency(previewAgg.exempt, getOperatingCurrency())}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between">
-                        <span>Importe Solicitado:</span>
-                        <span className="text-zinc-900">{formatCurrency(requestedTotal, getOperatingCurrency())}</span>
+                        <span className="text-zinc-500">{activeJurisdiction.taxName} {isExemptPreview ? "(Exento)" : `${(activeJurisdiction.taxRate * 100).toFixed(0)}%`}:</span>
+                        <span className="font-mono text-zinc-900">{previewAgg.vat > 0 ? formatCurrency(previewAgg.vat, getOperatingCurrency()) : "Exento"}</span>
                       </div>
-                      <div className="flex justify-between text-emerald-750 font-bold">
-                        <span>Debitar de Saldo a Favor:</span>
-                        <span>-{formatCurrency(appliedSaldoFavor, getOperatingCurrency())}</span>
+                      {previewAgg.surcharge > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500">{activeJurisdiction.surchargeName || "Recargo"}:</span>
+                          <span className="font-mono text-zinc-900">{formatCurrency(previewAgg.surcharge, getOperatingCurrency())}</span>
+                        </div>
+                      )}
+                      {previewAgg.vatWithheld > 0 && (
+                        <div className="flex justify-between text-amber-700">
+                          <span>Retención {activeJurisdiction.taxName}:</span>
+                          <span className="font-mono">-{formatCurrency(previewAgg.vatWithheld, getOperatingCurrency())}</span>
+                        </div>
+                      )}
+                      {previewAgg.incomeTaxWithheld > 0 && (
+                        <div className="flex justify-between text-amber-700">
+                          <span>Retención {activeJurisdiction.incomeTaxWithholdingLabel || "ISLR"}:</span>
+                          <span className="font-mono">-{formatCurrency(previewAgg.incomeTaxWithheld, getOperatingCurrency())}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between border-t border-zinc-200/60 pt-1.5 mt-1 text-zinc-950 font-black">
+                        <span className="uppercase text-[10px] tracking-wider">Total a Facturar (con {activeJurisdiction.taxName}):</span>
+                        <span className="font-mono text-sm">{formatCurrency(previewGross, getOperatingCurrency())}</span>
                       </div>
+                      {useSaldoFavor && (
+                        <div className="flex justify-between text-emerald-750 font-bold">
+                          <span>Debitar de Saldo a Favor:</span>
+                          <span className="font-mono">-{formatCurrency(appliedSaldoFavor, getOperatingCurrency())}</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
                   <div className="flex justify-between items-center text-xs font-semibold">
                     <span className="text-zinc-500 uppercase text-[9px] font-bold">
-                      {useSaldoFavor ? "Monto Neto a Liquidar:" : "Importe por Facturación Solicitada:"}
+                      {useSaldoFavor ? "Monto Neto a Liquidar:" : "Total por Facturación Solicitada:"}
                     </span>
                     <span className={`font-black text-base ${hasRequests ? "text-amber-700" : "text-zinc-500"}`}>
                       {formatCurrency(remainingToPay, getOperatingCurrency())}
@@ -2552,6 +2758,25 @@ export default function FacturacionView({
                       <div>
                         <span className="text-xs font-bold text-zinc-800 block">Facturar sin {activeJurisdiction.taxName}</span>
                         <span className="text-[10px] text-zinc-500">Cliente exento — no genera crédito fiscal</span>
+                      </div>
+                    </label>
+                  )}
+
+                  {hasRequests && !isExemptPreview && (
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none px-3 py-2 rounded border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={preciosIncluyenIVA}
+                        onChange={e => setPreciosIncluyenIVA(e.target.checked)}
+                        className="w-4 h-4 rounded border-gray-300 accent-zinc-800 cursor-pointer"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-zinc-800 block">Los precios ya incluyen {activeJurisdiction.taxName}</span>
+                        <span className="text-[10px] text-zinc-500">
+                          {preciosIncluyenIVA
+                            ? `El ${activeJurisdiction.taxName} se extrae del precio (el total no cambia).`
+                            : `El ${activeJurisdiction.taxName} se suma sobre el precio (el total sube).`}
+                        </span>
                       </div>
                     </label>
                   )}
@@ -3290,10 +3515,12 @@ export default function FacturacionView({
                   <span className="inline-block px-3 py-1 bg-zinc-950 text-white text-[10px] font-black uppercase tracking-widest rounded-sm">
                     FACTURA COMERCIAL
                   </span>
+                  <p className="text-[8.5px] text-zinc-400 font-semibold mt-1 uppercase tracking-wide">Documento no fiscal · comprobante interno</p>
                   <h2 className="text-xl font-mono font-black text-zinc-950 mt-2">{selectedInvoiceForModal.id}</h2>
                   <div className="text-xs text-zinc-600 mt-3 space-y-1">
                     <p><span className="font-bold text-zinc-700">Fecha Emisión:</span> {formatDate(selectedInvoiceForModal.date)}</p>
                     <p><span className="font-bold text-zinc-700">Vencimiento:</span> {formatDate(selectedInvoiceForModal.dueDate)}</p>
+                    <p><span className="font-bold text-zinc-700">Condición:</span> {selectedInvoiceForModal.status === "Pagado" ? "Contado" : "Crédito"}</p>
                     <p>
                       <span className="font-bold text-zinc-700">Estado Pago:</span>{" "}
                       <span className={`font-bold uppercase ${selectedInvoiceForModal.status === "Pagado" ? "text-emerald-600" : "text-amber-600"}`}>
@@ -3312,7 +3539,11 @@ export default function FacturacionView({
                     {activeRes?.agenciaName || "Cliente Directo"}
                   </p>
                   <p className="text-zinc-600 mt-1 font-semibold">
-                    RIF: {clients.find(c => activeRes?.agenciaName && c.nombre.toLowerCase() === activeRes.agenciaName.toLowerCase())?.rif || "N/A"}
+                    RIF: {
+                      clients.find(c => c.id === selectedInvoiceForModal.clientId)?.rif
+                      || clients.find(c => activeRes?.agenciaName && c.nombre.toLowerCase() === activeRes.agenciaName.toLowerCase())?.rif
+                      || "s/RIF"
+                    }
                   </p>
                   <p className="text-zinc-500 mt-0.5">
                     Canal: B2B Mayorista
@@ -3334,54 +3565,155 @@ export default function FacturacionView({
               <div className="mb-6">
                 {(() => {
                   const inv = selectedInvoiceForModal;
-                  const isExemptInv = inv.isExempt || inv.vatAmount === 0;
+                  const rate = activeJurisdiction.taxRate;
+                  const total = inv.amount;
+                  const surcharge = inv.surchargeAmount || 0;
+                  const storedVat = inv.vatAmount || 0;
+                  // Facturas NUEVAS: usar los campos fiscales guardados (soportan facturas mixtas:
+                  // base gravable + base exenta). La base exenta se deriva del total. Facturas VIEJAS
+                  // o inconsistentes (base+IVA > total): recomputar extrayendo el IVA de forma uniforme.
+                  const useStored = inv.taxableBase != null && (inv.taxableBase + storedVat) <= total + 0.01;
+                  let base: number, iva: number, exenta: number;
+                  if (useStored) {
+                    base = round2(inv.taxableBase || 0);
+                    iva = round2(storedVat);
+                    exenta = round2(total - base - iva - surcharge);
+                    if (exenta < 0.01) exenta = 0;
+                  } else {
+                    const legacyExempt = inv.isExempt || storedVat === 0;
+                    base = legacyExempt ? 0 : round2(total / (1 + rate));
+                    iva = legacyExempt ? 0 : round2(total - base);
+                    exenta = legacyExempt ? total : 0;
+                  }
+                  const baseRow = round2(base + exenta); // columna "Base" de la fila (Base+IVA=Total)
+                  const isExemptInv = iva === 0 && exenta > 0; // totalmente exenta
+                  const isMixed = base > 0 && exenta > 0;
                   const taxLabel = isExemptInv
                     ? `${activeJurisdiction.taxName} (Exento)`
-                    : `${activeJurisdiction.taxName} ${(activeJurisdiction.taxRate * 100).toFixed(0)}%`;
-                  const subtotal = isExemptInv ? inv.amount : (inv.taxableBase ?? inv.amount - inv.vatAmount);
+                    : `${activeJurisdiction.taxName} ${(rate * 100).toFixed(0)}%`;
+                  const retIva = inv.vatWithheld || 0;
+                  const retIslr = inv.incomeTaxWithheld || 0;
+                  const netoRecibir = round2(total + surcharge - retIva - retIslr);
+                  const hasRet = retIva > 0 || retIslr > 0 || surcharge > 0;
+                  const { lineItems, canItemize } = computeInvoiceLines(inv);
                   return (
+                    <>
                     <table className="w-full text-left text-xs divide-y divide-zinc-200 border border-zinc-200">
                       <thead>
                         <tr className="bg-zinc-950 text-white font-bold uppercase tracking-wider text-[9px]">
                           <th className="p-3">Concepto / Descripción</th>
-                          <th className="p-3 text-right w-24">Subtotal ({getCurrencySymbol()})</th>
+                          <th className="p-3 text-right w-24">Base ({getCurrencySymbol()})</th>
                           <th className="p-3 text-right w-24">{taxLabel} ({getCurrencySymbol()})</th>
                           <th className="p-3 text-right w-24">Total ({getCurrencySymbol()})</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-200 font-medium text-zinc-800">
-                        <tr>
-                          <td className="p-3.5">
-                            <p className="font-bold text-zinc-950 uppercase">
-                              {inv.clientName.split("(")[1]?.replace(")", "") || "Facturación de Servicios Turísticos Receptivos"}
-                            </p>
-                            <p className="text-[10px] text-zinc-400 mt-1">
-                              Servicios asociados al expediente de reserva para el pasajero titular {activeRes?.holder || "registrado en sistema"}.
-                            </p>
-                            {isExemptInv && (
-                              <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded text-[9px] font-bold text-emerald-700 uppercase tracking-wide">
-                                Operación Exenta de {activeJurisdiction.taxName}
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-3.5 text-right font-mono">
-                            {formatCurrency(subtotal, getOperatingCurrency())}
-                          </td>
-                          <td className={`p-3.5 text-right font-mono ${isExemptInv ? "text-emerald-700 font-bold" : "text-zinc-600"}`}>
-                            {isExemptInv ? "Exento" : `${formatCurrency(inv.vatAmount, getOperatingCurrency())}`}
-                          </td>
-                          <td className="p-3.5 text-right font-mono font-bold text-zinc-950">
-                            {formatCurrency(inv.amount, getOperatingCurrency())}
-                          </td>
-                        </tr>
+                        {canItemize ? (
+                          lineItems.map((line, i) => (
+                            <tr key={i}>
+                              <td className="p-3.5">
+                                <span className="inline-block px-1.5 py-0.5 bg-zinc-100 border border-zinc-200 text-zinc-700 font-bold rounded-sm uppercase tracking-wide text-[8px] mr-2 align-middle">{line.tipo}</span>
+                                <span className="font-bold text-zinc-900 align-middle">{line.desc}</span>
+                                {line.exento && (
+                                  <span className="ml-2 inline-flex items-center px-1.5 py-0.5 bg-emerald-50 border border-emerald-200 rounded text-[8px] font-bold text-emerald-700 uppercase tracking-wide align-middle">Exento</span>
+                                )}
+                              </td>
+                              <td className="p-3.5 text-right font-mono">{formatCurrency(line.base, getOperatingCurrency())}</td>
+                              <td className={`p-3.5 text-right font-mono ${line.exento ? "text-emerald-700 font-bold" : "text-zinc-600"}`}>{line.exento ? "Exento" : formatCurrency(line.iva, getOperatingCurrency())}</td>
+                              <td className="p-3.5 text-right font-mono font-bold text-zinc-950">{formatCurrency(line.total, getOperatingCurrency())}</td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td className="p-3.5">
+                              <p className="font-bold text-zinc-950 uppercase">
+                                {inv.clientName.split("(")[1]?.replace(")", "") || "Facturación de Servicios Turísticos Receptivos"}
+                              </p>
+                              <p className="text-[10px] text-zinc-400 mt-1">
+                                Servicios asociados al expediente de reserva para el pasajero titular {activeRes?.holder || "registrado en sistema"}.
+                              </p>
+                              {isExemptInv && (
+                                <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded text-[9px] font-bold text-emerald-700 uppercase tracking-wide">
+                                  Operación Exenta de {activeJurisdiction.taxName}
+                                </span>
+                              )}
+                              {isMixed && (
+                                <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 bg-amber-50 border border-amber-200 rounded text-[9px] font-bold text-amber-700 uppercase tracking-wide">
+                                  Incluye ítems gravados y exentos
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3.5 text-right font-mono">
+                              {formatCurrency(baseRow, getOperatingCurrency())}
+                            </td>
+                            <td className={`p-3.5 text-right font-mono ${isExemptInv ? "text-emerald-700 font-bold" : "text-zinc-600"}`}>
+                              {isExemptInv ? "Exento" : `${formatCurrency(iva, getOperatingCurrency())}`}
+                            </td>
+                            <td className="p-3.5 text-right font-mono font-bold text-zinc-950">
+                              {formatCurrency(total, getOperatingCurrency())}
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
+
+                    {/* Bloque de totales (cuadra: Base gravable + Base exenta + IVA = Total) */}
+                    <div className="flex justify-end mt-4">
+                      <div className="w-full sm:w-72 space-y-1 text-xs">
+                        {base > 0 && (
+                          <div className="flex justify-between text-zinc-600">
+                            <span>Base gravable:</span>
+                            <span className="font-mono">{formatCurrency(base, getOperatingCurrency())}</span>
+                          </div>
+                        )}
+                        {exenta > 0 && (
+                          <div className="flex justify-between text-zinc-600">
+                            <span>Base exenta:</span>
+                            <span className="font-mono">{formatCurrency(exenta, getOperatingCurrency())}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-zinc-600">
+                          <span>{taxLabel}:</span>
+                          <span className="font-mono">{iva > 0 ? formatCurrency(iva, getOperatingCurrency()) : "Exento"}</span>
+                        </div>
+                        {surcharge > 0 && (
+                          <div className="flex justify-between text-zinc-600">
+                            <span>{activeJurisdiction.surchargeName || "Recargo"}:</span>
+                            <span className="font-mono">{formatCurrency(surcharge, getOperatingCurrency())}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between font-black text-zinc-950 border-t border-zinc-300 pt-1.5 mt-1">
+                          <span className="uppercase tracking-wider text-[10px]">Total Factura:</span>
+                          <span className="font-mono text-sm">{formatCurrency(total, getOperatingCurrency())}</span>
+                        </div>
+                        {retIva > 0 && (
+                          <div className="flex justify-between text-amber-700">
+                            <span>Retención {activeJurisdiction.taxName}:</span>
+                            <span className="font-mono">-{formatCurrency(retIva, getOperatingCurrency())}</span>
+                          </div>
+                        )}
+                        {retIslr > 0 && (
+                          <div className="flex justify-between text-amber-700">
+                            <span>Retención {activeJurisdiction.incomeTaxWithholdingLabel || "ISLR"}:</span>
+                            <span className="font-mono">-{formatCurrency(retIslr, getOperatingCurrency())}</span>
+                          </div>
+                        )}
+                        {hasRet && (
+                          <div className="flex justify-between font-black text-emerald-800 border-t border-zinc-200 pt-1.5 mt-1">
+                            <span className="uppercase tracking-wider text-[10px]">Neto a Recibir:</span>
+                            <span className="font-mono text-sm">{formatCurrency(netoRecibir, getOperatingCurrency())}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    </>
                   );
                 })()}
               </div>
 
-              {/* Booking Services Breakdown for customer context */}
-              {activeRes && activeRes.servicios && activeRes.servicios.length > 0 && (
+              {/* Detalle de servicios del expediente — solo como respaldo cuando la factura NO se
+                  pudo itemizar por línea (p.ej. factura dividida por saldo a favor). */}
+              {activeRes && activeRes.servicios && activeRes.servicios.length > 0 && !computeInvoiceLines(selectedInvoiceForModal).canItemize && (
                 <div className="mb-8 border border-zinc-200 rounded-lg p-4 bg-zinc-50/50">
                   <h4 className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-2.5">
                     Servicios Consolidados en el Expediente (RES-{(activeRes.id).substring(4)})

@@ -176,13 +176,18 @@ export function calculateTaxes(
   jurisdiction: TaxJurisdiction,
   clientProfile: ClientTaxProfile,
   exchangeRate: number,
+  // vatInclusive: si `amount` YA incluye el IVA (precio final), la base se EXTRAE (base = amount/(1+tasa))
+  // y el total = amount. Si es false (default), `amount` es la base neta y el IVA se SUMA por encima.
+  vatInclusive: boolean = false,
 ): TaxCalculation {
   const isExempt = clientProfile.isInExemptZone && jurisdiction.hasExemptZone;
   const appliedRate = isExempt ? jurisdiction.reducedTaxRate : jurisdiction.taxRate;
 
-  const taxableBase = isExempt ? 0 : amount;
+  // Base gravable: exento → 0; precio con IVA incluido → se extrae; neto → es el propio amount.
+  const taxableBase = isExempt ? 0 : (vatInclusive ? amount / (1 + appliedRate) : amount);
   const exemptBase  = isExempt ? amount : 0;
 
+  // vatAmount = base * tasa (equivale a amount - base cuando es inclusive).
   const vatAmount = taxableBase * appliedRate;
 
   const vatWithheld =
@@ -200,7 +205,11 @@ export function calculateTaxes(
       ? taxableBase * (clientProfile.incomeTaxWithholdingPct / 100)
       : 0;
 
-  const totalInvoice  = amount + vatAmount + surchargeAmount;
+  // Total = base gravable + IVA + base exenta + recargo. Unificado para inclusive/aditivo/exento:
+  // - aditivo no exento: amount + IVA + recargo (como antes).
+  // - inclusive no exento: base + IVA = amount, + recargo.
+  // - exento: exemptBase (= amount) + recargo.
+  const totalInvoice  = taxableBase + vatAmount + exemptBase + surchargeAmount;
   const totalReceived = totalInvoice - vatWithheld - incomeTaxWithheld;
 
   // Redondeo a 2 decimales de todo valor monetario para evitar drift de float en documentos fiscales.

@@ -387,12 +387,25 @@ export default function ServiciosView({
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Ubicación / Ciudad</label>
-                      <input 
-                        type="text" 
-                        value={serviceForm.ubicacion || ""} 
+                      <input
+                        type="text"
+                        value={serviceForm.ubicacion || ""}
                         onChange={e => setServiceForm({...serviceForm, ubicacion: e.target.value})}
                         className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-semibold bg-white"
                       />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Tratamiento de IVA</label>
+                      <select
+                        value={serviceForm.tratamientoIVA || ""}
+                        onChange={e => setServiceForm({...serviceForm, tratamientoIVA: (e.target.value || undefined) as any})}
+                        className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-semibold bg-white"
+                      >
+                        <option value="">Según la emisión (default)</option>
+                        <option value="incluido">Precio incluye IVA</option>
+                        <option value="aparte">IVA por fuera (se suma)</option>
+                        <option value="exento">Exento (sin IVA)</option>
+                      </select>
                     </div>
                   </div>
 

@@ -248,15 +248,15 @@ mutation UpdateRoomType($id: String!, $propertyId: String, $nombre: String, $reg
     updatedAt: $updatedAt, propertyId: $propertyId, nombre: $nombre, regimenAlimentacion: $regimenAlimentacion, capacidadMax: $capacidadMax, ocupacionBase: $ocupacionBase })
 }
 
-mutation InsertRatePlan($id: String!, $propertyId: String!, $roomTypeId: String!, $nombrePromocion: String!, $fechaInicio: String!, $fechaFin: String!, $tipoCobro: String!, $tarifaBase: Float!, $tarifaExtraAdulto: Float!, $tarifaExtraNino: Float!, $politicasCancelacion: String!, $mercado: String!, $comisionCedidaB2B: Float, $updatedAt: String) @auth(level: PUBLIC) {
+mutation InsertRatePlan($id: String!, $propertyId: String!, $roomTypeId: String!, $nombrePromocion: String!, $fechaInicio: String!, $fechaFin: String!, $tipoCobro: String!, $tarifaBase: Float!, $tarifaExtraAdulto: Float!, $tarifaExtraNino: Float!, $politicasCancelacion: String!, $mercado: String!, $comisionCedidaB2B: Float, $tratamientoIVA: String, $updatedAt: String) @auth(level: PUBLIC) {
   ratePlan_insert(data: { id: $id,
-    updatedAt: $updatedAt, propertyId: $propertyId, roomTypeId: $roomTypeId, nombrePromocion: $nombrePromocion, fechaInicio: $fechaInicio, fechaFin: $fechaFin, tipoCobro: $tipoCobro, tarifaBase: $tarifaBase, tarifaExtraAdulto: $tarifaExtraAdulto, tarifaExtraNino: $tarifaExtraNino, politicasCancelacion: $politicasCancelacion, mercado: $mercado, comisionCedidaB2B: $comisionCedidaB2B })
+    updatedAt: $updatedAt, propertyId: $propertyId, roomTypeId: $roomTypeId, nombrePromocion: $nombrePromocion, fechaInicio: $fechaInicio, fechaFin: $fechaFin, tipoCobro: $tipoCobro, tarifaBase: $tarifaBase, tarifaExtraAdulto: $tarifaExtraAdulto, tarifaExtraNino: $tarifaExtraNino, politicasCancelacion: $politicasCancelacion, mercado: $mercado, comisionCedidaB2B: $comisionCedidaB2B, tratamientoIVA: $tratamientoIVA })
 }
 
-mutation UpdateRatePlan($id: String!, $propertyId: String, $roomTypeId: String, $nombrePromocion: String, $fechaInicio: String, $fechaFin: String, $tipoCobro: String, $tarifaBase: Float, $tarifaExtraAdulto: Float, $tarifaExtraNino: Float, $politicasCancelacion: String, $mercado: String, $comisionCedidaB2B: Float, $updatedAt: String) @auth(level: PUBLIC) {
+mutation UpdateRatePlan($id: String!, $propertyId: String, $roomTypeId: String, $nombrePromocion: String, $fechaInicio: String, $fechaFin: String, $tipoCobro: String, $tarifaBase: Float, $tarifaExtraAdulto: Float, $tarifaExtraNino: Float, $politicasCancelacion: String, $mercado: String, $comisionCedidaB2B: Float, $tratamientoIVA: String, $updatedAt: String) @auth(level: PUBLIC) {
   ratePlan_update(id: $id,
     data: {
-    updatedAt: $updatedAt, propertyId: $propertyId, roomTypeId: $roomTypeId, nombrePromocion: $nombrePromocion, fechaInicio: $fechaInicio, fechaFin: $fechaFin, tipoCobro: $tipoCobro, tarifaBase: $tarifaBase, tarifaExtraAdulto: $tarifaExtraAdulto, tarifaExtraNino: $tarifaExtraNino, politicasCancelacion: $politicasCancelacion, mercado: $mercado, comisionCedidaB2B: $comisionCedidaB2B })
+    updatedAt: $updatedAt, propertyId: $propertyId, roomTypeId: $roomTypeId, nombrePromocion: $nombrePromocion, fechaInicio: $fechaInicio, fechaFin: $fechaFin, tipoCobro: $tipoCobro, tarifaBase: $tarifaBase, tarifaExtraAdulto: $tarifaExtraAdulto, tarifaExtraNino: $tarifaExtraNino, politicasCancelacion: $politicasCancelacion, mercado: $mercado, comisionCedidaB2B: $comisionCedidaB2B, tratamientoIVA: $tratamientoIVA })
 }
 
 mutation InsertStopSale($id: String!, $propertyId: String!, $fechaInicio: String!, $fechaFin: String!, $motivo: String, $tipo: String, $updatedAt: String) @auth(level: PUBLIC) {
@@ -719,6 +719,7 @@ mutation InsertExtraService(
   $descripcion: String!
   $politicasCancelacion: String!
   $status: String!
+  $tratamientoIVA: String
   $updatedAt: String
 ) @auth(level: PUBLIC) {
   extraService_insert(
@@ -733,6 +734,7 @@ mutation InsertExtraService(
       descripcion: $descripcion
       politicasCancelacion: $politicasCancelacion
       status: $status
+      tratamientoIVA: $tratamientoIVA
     }
   )
 }
@@ -747,6 +749,7 @@ mutation UpdateExtraService(
   $descripcion: String
   $politicasCancelacion: String
   $status: String
+  $tratamientoIVA: String
   $updatedAt: String
 ) @auth(level: PUBLIC) {
   extraService_update(
@@ -761,6 +764,7 @@ mutation UpdateExtraService(
       descripcion: $descripcion
       politicasCancelacion: $politicasCancelacion
       status: $status
+      tratamientoIVA: $tratamientoIVA
     }
   )
 }

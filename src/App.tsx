@@ -2212,6 +2212,7 @@ onDeleteStopSale={handleDeleteStopSale}
                     detailedProperties={detailedProperties}
                     payableObligations={payableObligations}
                     usuarios={usuarios}
+                    jurisdiction={jurisdiction}
                   />
                 )}
                 {currentSection === ProjectView.CLIENTES && (

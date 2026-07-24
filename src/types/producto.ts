@@ -60,6 +60,10 @@ export interface RatePlan {
   // % de la comisión bruta del hotel (Property.comisionBruta) que este plan de tarifa cede a
   // la agencia B2B revendedora; el resto queda para la propia agencia.
   comisionCedidaB2B?: number;
+  // Tratamiento de IVA del producto: "incluido" (el precio ya lo trae), "aparte" (se suma) o
+  // "exento". El servicio lo hereda al agregarse a una reserva; si no se define, la facturación
+  // usa el modo por defecto de la emisión.
+  tratamientoIVA?: "incluido" | "aparte" | "exento";
 }
 
 // "Cierre" = stop sale duro (no hay disponibilidad, se muestra en rojo). "EnSolicitud" = hay que
@@ -105,6 +109,8 @@ export interface ExtraService {
   descripcion: string;
   politicasCancelacion: string;
   status: "Activo" | "Inactivo";
+  // Tratamiento de IVA del servicio (heredado al agregarlo a una reserva). Ver RatePlan.
+  tratamientoIVA?: "incluido" | "aparte" | "exento";
 }
 
 // ─── PROVEEDORES DE SERVICIOS (NO HOTELEROS) ──────────────────────────────────

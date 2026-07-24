@@ -63,6 +63,7 @@ import EstadoCuentaReservaPDF from "../components/EstadoCuentaReservaPDF";
 import { nextSequentialId } from "../lib/idGenerator";
 import { parseAttachment, downloadAttachment } from "../lib/attachments";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
+import { computeVatBreakdown } from "../lib/quoteVat";
 import { getStatusBadge, formatDate } from "../components/reservas/reservasFormat";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
@@ -189,9 +190,14 @@ const calculateRoomPvpBySegments = (
 
   return segments.reduce((sum, seg) => {
     const rate = seg.ratePlan;
+    const extraAdulto = rate.tarifaExtraAdulto || 0;
+    const extraNino = rate.tarifaExtraNino || 0;
+    // POR_HABITACION: la tarifa base cubre la ocupación base de la habitación; los adultos extra
+    // (sobre la base) y los niños suman sus recargos. Antes se ignoraban por completo.
+    // POR_PERSONA: cada ocupante base paga la tarifa base, más los recargos de adulto extra/niño.
     const perNight = rate.tipoCobro === TipoCobro.POR_HABITACION
-      ? rate.tarifaBase
-      : (rate.tarifaBase * baseOccupants) + (rate.tarifaExtraAdulto * extraAdults) + (rate.tarifaExtraNino * children);
+      ? rate.tarifaBase + (extraAdulto * extraAdults) + (extraNino * children)
+      : (rate.tarifaBase * baseOccupants) + (extraAdulto * extraAdults) + (extraNino * children);
     return sum + perNight * seg.nights;
   }, 0);
 };
@@ -229,6 +235,26 @@ export default function ReservasView({
   registrosAuditoria = [],
 }: ReservasViewProps) {
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
+  // Celdas de precio de la cotización DIRECTO: 1 columna (Precio) o, con el toggle de IVA activo,
+  // 3 columnas (Subtotal base · IVA · Total) por servicio/habitación.
+  const renderDirectoPriceCells = (amount: number, mode?: "incluido" | "aparte" | "exento", pad: string = "p-2") => {
+    if (!mostrarDesgloseIVA) {
+      return <td className={`${pad} text-right font-bold text-zinc-950`}>{formatCurrency(amount, getOperatingCurrency())}</td>;
+    }
+    const v = computeVatBreakdown([{ precioVenta: amount, tratamientoIVA: mode }], jur.taxRate);
+    return (
+      <>
+        <td className={`${pad} text-right text-zinc-600 font-mono text-xs`}>{formatCurrency(v.base + v.exento, getOperatingCurrency())}</td>
+        <td className={`${pad} text-right font-mono text-xs ${v.iva > 0 ? "text-zinc-500" : "text-emerald-700 font-bold"}`}>{v.iva > 0 ? formatCurrency(v.iva, getOperatingCurrency()) : "Exento"}</td>
+        <td className={`${pad} text-right font-bold text-zinc-950 font-mono`}>{formatCurrency(v.total, getOperatingCurrency())}</td>
+      </>
+    );
+  };
+  // Celdas de precio VACÍAS (para la cabecera de un hotel con varias habitaciones: el monto va en
+  // las sub-filas por habitación, no en la cabecera, para no parecer un cargo adicional).
+  const emptyDirectoCells = (pad: string = "p-2") => mostrarDesgloseIVA
+    ? (<><td className={pad}></td><td className={pad}></td><td className={pad}></td></>)
+    : (<td className={pad}></td>);
   const { showAlert, showConfirm } = useDialog();
   const { puede, esAdministrador } = usePermissions();
   const { usuario } = useAuth();
@@ -360,6 +386,8 @@ export default function ReservasView({
   
   // --- B2B MODAL VIEW ---
   const [showB2BModal, setShowB2BModal] = useState<boolean>(false);
+  // Toggle para incluir el desglose de IVA (Base/IVA/Total) en la cotización — para clientes que facturan.
+  const [mostrarDesgloseIVA, setMostrarDesgloseIVA] = useState<boolean>(false);
   const [showVoucherModal, setShowVoucherModal] = useState<boolean>(false);
 
   // --- SERVICE FORM STATES (Level 4) ---
@@ -1408,6 +1436,15 @@ export default function ReservasView({
         ? (parseFloat(salePrice) || 0) * insPax
         : (parseFloat(salePrice) || 0);
 
+    // Tratamiento de IVA heredado del producto (plan de tarifa / servicio del catálogo). Si el
+    // producto no lo define, queda undefined y la facturación usa el modo por defecto de la emisión.
+    const tratamientoIVAHeredado: ServiceItem["tratamientoIVA"] =
+      activeServiceType === ServiceType.ALOJAMIENTO
+        ? ratePlans.find(rp => rp.id === selectedRatePlanId)?.tratamientoIVA
+        : (activeServiceType === ServiceType.TRASLADO || activeServiceType === ServiceType.SERVICIO_VARIO)
+          ? extraServices?.find(es => es.id === svExtraServiceId)?.tratamientoIVA
+          : undefined;
+
     if (editingServiceId) {
       setCartServices(prev => prev.map(s => {
         if (s.id === editingServiceId) {
@@ -1425,7 +1462,8 @@ export default function ReservasView({
                        activeServiceType === ServiceType.MANUAL ? manualSupplier :
                        activeServiceType === ServiceType.SERVICIO_VARIO ? (svSupplier || extraServices?.find(s => s.id === svExtraServiceId)?.providerName) : undefined,
             proveedorId,
-            detalles: det
+            detalles: det,
+            tratamientoIVA: tratamientoIVAHeredado ?? s.tratamientoIVA
           };
         }
         return s;
@@ -1449,6 +1487,7 @@ export default function ReservasView({
                    activeServiceType === ServiceType.SERVICIO_VARIO ? (svSupplier || extraServices?.find(s => s.id === svExtraServiceId)?.providerName) : undefined,
         proveedorId,
         detalles: det,
+        tratamientoIVA: tratamientoIVAHeredado,
         statusFacturacion: "Borrador"
       };
       setCartServices(prev => [...prev, newService]);
@@ -6063,7 +6102,15 @@ export default function ReservasView({
                               <th className="p-2 w-24">Tipo</th>
                               <th className="p-2">Descripción / Itinerario del Servicio</th>
                               {isDirecto ? (
-                                <th className="p-2 text-right w-28">Precio</th>
+                                mostrarDesgloseIVA ? (
+                                  <>
+                                    <th className="p-2 text-right w-24">Subtotal</th>
+                                    <th className="p-2 text-right w-24">{jur.taxName}</th>
+                                    <th className="p-2 text-right w-24">Total</th>
+                                  </>
+                                ) : (
+                                  <th className="p-2 text-right w-28">Precio</th>
+                                )
                               ) : (
                                 <>
                                   <th className="p-2 text-right w-24">PVP Tarifa</th>
@@ -6107,8 +6154,10 @@ export default function ReservasView({
                                           )}
                                         </td>
                                         {isDirecto ? (
-                                          <td className="p-2 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
-                                        ) : (
+                                          singleRoom
+                                            ? renderDirectoPriceCells(pvp, (s as any).tratamientoIVA, "p-2")
+                                            : emptyDirectoCells("p-2")
+                                        ) : singleRoom ? (
                                           <>
                                             <td className="p-2 text-right font-bold text-zinc-900">{formatCurrency(pvp, getOperatingCurrency())}</td>
                                             <td className="p-2 text-center font-bold text-zinc-600">
@@ -6118,6 +6167,12 @@ export default function ReservasView({
                                               </span>
                                             </td>
                                             <td className="p-2 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <td className="p-2"></td>
+                                            <td className="p-2"></td>
+                                            <td className="p-2"></td>
                                           </>
                                         )}
                                       </tr>
@@ -6135,7 +6190,7 @@ export default function ReservasView({
                                               {guestsNames && <span className="block text-[10px] text-zinc-400 italic">Pasajeros: {guestsNames}</span>}
                                             </td>
                                             {isDirecto ? (
-                                              <td className="p-1.5 text-right text-zinc-800 font-bold text-xs">{formatCurrency(rates.sale, getOperatingCurrency())}</td>
+                                              renderDirectoPriceCells(rates.pvp, (s as any).tratamientoIVA, "p-1.5")
                                             ) : (
                                               <>
                                                 <td className="p-1.5 text-right text-zinc-700 text-xs font-semibold">{formatCurrency(rates.pvp, getOperatingCurrency())}</td>
@@ -6161,7 +6216,7 @@ export default function ReservasView({
                                     <td className="p-2 font-bold text-zinc-900">{s.tipo}</td>
                                     <td className="p-2 font-medium text-zinc-700 leading-tight">{s.descripcion}</td>
                                     {isDirecto ? (
-                                      <td className="p-2 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
+                                      renderDirectoPriceCells(pvp, (s as any).tratamientoIVA, "p-2")
                                     ) : (
                                       <>
                                         <td className="p-2 text-right font-bold text-zinc-900">{formatCurrency(pvp, getOperatingCurrency())}</td>
@@ -6190,7 +6245,7 @@ export default function ReservasView({
                                       {activeRes.hotelName} - 7 noches - {activeRes.pax} Pax - Check-in: {formatDate(activeRes.checkIn)} ➔ Out: {formatDate(activeRes.checkOut)}
                                     </td>
                                     {isDirecto ? (
-                                      <td className="p-3 text-right font-bold text-zinc-950">{formatCurrency(activeRes.totalPrice, getOperatingCurrency())}</td>
+                                      renderDirectoPriceCells(pvp, undefined, "p-3")
                                     ) : (
                                       <>
                                         <td className="p-3 text-right font-bold text-zinc-900">{formatCurrency(pvp, getOperatingCurrency())}</td>
@@ -6247,6 +6302,35 @@ export default function ReservasView({
                             </div>
                           </>
                         )}
+
+                        {/* Desglose de IVA (opcional, para clientes/agencias que van a facturar).
+                            Descompone el monto facturable (Directo: PVP; B2B: neto a Foratour) en base + IVA. */}
+                        {mostrarDesgloseIVA && (() => {
+                          const vatItems = allServices.map((s: any) => ({
+                            precioVenta: isDirecto ? (s.precioPvp ?? s.precioVenta) : s.precioVenta,
+                            tratamientoIVA: s.tratamientoIVA,
+                          }));
+                          const vat = computeVatBreakdown(vatItems, jur.taxRate);
+                          return (
+                            <div className="pt-2 mt-2 border-t border-dashed border-zinc-300 space-y-1">
+                              <p className="text-[8.5px] font-black text-zinc-400 uppercase tracking-widest">Desglose fiscal ({jur.taxName}) — para facturación</p>
+                              {vat.base > 0 && (
+                                <div className="flex justify-between text-[11px] text-zinc-600"><span>Base gravable:</span><span className="font-mono">{formatCurrency(vat.base, getOperatingCurrency())}</span></div>
+                              )}
+                              {vat.exento > 0 && (
+                                <div className="flex justify-between text-[11px] text-zinc-600"><span>Base exenta:</span><span className="font-mono">{formatCurrency(vat.exento, getOperatingCurrency())}</span></div>
+                              )}
+                              <div className="flex justify-between text-[11px] text-zinc-600">
+                                <span>{jur.taxName} {(jur.taxRate * 100).toFixed(0)}%:</span>
+                                <span className="font-mono">{vat.iva > 0 ? formatCurrency(vat.iva, getOperatingCurrency()) : "Exento"}</span>
+                              </div>
+                              <div className="flex justify-between text-[11px] font-black text-zinc-950 border-t border-zinc-200 pt-1">
+                                <span>Total con {jur.taxName}:</span>
+                                <span className="font-mono">{formatCurrency(vat.total, getOperatingCurrency())}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   </React.Fragment>
@@ -6267,11 +6351,16 @@ export default function ReservasView({
 
             {/* Modal Actions */}
             <div className="bg-zinc-50 border-t border-zinc-200 px-5 py-4 flex justify-between items-center no-print">
-              <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 font-sans">
-                <Info className="w-3.5 h-3.5 text-zinc-400" />
-                Presione Ctrl+P o use el botón para imprimir o guardar como PDF
-              </span>
-              
+              <label className="text-[11px] text-zinc-600 font-bold flex items-center gap-2 font-sans cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={mostrarDesgloseIVA}
+                  onChange={(e) => setMostrarDesgloseIVA(e.target.checked)}
+                  className="w-4 h-4 rounded accent-zinc-800 cursor-pointer"
+                />
+                Incluir desglose de IVA (para facturación)
+              </label>
+
               <div className="flex gap-2.5">
                 <Button
                   onClick={() => setShowB2BModal(false)}

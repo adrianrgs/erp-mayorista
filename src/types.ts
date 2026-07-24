@@ -347,6 +347,10 @@ export interface ServiceItem {
   // el nombre en `proveedor`, no por este id.
   proveedorId?: string;
   detalles?: any;
+  // Tratamiento de IVA de este servicio para la facturación:
+  //  - "incluido": el precio ya incluye IVA (se extrae)  - "aparte": el IVA se suma sobre el precio
+  //  - "exento": no genera IVA. Si no se define, se usa el modo por defecto de la emisión.
+  tratamientoIVA?: "incluido" | "aparte" | "exento";
   statusFacturacion?: "Borrador" | "Solicitado" | "Facturado" | "Rechazado";
   status?: "Confirmado" | "Modificado" | "Cancelado";
   originalPriceNet?: number;

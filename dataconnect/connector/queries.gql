@@ -164,6 +164,7 @@ propertyId
     politicasCancelacion
     mercado
     comisionCedidaB2B
+    tratamientoIVA
   }
 }
 
@@ -310,6 +311,7 @@ query ListExtraServices @auth(level: PUBLIC) {
     descripcion
     politicasCancelacion
     status
+    tratamientoIVA
   }
 }
 

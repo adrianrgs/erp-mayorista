@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { formatCurrency, getOperatingCurrency } from "../lib/taxEngine";
+import { formatCurrency, getOperatingCurrency, TaxJurisdiction, DEFAULT_JURISDICTION } from "../lib/taxEngine";
 import { round2 } from "../lib/money";
+import { netoSinIVA } from "../lib/quoteVat";
 import {
   FinancialInvoice,
   Reservation,
@@ -45,6 +46,7 @@ interface AdministracionViewProps {
   detailedProperties?: Property[];
   payableObligations?: PayableObligation[];
   usuarios?: Usuario[];
+  jurisdiction?: TaxJurisdiction;
 }
 
 export default function AdministracionView({
@@ -55,8 +57,11 @@ export default function AdministracionView({
   clients = [],
   detailedProperties = [],
   payableObligations = [],
-  usuarios = []
+  usuarios = [],
+  jurisdiction
 }: AdministracionViewProps) {
+  // Tasa de IVA vigente — para excluir el IVA del cálculo de comisiones/ganancias.
+  const ivaRate = (jurisdiction ?? DEFAULT_JURISDICTION).taxRate;
   // 1. KPI Calculations (Health Metrics)
   const activeReservations = reservations.filter(r => r.status !== "Cancelada");
 
@@ -250,11 +255,15 @@ export default function AdministracionView({
     (r.servicios || []).forEach(s => {
       if (s.statusFacturacion !== "Facturado") return;
       const pct = s.comisionB2B !== undefined ? s.comisionB2B : 10;
-      const pvp = s.precioPvp !== undefined ? s.precioPvp : (s.precioVenta / (1 - pct / 100));
+      const pvpGross = s.precioPvp !== undefined ? s.precioPvp : (s.precioVenta / (1 - pct / 100));
+      // El IVA NO se considera en comisiones/ganancias: se calcula sobre el NETO (base sin IVA),
+      // extrayendo el IVA de PVP y precio de venta según el tratamiento del servicio.
+      const pvpNeto = netoSinIVA(pvpGross, s.tratamientoIVA, ivaRate);
+      const ventaNeta = netoSinIVA(s.precioVenta, s.tratamientoIVA, ivaRate);
       const row = getAsesorRow(key);
-      row.pvp += pvp;
+      row.pvp += pvpNeto;
       row.neto += s.precioNeto;
-      row.ganancia += (s.precioVenta - s.precioNeto);
+      row.ganancia += (ventaNeta - s.precioNeto);
       aporta = true;
     });
     if (aporta) getAsesorRow(key).reservas += 1;
@@ -266,10 +275,11 @@ export default function AdministracionView({
     const facturado = !st || st === "Facturado" || st === "PagadoAerolinea";
     const excluido = st === "Anulado" || st === "Reembolsado";
     if (!facturado || excluido) return;
+    const ventaNeta = netoSinIVA(b.precioVenta, undefined, ivaRate);
     const row = getAsesorRow(b.asesor || "__SIN__");
-    row.pvp += b.precioVenta;
+    row.pvp += ventaNeta;
     row.neto += (b.costoNeto || 0);
-    row.ganancia += (b.precioVenta - (b.costoNeto || 0));
+    row.ganancia += (ventaNeta - (b.costoNeto || 0));
     row.boletos += 1;
   });
 
@@ -543,7 +553,7 @@ export default function AdministracionView({
               <UserCircle className="w-4.5 h-4.5 text-violet-600" /> Desempeño por Asesor
             </h4>
             <p className="text-[10.5px] text-zinc-400 font-semibold mt-0.5 uppercase tracking-wide">
-              Ventas facturadas por asesor (base para comisiones) · atribuido por fecha de registro
+              Ventas facturadas por asesor (base para comisiones) · montos SIN IVA · atribuido por fecha de registro
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
