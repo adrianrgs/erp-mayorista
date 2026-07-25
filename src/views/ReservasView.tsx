@@ -1036,10 +1036,12 @@ export default function ReservasView({
       setComisionB2B(getDefaultComisionB2B());
       setComisionPropia(5);
     } else if (type === ServiceType.TRASLADO) {
+      // Arranca como ida = vuelta (mismo día) → Sólo Ida por defecto; se vuelve Ida y Vuelta
+      // automáticamente si el vendedor elige una fecha de vuelta posterior en el calendario.
       setTransDate(cartCheckIn || "2026-06-20");
       setTransTripType("one-way");
       setTransReturnDropoff("");
-      setTransReturnDate(cartCheckOut || "2026-06-27");
+      setTransReturnDate(cartCheckIn || "2026-06-20");
       setTransServiceType("privado");
       setTransPax(paxCount || 2);
       setSvExtraServiceId("");
@@ -1825,6 +1827,8 @@ export default function ReservasView({
         setTransPickup("");
         setTransDropoff("");
         setTransDate(cartCheckIn || "2026-06-20");
+        setTransReturnDate(cartCheckIn || "2026-06-20");
+        setTransTripType("one-way");
         // Categoría de vehículo es opcional → arranca vacía (solo se pone si el vendedor quiere).
         setTransVehicle("");
         setSvExtraServiceId("");
@@ -5079,17 +5083,6 @@ export default function ReservasView({
                   )}
 
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Tipo de Traslado</label>
-                    <select
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
-                      value={transTripType}
-                      onChange={(e) => setTransTripType(e.target.value as "one-way" | "round-trip")}
-                    >
-                      <option value="one-way">Sólo Ida (One Way)</option>
-                      <option value="round-trip">Ida y Vuelta (Round Trip)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Pasajeros</label>
                     <input
                       type="number"
@@ -5189,16 +5182,6 @@ export default function ReservasView({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Retorno</label>
-                      <input
-                        type="date"
-                        required
-                        className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800 focus:outline-none"
-                        value={transReturnDate}
-                        onChange={(e) => setTransReturnDate(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Hora de Retorno</label>
                       <input
                         type="time"
@@ -5211,17 +5194,21 @@ export default function ReservasView({
                   </div>
                 )}
 
+                <DateRangePicker
+                  checkIn={transDate}
+                  checkOut={transReturnDate}
+                  allowSameDay
+                  onChange={(ci, co) => {
+                    setTransDate(ci);
+                    setTransReturnDate(co);
+                    // El tipo se deriva de las fechas: vuelta posterior a la ida = ida y vuelta.
+                    setTransTripType(co && co > ci ? "round-trip" : "one-way");
+                  }}
+                  checkInLabel="Fecha Ida"
+                  checkOutLabel="Fecha Vuelta"
+                  required
+                />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha (Ida)</label>
-                    <input
-                      type="date"
-                      required
-                      className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800 focus:outline-none"
-                      value={transDate}
-                      onChange={(e) => setTransDate(e.target.value)}
-                    />
-                  </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Hora de Pick up</label>
                     <input
