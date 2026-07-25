@@ -540,7 +540,7 @@ export default function ReservasView({
   const [transDropoff, setTransDropoff] = useState("");
   const [transDate, setTransDate] = useState("2026-06-20");
   const [transTime, setTransTime] = useState("14:00");
-  const [transVehicle, setTransVehicle] = useState("Berlina Ejecutiva");
+  const [transVehicle, setTransVehicle] = useState("");
   const [transTripType, setTransTripType] = useState<"one-way" | "round-trip">("one-way");
   const [transReturnDropoff, setTransReturnDropoff] = useState("");
   const [transReturnDate, setTransReturnDate] = useState("2026-06-27");
@@ -1703,7 +1703,7 @@ export default function ReservasView({
         setTransPickup(det.transPickup || "");
         setTransDropoff(det.transDropoff || "");
         setTransDate(det.transDate || "");
-        setTransVehicle(det.transVehicle || "Berlina Ejecutiva");
+        setTransVehicle(det.transVehicle || "");
         setTransTripType(det.transTripType || "one-way");
         setTransReturnDropoff(det.transReturnDropoff || "");
         setTransReturnDate(det.transReturnDate || "");
@@ -1793,8 +1793,8 @@ export default function ReservasView({
         setTransPickup("");
         setTransDropoff("");
         setTransDate(cartCheckIn || "2026-06-20");
-        // Default: primera categoría de la flota registrada (o "Berlina Ejecutiva" si no hay flota).
-        setTransVehicle(Array.from(new Set(fleetVehicles.map(v => v.tipo).filter(Boolean)))[0] || "Berlina Ejecutiva");
+        // Categoría de vehículo es opcional → arranca vacía (solo se pone si el vendedor quiere).
+        setTransVehicle("");
         setSvExtraServiceId("");
         setTransEsPropio(false);
         setTransSupplier("");
@@ -5008,9 +5008,6 @@ export default function ReservasView({
                           // Un traslado del catálogo siempre implica un proveedor tercero.
                           setTransEsPropio(false);
                           setTransSupplier(selected.providerName);
-                          // Default de categoría: primer vehículo registrado de ese proveedor (si hay).
-                          const catProv = fleetVehicles.find(v => v.esTercero && v.proveedor === selected.providerName)?.tipo;
-                          if (catProv) setTransVehicle(catProv);
                         } else {
                           setTransSupplier("");
                         }
@@ -5222,9 +5219,9 @@ export default function ReservasView({
                       onChange={(e) => setTransVehicle(e.target.value)}
                     >
                       {(() => {
-                        // Categorías del vehículo, priorizando el proveedor/operador del traslado pero
-                        // mostrando SIEMPRE los vehículos registrados (propios + terceros). Los defaults
-                        // solo si la flota está vacía. Siempre incluye el valor actual.
+                        // Categoría de vehículo = OPCIONAL. Arranca vacía; el vendedor la pone si quiere.
+                        // Opciones: vehículos registrados (propios + terceros), priorizando el proveedor
+                        // del traslado. Si no hay flota, se ofrecen las categorías por defecto.
                         const prov = (transSupplier || "").trim();
                         const delProveedor = prov
                           ? fleetVehicles.filter(v => v.esTercero && v.proveedor === prov).map(v => v.tipo)
@@ -5233,7 +5230,12 @@ export default function ReservasView({
                         const registradas = Array.from(new Set([...delProveedor, ...todaLaFlota].filter(Boolean)));
                         const base = registradas.length ? registradas : DEFAULT_VEHICLE_CATEGORIES;
                         const opciones = Array.from(new Set([...base, transVehicle].filter(Boolean)));
-                        return opciones.map(cat => <option key={cat} value={cat}>{cat}</option>);
+                        return (
+                          <>
+                            <option value="">— Sin especificar —</option>
+                            {opciones.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                          </>
+                        );
                       })()}
                     </select>
                   </div>
