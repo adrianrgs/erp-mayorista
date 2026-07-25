@@ -1793,7 +1793,8 @@ export default function ReservasView({
         setTransPickup("");
         setTransDropoff("");
         setTransDate(cartCheckIn || "2026-06-20");
-        setTransVehicle("Berlina Ejecutiva");
+        // Default: primera categoría de la flota registrada (o "Berlina Ejecutiva" si no hay flota).
+        setTransVehicle(Array.from(new Set(fleetVehicles.map(v => v.tipo).filter(Boolean)))[0] || "Berlina Ejecutiva");
         setSvExtraServiceId("");
         setTransEsPropio(false);
         setTransSupplier("");
@@ -5007,6 +5008,9 @@ export default function ReservasView({
                           // Un traslado del catálogo siempre implica un proveedor tercero.
                           setTransEsPropio(false);
                           setTransSupplier(selected.providerName);
+                          // Default de categoría: primer vehículo registrado de ese proveedor (si hay).
+                          const catProv = fleetVehicles.find(v => v.esTercero && v.proveedor === selected.providerName)?.tipo;
+                          if (catProv) setTransVehicle(catProv);
                         } else {
                           setTransSupplier("");
                         }
