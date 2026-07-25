@@ -209,7 +209,11 @@ export default function DateRangePicker({
           nights > 0 || (allowSameDay && nights === 0) ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"
         }`}>
           {nights > 0 ? (
-            <>🌙 {nights} noche{nights === 1 ? "" : "s"} seleccionada{nights === 1 ? "" : "s"}</>
+            allowSameDay ? (
+              <>🗓 {formatDisplay(checkIn)} → {formatDisplay(checkOut)}</>
+            ) : (
+              <>🌙 {nights} noche{nights === 1 ? "" : "s"} seleccionada{nights === 1 ? "" : "s"}</>
+            )
           ) : allowSameDay ? (
             <>☀ Actividad de un día (mismo día)</>
           ) : (
