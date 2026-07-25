@@ -5265,48 +5265,19 @@ export default function ReservasView({
             {/* 3. RENT A CAR */}
             {activeServiceType === ServiceType.RENT_A_CAR && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Entrega / Pick Up</label>
-                    <input
-                      type="date"
-                      required
-                      className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800 focus:outline-none"
-                      value={carStartDate}
-                      onChange={(e) => {
-                        const start = e.target.value;
-                        setCarStartDate(start);
-                        if (carEndDate) {
-                          const s = new Date(start);
-                          const eDate = new Date(carEndDate);
-                          if (!isNaN(s.getTime()) && !isNaN(eDate.getTime())) {
-                            setCarDays(Math.max(1, Math.ceil((eDate.getTime() - s.getTime()) / (1000 * 60 * 60 * 24))));
-                          }
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Devolución / Drop Off</label>
-                    <input
-                      type="date"
-                      required
-                      className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800 focus:outline-none"
-                      value={carEndDate}
-                      onChange={(e) => {
-                        const end = e.target.value;
-                        setCarEndDate(end);
-                        if (carStartDate) {
-                          const s = new Date(carStartDate);
-                          const eDate = new Date(end);
-                          if (!isNaN(s.getTime()) && !isNaN(eDate.getTime())) {
-                            setCarDays(Math.max(1, Math.ceil((eDate.getTime() - s.getTime()) / (1000 * 60 * 60 * 24))));
-                          }
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
+                <DateRangePicker
+                  checkIn={carStartDate}
+                  checkOut={carEndDate}
+                  onChange={(ci, co) => {
+                    setCarStartDate(ci);
+                    setCarEndDate(co);
+                    const s = new Date(ci); const eDate = new Date(co);
+                    if (!isNaN(s.getTime()) && !isNaN(eDate.getTime())) setCarDays(Math.max(1, Math.ceil((eDate.getTime() - s.getTime()) / (1000 * 60 * 60 * 24))));
+                  }}
+                  checkInLabel="Fecha Entrega / Pick Up"
+                  checkOutLabel="Fecha Devolución / Drop Off"
+                  required
+                />
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
@@ -5346,47 +5317,20 @@ export default function ReservasView({
             {/* 4. SEGUROS DE VIAJE */}
             {activeServiceType === ServiceType.SEGURO && (
               <div className="space-y-4">
+                <DateRangePicker
+                  checkIn={insStartDate}
+                  checkOut={insEndDate}
+                  onChange={(ci, co) => {
+                    setInsStartDate(ci);
+                    setInsEndDate(co);
+                    const s = new Date(ci); const eDate = new Date(co);
+                    if (!isNaN(s.getTime()) && !isNaN(eDate.getTime())) setInsDays(Math.max(1, Math.ceil((eDate.getTime() - s.getTime()) / (1000 * 60 * 60 * 24))));
+                  }}
+                  checkInLabel="Fecha de Inicio"
+                  checkOutLabel="Fecha de Fin"
+                  required
+                />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha de Inicio</label>
-                    <input
-                      type="date"
-                      required
-                      className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800 focus:outline-none"
-                      value={insStartDate}
-                      onChange={(e) => {
-                        const start = e.target.value;
-                        setInsStartDate(start);
-                        if (insEndDate) {
-                          const s = new Date(start);
-                          const eDate = new Date(insEndDate);
-                          if (!isNaN(s.getTime()) && !isNaN(eDate.getTime())) {
-                            setInsDays(Math.max(1, Math.ceil((eDate.getTime() - s.getTime()) / (1000 * 60 * 60 * 24))));
-                          }
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha de Fin</label>
-                    <input
-                      type="date"
-                      required
-                      className="w-full p-2 border border-zinc-200 rounded text-xs font-semibold bg-white text-zinc-800 focus:outline-none"
-                      value={insEndDate}
-                      onChange={(e) => {
-                        const end = e.target.value;
-                        setInsEndDate(end);
-                        if (insStartDate) {
-                          const s = new Date(insStartDate);
-                          const eDate = new Date(end);
-                          if (!isNaN(s.getTime()) && !isNaN(eDate.getTime())) {
-                            setInsDays(Math.max(1, Math.ceil((eDate.getTime() - s.getTime()) / (1000 * 60 * 60 * 24))));
-                          }
-                        }
-                      }}
-                    />
-                  </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Cantidad de Pax</label>
                     <input
@@ -5440,16 +5384,13 @@ export default function ReservasView({
             {/* 5. ENTRADA MANUAL */}
             {activeServiceType === ServiceType.MANUAL && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Entrada</label>
-                    <input type="date" value={svcCheckIn} onChange={(e) => setSvcCheckIn(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Salida</label>
-                    <input type="date" value={svcCheckOut} onChange={(e) => setSvcCheckOut(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
-                  </div>
-                </div>
+                <DateRangePicker
+                  checkIn={svcCheckIn}
+                  checkOut={svcCheckOut}
+                  onChange={(ci, co) => { setSvcCheckIn(ci); setSvcCheckOut(co); }}
+                  checkInLabel="Fecha Entrada"
+                  checkOutLabel="Fecha Salida"
+                />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Descripción del Servicio</label>
@@ -5480,16 +5421,13 @@ export default function ReservasView({
             {/* 6. SERVICIOS VARIOS */}
             {activeServiceType === ServiceType.SERVICIO_VARIO && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Entrada</label>
-                    <input type="date" value={svcCheckIn} onChange={(e) => setSvcCheckIn(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Salida</label>
-                    <input type="date" value={svcCheckOut} onChange={(e) => setSvcCheckOut(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
-                  </div>
-                </div>
+                <DateRangePicker
+                  checkIn={svcCheckIn}
+                  checkOut={svcCheckOut}
+                  onChange={(ci, co) => { setSvcCheckIn(ci); setSvcCheckOut(co); }}
+                  checkInLabel="Fecha Entrada"
+                  checkOutLabel="Fecha Salida"
+                />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Seleccionar Servicio del Catálogo</label>
