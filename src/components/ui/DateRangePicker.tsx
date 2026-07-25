@@ -9,6 +9,9 @@ interface DateRangePickerProps {
   checkInLabel?: string;
   checkOutLabel?: string;
   required?: boolean;
+  /** Permite elegir el MISMO día en ambas fechas (actividad de un día). Alojamiento lo deja en
+   *  false (exige mínimo 1 noche); traslados/servicios/seguros/rent-a-car lo usan en true. */
+  allowSameDay?: boolean;
 }
 
 const MONTH_NAMES = [
@@ -69,7 +72,8 @@ export default function DateRangePicker({
   minDate,
   checkInLabel = "Check-In",
   checkOutLabel = "Check-Out",
-  required
+  required,
+  allowSameDay = false
 }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState(() => (checkIn ? parseISO(checkIn) : new Date()));
@@ -94,7 +98,8 @@ export default function DateRangePicker({
     setCheckInText(masked);
     const iso = parseTypedDate(masked);
     if (iso && iso >= effectiveMinDate) {
-      onChange(iso, checkOut && checkOut > iso ? checkOut : "");
+      const keepOut = checkOut && (allowSameDay ? checkOut >= iso : checkOut > iso);
+      onChange(iso, keepOut ? checkOut : "");
       setViewMonth(parseISO(iso));
     }
   };
@@ -103,7 +108,7 @@ export default function DateRangePicker({
     const masked = maskTypingValue(raw);
     setCheckOutText(masked);
     const iso = parseTypedDate(masked);
-    if (iso && (!checkIn || iso > checkIn)) {
+    if (iso && (!checkIn || (allowSameDay ? iso >= checkIn : iso > checkIn))) {
       onChange(checkIn, iso);
       setViewMonth(parseISO(iso));
     }
@@ -115,9 +120,13 @@ export default function DateRangePicker({
       onChange(iso, "");
       return;
     }
-    if (iso <= checkIn) {
+    if (iso < checkIn) {
+      onChange(iso, "");
+    } else if (iso === checkIn && !allowSameDay) {
+      // Alojamiento: clic en el mismo día reinicia (no permite 0 noches).
       onChange(iso, "");
     } else {
+      // allowSameDay: iso === checkIn cierra como actividad de un día; iso > checkIn = rango normal.
       onChange(checkIn, iso);
       setOpen(false);
     }
@@ -197,10 +206,12 @@ export default function DateRangePicker({
           vendedor detecte de inmediato si se equivocó al elegir las fechas. */}
       {checkIn && checkOut && (
         <div className={`mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border ${
-          nights > 0 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"
+          nights > 0 || (allowSameDay && nights === 0) ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-red-50 text-red-700 border-red-200"
         }`}>
           {nights > 0 ? (
             <>🌙 {nights} noche{nights === 1 ? "" : "s"} seleccionada{nights === 1 ? "" : "s"}</>
+          ) : allowSameDay ? (
+            <>☀ Actividad de un día (mismo día)</>
           ) : (
             <>⚠ El check-out debe ser posterior al check-in</>
           )}

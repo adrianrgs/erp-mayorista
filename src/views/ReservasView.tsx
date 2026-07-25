@@ -5279,6 +5279,7 @@ export default function ReservasView({
                   checkInLabel="Fecha Entrega / Pick Up"
                   checkOutLabel="Fecha Devolución / Drop Off"
                   required
+                  allowSameDay
                 />
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -5331,6 +5332,7 @@ export default function ReservasView({
                   checkInLabel="Fecha de Inicio"
                   checkOutLabel="Fecha de Fin"
                   required
+                  allowSameDay
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
@@ -5392,6 +5394,7 @@ export default function ReservasView({
                   onChange={(ci, co) => { setSvcCheckIn(ci); setSvcCheckOut(co); }}
                   checkInLabel="Fecha Entrada"
                   checkOutLabel="Fecha Salida"
+                  allowSameDay
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
@@ -5429,6 +5432,7 @@ export default function ReservasView({
                   onChange={(ci, co) => { setSvcCheckIn(ci); setSvcCheckOut(co); }}
                   checkInLabel="Fecha Entrada"
                   checkOutLabel="Fecha Salida"
+                  allowSameDay
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
