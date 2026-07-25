@@ -583,6 +583,10 @@ export default function ReservasView({
   // Servicio Vario no tenía ningún estado propio de proveedor (se derivaba 100% del catálogo).
   const [svSupplier, setSvSupplier] = useState("");
   const [svManualDescription, setSvManualDescription] = useState("");
+  // Fechas de entrada/salida para Entrada Manual y Servicios Varios. Por defecto las del
+  // expediente, pero editables por si un servicio ocurre en un día distinto de la estadía.
+  const [svcCheckIn, setSvcCheckIn] = useState("");
+  const [svcCheckOut, setSvcCheckOut] = useState("");
 
   // Auto-selecciona la tarifa de Servicio Vario / Traslado vigente para la fecha de check-in del
   // expediente (cartCheckIn), en vez de forzar al vendedor a elegirla manualmente — mismo
@@ -984,6 +988,9 @@ export default function ReservasView({
     setSalePrice("");
     setManualDescription("");
     setManualSupplier("");
+    // Fechas de servicio (Manual / Servicios Varios): por defecto las del expediente.
+    setSvcCheckIn(cartCheckIn || "");
+    setSvcCheckOut(cartCheckOut || "");
     setTransPickup("");
     setTransDropoff("");
     setProveedorId(undefined);
@@ -1315,7 +1322,7 @@ export default function ReservasView({
         break;
       }
       case ServiceType.MANUAL:
-        desc = `${manualDescription} (Proveedor: ${manualSupplier || "Directo"})`;
+        desc = `${manualDescription} (Proveedor: ${manualSupplier || "Directo"})${svcCheckIn && svcCheckOut ? ` [${svcCheckIn} → ${svcCheckOut}]` : ""}`;
         sPrice = (parseFloat(salePrice) || 0) * (1 - comisionB2B / 100);
         break;
       case ServiceType.SERVICIO_VARIO: {
@@ -1327,9 +1334,10 @@ export default function ReservasView({
         sPrice = Math.round(pvpVal * (1 - comisionB2B / 100) * 100) / 100;
         nPrice = Math.round(pvpVal * (1 - (comisionB2B + comisionPropia) / 100) * 100) / 100;
         const label = srv?.nombre || svManualDescription || "Servicio Vario";
-        desc = rate
+        const svcFechas = svcCheckIn && svcCheckOut ? ` [${svcCheckIn} → ${svcCheckOut}]` : "";
+        desc = (rate
           ? `${label} - ${rate.pricingModel === "Por Persona" ? `${svAdults} Adultos, ${svChildren} Niños` : `${svVehicles} Vehículo(s)/Grupo(s)`} (Del ${rate.temporadaInicio} al ${rate.temporadaFin})`
-          : label;
+          : label) + svcFechas;
         break;
       }
     }
@@ -1411,6 +1419,8 @@ export default function ReservasView({
       det = {
         manualDescription,
         manualSupplier,
+        checkIn: svcCheckIn,
+        checkOut: svcCheckOut,
         netPrice: netPrice,
         salePrice: salePrice,
         comisionB2B: comisionB2B
@@ -1423,6 +1433,8 @@ export default function ReservasView({
         svChildren,
         svVehicles,
         svManualDescription,
+        checkIn: svcCheckIn,
+        checkOut: svcCheckOut,
         pvp: parseFloat(salePrice) || 0,
         netPrice: nPrice,
         salePrice: sPrice,
@@ -1740,6 +1752,8 @@ export default function ReservasView({
       } else if (service.tipo === ServiceType.MANUAL) {
         setManualDescription(det.manualDescription || "");
         setManualSupplier(service.proveedor || det.manualSupplier || "");
+        setSvcCheckIn(det.checkIn || cartCheckIn || "");
+        setSvcCheckOut(det.checkOut || cartCheckOut || "");
         setNetPrice(det.netPrice || "");
         setSalePrice(det.salePrice || "");
         setComisionB2B(det.comisionB2B !== undefined ? det.comisionB2B : getDefaultComisionB2B());
@@ -1750,6 +1764,8 @@ export default function ReservasView({
         setSvChildren(det.svChildren !== undefined ? det.svChildren : 0);
         setSvVehicles(det.svVehicles !== undefined ? det.svVehicles : 1);
         setSvManualDescription(det.svManualDescription || "");
+        setSvcCheckIn(det.checkIn || cartCheckIn || "");
+        setSvcCheckOut(det.checkOut || cartCheckOut || "");
         setSvSupplier(service.proveedor || "");
         setNetPrice(det.netPrice !== undefined ? String(det.netPrice) : "");
         setSalePrice(det.pvp !== undefined ? String(det.pvp) : "");
@@ -5444,6 +5460,14 @@ export default function ReservasView({
                       placeholder="Ej: Disney Ticket Wholesaler"
                     />
                   </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Entrada</label>
+                    <input type="date" value={svcCheckIn} onChange={(e) => setSvcCheckIn(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Salida</label>
+                    <input type="date" value={svcCheckOut} onChange={(e) => setSvcCheckOut(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
+                  </div>
                 </div>
               </div>
             )}
@@ -5525,6 +5549,17 @@ export default function ReservasView({
                     required
                     placeholder="Buscar o escribir proveedor..."
                   />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Entrada</label>
+                    <input type="date" value={svcCheckIn} onChange={(e) => setSvcCheckIn(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Salida</label>
+                    <input type="date" value={svcCheckOut} onChange={(e) => setSvcCheckOut(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
+                  </div>
                 </div>
 
                 {/* Aviso de tarifa mixta: el rango de fechas del expediente toca más de una
