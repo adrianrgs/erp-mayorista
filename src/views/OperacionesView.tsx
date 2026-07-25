@@ -36,13 +36,15 @@ import {
   Info,
   X,
   Printer,
-  PhoneOff
+  PhoneOff,
+  Trash2
 } from "lucide-react";
 
 import { DriverManifest } from "../components/operaciones/DriverManifest";
 import { DailyDispatchManifest } from "../components/operaciones/DailyDispatchManifest";
 import SearchableSelect from "../components/ui/SearchableSelect";
 import { Proveedor } from "../types/producto";
+import { useDialog } from "../components/ui/DialogProvider";
 
 // ─── TIPOS ────────────────────────────────────────────────────────────────────
 type OpsTab = "despacho" | "flota" | "alertas";
@@ -58,6 +60,8 @@ interface OperacionesViewProps {
   fleetDrivers: FleetDriver[];
   onUpdateDriver: (updated: FleetDriver) => void;
   onAddDriver: (d: FleetDriver) => void;
+  onDeleteVehicle?: (id: string) => void;
+  onDeleteDriver?: (id: string) => void;
   proveedores?: Proveedor[];
 }
 
@@ -119,8 +123,11 @@ export default function OperacionesView({
   fleetDrivers,
   onUpdateDriver,
   onAddDriver,
+  onDeleteVehicle,
+  onDeleteDriver,
   proveedores = [],
 }: OperacionesViewProps) {
+  const { showConfirm } = useDialog();
   const [activeTab, setActiveTab] = useState<OpsTab>("despacho");
   const [fleetSubTab, setFleetSubTab] = useState<FleetSubTab>("vehiculos");
   // "propio" = traslados operados por la propia agencia (los que hay que despachar con la
@@ -410,6 +417,22 @@ export default function OperacionesView({
     setActionMsg(msg);
     setTimeout(() => setActionMsg(""), 4000);
   };
+
+  const confirmDeleteVehicle = (v: FleetVehicle) => showConfirm({
+    title: "Eliminar vehículo",
+    message: `¿Eliminar "${[v.marca, v.modelo].filter(Boolean).join(" ") || v.tipo}" (${v.placa || v.proveedor || v.tipo})? Esta acción no se puede deshacer.`,
+    type: "danger",
+    confirmText: "Eliminar",
+    onConfirm: () => { onDeleteVehicle?.(v.id); notify("✓ Vehículo eliminado."); },
+  });
+
+  const confirmDeleteDriver = (d: FleetDriver) => showConfirm({
+    title: "Eliminar conductor",
+    message: `¿Eliminar a "${d.nombre}"? Esta acción no se puede deshacer.`,
+    type: "danger",
+    confirmText: "Eliminar",
+    onConfirm: () => { onDeleteDriver?.(d.id); notify("✓ Conductor eliminado."); },
+  });
 
   const handleAssign = () => {
     if (!selectedTransfer || !assignVehicleId || !assignDriverId) return;
@@ -1283,8 +1306,8 @@ export default function OperacionesView({
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-zinc-50 border-b border-zinc-200">
-                        {["ID","Placa","Tipo","Marca / Modelo","Cap.","Proveedor","Estado","Conductor","Notas"].map(h => (
-                          <th key={h} className="px-3 py-2.5 text-left text-[9px] font-extrabold uppercase tracking-widest text-zinc-400 whitespace-nowrap">{h}</th>
+                        {["ID","Placa","Tipo","Marca / Modelo","Cap.","Proveedor","Estado","Conductor","Notas",""].map((h, i) => (
+                          <th key={h || `acc-${i}`} className="px-3 py-2.5 text-left text-[9px] font-extrabold uppercase tracking-widest text-zinc-400 whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1309,6 +1332,13 @@ export default function OperacionesView({
                               {driver ? driver.nombre : <span className="text-zinc-300">—</span>}
                             </td>
                             <td className="px-3 py-3 text-zinc-400 max-w-[180px] truncate">{v.observaciones}</td>
+                            <td className="px-3 py-3 text-right">
+                              {onDeleteVehicle && (
+                                <button onClick={() => confirmDeleteVehicle(v)} className="text-zinc-300 hover:text-red-500 p-1 cursor-pointer" title="Eliminar vehículo">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </td>
                           </tr>
                         );
                       })}
@@ -1342,8 +1372,8 @@ export default function OperacionesView({
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-zinc-50 border-b border-zinc-200">
-                          {["Proveedor / Operador","Categoría","Cap.","Placa","Marca / Modelo","Estado","Notas"].map(h => (
-                            <th key={h} className="px-3 py-2.5 text-left text-[9px] font-extrabold uppercase tracking-widest text-zinc-400 whitespace-nowrap">{h}</th>
+                          {["Proveedor / Operador","Categoría","Cap.","Placa","Marca / Modelo","Estado","Notas",""].map((h, i) => (
+                            <th key={h || `acc-${i}`} className="px-3 py-2.5 text-left text-[9px] font-extrabold uppercase tracking-widest text-zinc-400 whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -1363,6 +1393,13 @@ export default function OperacionesView({
                                 </span>
                               </td>
                               <td className="px-3 py-3 text-zinc-400 max-w-[180px] truncate">{v.observaciones}</td>
+                              <td className="px-3 py-3 text-right">
+                                {onDeleteVehicle && (
+                                  <button onClick={() => confirmDeleteVehicle(v)} className="text-zinc-300 hover:text-red-500 p-1 cursor-pointer" title="Eliminar vehículo">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </td>
                             </tr>
                           );
                         })}
@@ -1420,13 +1457,20 @@ export default function OperacionesView({
                             </td>
                             <td className="px-3 py-3 text-zinc-500 whitespace-nowrap">{d.observaciones || "—"}</td>
                             <td className="px-3 py-3">
-                              <button 
-                                onClick={() => handlePrintDriver(d)}
-                                title="Imprimir manifiesto de hoy"
-                                className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-600 bg-white hover:bg-zinc-100 hover:text-black border border-zinc-200 rounded cursor-pointer transition-colors"
-                              >
-                                <Printer className="w-3 h-3" /> Imprimir
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => handlePrintDriver(d)}
+                                  title="Imprimir manifiesto de hoy"
+                                  className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-600 bg-white hover:bg-zinc-100 hover:text-black border border-zinc-200 rounded cursor-pointer transition-colors"
+                                >
+                                  <Printer className="w-3 h-3" /> Imprimir
+                                </button>
+                                {onDeleteDriver && (
+                                  <button onClick={() => confirmDeleteDriver(d)} className="text-zinc-300 hover:text-red-500 p-1 cursor-pointer" title="Eliminar conductor">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );

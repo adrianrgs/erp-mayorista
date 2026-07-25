@@ -1382,6 +1382,18 @@ export default function App() {
     }
   };
 
+  const handleDeleteVehicle = async (id: string) => {
+    setFleetVehicles(prev => prev.filter(v => v.id !== id));
+    try { await deleteFleetVehicle(dataConnect, { id }); }
+    catch (e) { console.error("Failed to delete vehicle", e); }
+  };
+
+  const handleDeleteDriver = async (id: string) => {
+    setFleetDrivers(prev => prev.filter(d => d.id !== id));
+    try { await deleteFleetDriver(dataConnect, { id }); }
+    catch (e) { console.error("Failed to delete driver", e); }
+  };
+
   const handleUpdateInvoice = async (updated: any) => {
     updated.updatedAt = new Date().toISOString();
     for (const f of ["amount", "vatAmount", "taxableBase", "surchargeAmount", "vatWithheld", "incomeTaxWithheld", "localCurrencyAmount"]) {
@@ -2203,6 +2215,8 @@ onDeleteStopSale={handleDeleteStopSale}
                     fleetDrivers={fleetDrivers}
                     onUpdateDriver={handleUpdateDriver}
                     onAddDriver={handleAddDriver}
+                    onDeleteVehicle={handleDeleteVehicle}
+                    onDeleteDriver={handleDeleteDriver}
                     proveedores={proveedores}
                   />
                 )}
