@@ -6263,7 +6263,45 @@ export default function ReservasView({
                                   <tr key={s.id || idx} className="hover:bg-zinc-50/50">
                                     <td className="p-2 font-mono text-[10.5px] text-zinc-400">{s.id}</td>
                                     <td className="p-2 font-bold text-zinc-900">{s.tipo}</td>
-                                    <td className="p-2 font-medium text-zinc-700 leading-tight">{s.descripcion}</td>
+                                    <td className="p-2 text-left leading-tight">
+                                      {(() => {
+                                        const d = s.detalles || {};
+                                        // Formato estructurado por tipo (título + detalles), consistente con alojamiento/traslado.
+                                        if (s.tipo === ServiceType.RENT_A_CAR) {
+                                          return (<>
+                                            <span className="text-zinc-900 font-extrabold">{d.carCategory || "Rent a Car"}</span>
+                                            {d.carSupplier && <span className="block text-[9.5px] text-zinc-500 font-medium mt-0.5">Proveedor: {d.carSupplier}</span>}
+                                            {(d.carStartDate || d.carEndDate) && <span className="block text-[9.5px] text-zinc-500 font-medium mt-0.5">Del {formatDate(d.carStartDate)} al {formatDate(d.carEndDate)}{d.carDays ? ` · ${d.carDays} día(s)` : ""}</span>}
+                                          </>);
+                                        }
+                                        if (s.tipo === ServiceType.SEGURO) {
+                                          return (<>
+                                            <span className="text-zinc-900 font-extrabold">{d.insPlan || "Seguro de Viaje"}</span>
+                                            {(d.insStartDate || d.insEndDate) && <span className="block text-[9.5px] text-zinc-500 font-medium mt-0.5">Vigencia: {formatDate(d.insStartDate)} ➔ {formatDate(d.insEndDate)}{d.insDays ? ` · ${d.insDays} día(s)` : ""}</span>}
+                                            {d.insPax && <span className="block text-[10px] text-zinc-600 font-semibold mt-0.5">{d.insPax} Pax</span>}
+                                          </>);
+                                        }
+                                        if (s.tipo === ServiceType.MANUAL) {
+                                          return (<>
+                                            <span className="text-zinc-900 font-extrabold">{d.manualDescription || s.descripcion}</span>
+                                            {d.manualSupplier && <span className="block text-[9.5px] text-zinc-500 font-medium mt-0.5">Proveedor: {d.manualSupplier}</span>}
+                                            {d.checkIn && <span className="block text-[9.5px] text-zinc-500 font-medium mt-0.5">{formatDate(d.checkIn)}{d.checkOut && d.checkOut !== d.checkIn ? ` ➔ ${formatDate(d.checkOut)}` : ""}</span>}
+                                          </>);
+                                        }
+                                        if (s.tipo === ServiceType.SERVICIO_VARIO) {
+                                          const catName = extraServices?.find(es => es.id === d.svExtraServiceId)?.nombre;
+                                          const paxTxt = (d.svAdults || d.svChildren)
+                                            ? `${d.svAdults || 0} Adulto(s)${d.svChildren ? `, ${d.svChildren} Niño(s)` : ""}`
+                                            : (d.svVehicles ? `${d.svVehicles} Vehículo(s)/Grupo(s)` : "");
+                                          return (<>
+                                            <span className="text-zinc-900 font-extrabold">{catName || d.svManualDescription || "Servicio Vario"}</span>
+                                            {d.checkIn && <span className="block text-[9.5px] text-zinc-500 font-medium mt-0.5">{formatDate(d.checkIn)}{d.checkOut && d.checkOut !== d.checkIn ? ` ➔ ${formatDate(d.checkOut)}` : ""}</span>}
+                                            {paxTxt && <span className="block text-[10px] text-zinc-600 font-semibold mt-0.5">{paxTxt}</span>}
+                                          </>);
+                                        }
+                                        return <span className="font-medium text-zinc-700">{s.descripcion}</span>;
+                                      })()}
+                                    </td>
                                     {isDirecto ? (
                                       renderDirectoPriceCells(pvp, (s as any).tratamientoIVA, "p-2")
                                     ) : (
