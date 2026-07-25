@@ -593,16 +593,19 @@ export default function ReservasView({
   // criterio que ya se usa para el plan de tarifa de Alojamiento. En Traslado el precio se
   // calcula con los pasajeros del traslado (transPax) / 1 vehículo, como en la selección manual.
   React.useEffect(() => {
-    if (activeServiceType !== ServiceType.SERVICIO_VARIO && activeServiceType !== ServiceType.TRASLADO) return;
-    if (!svExtraServiceId || !cartCheckIn) return;
+    const esTraslado = activeServiceType === ServiceType.TRASLADO;
+    if (activeServiceType !== ServiceType.SERVICIO_VARIO && !esTraslado) return;
+    // Usa la fecha PROPIA del servicio (traslado → transDate; vario → svcCheckIn), con fallback
+    // al check-in del expediente, para auto-elegir la tarifa vigente en esa fecha.
+    const fecha = (esTraslado ? transDate : svcCheckIn) || cartCheckIn;
+    if (!svExtraServiceId || !fecha) return;
     const match = (serviceRates || []).find(r =>
       r.extraServiceId === svExtraServiceId &&
-      cartCheckIn >= r.temporadaInicio &&
-      cartCheckIn <= r.temporadaFin
+      fecha >= r.temporadaInicio &&
+      fecha <= r.temporadaFin
     );
     if (match && match.id !== svRateId) {
       setSvRateId(match.id);
-      const esTraslado = activeServiceType === ServiceType.TRASLADO;
       if (match.pricingModel === "Por Persona") {
         const ad = esTraslado ? transPax : svAdults;
         const ni = esTraslado ? 0 : svChildren;
@@ -614,7 +617,7 @@ export default function ReservasView({
         setNetPrice(((match.netoTotal || 0) * units).toFixed(2));
       }
     }
-  }, [activeServiceType, svExtraServiceId, cartCheckIn, serviceRates]);
+  }, [activeServiceType, svExtraServiceId, svcCheckIn, transDate, cartCheckIn, serviceRates]);
 
   // Propaga la estructura de comisión configurada en la tarifa (ServiceRate.comisionBruta /
   // comisionCedidaB2B) a los campos de comisión del expediente, en vez de que el vendedor la
@@ -5439,6 +5442,16 @@ export default function ReservasView({
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Entrada</label>
+                    <input type="date" value={svcCheckIn} onChange={(e) => setSvcCheckIn(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Salida</label>
+                    <input type="date" value={svcCheckOut} onChange={(e) => setSvcCheckOut(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Descripción del Servicio</label>
                     <input
                       type="text"
@@ -5460,6 +5473,14 @@ export default function ReservasView({
                       placeholder="Ej: Disney Ticket Wholesaler"
                     />
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* 6. SERVICIOS VARIOS */}
+            {activeServiceType === ServiceType.SERVICIO_VARIO && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Entrada</label>
                     <input type="date" value={svcCheckIn} onChange={(e) => setSvcCheckIn(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
@@ -5469,12 +5490,6 @@ export default function ReservasView({
                     <input type="date" value={svcCheckOut} onChange={(e) => setSvcCheckOut(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* 6. SERVICIOS VARIOS */}
-            {activeServiceType === ServiceType.SERVICIO_VARIO && (
-              <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Seleccionar Servicio del Catálogo</label>
@@ -5551,33 +5566,24 @@ export default function ReservasView({
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Entrada</label>
-                    <input type="date" value={svcCheckIn} onChange={(e) => setSvcCheckIn(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fecha Salida</label>
-                    <input type="date" value={svcCheckOut} onChange={(e) => setSvcCheckOut(e.target.value)} className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none" />
-                  </div>
-                </div>
-
                 {/* Aviso de tarifa mixta: el rango de fechas del expediente toca más de una
                     temporada distinta para este servicio — a diferencia de Alojamiento (que
                     prorratea por noche), acá no hay un concepto de "noches" para repartir el
                     costo, así que solo se avisa para que el vendedor verifique manualmente. */}
                 {(() => {
-                  if (!svExtraServiceId || !cartCheckIn || !cartCheckOut) return null;
+                  const desde = svcCheckIn || cartCheckIn;
+                  const hasta = svcCheckOut || cartCheckOut;
+                  if (!svExtraServiceId || !desde || !hasta) return null;
                   const overlappingRateIds = new Set(
                     (serviceRates || [])
-                      .filter(r => r.extraServiceId === svExtraServiceId && cartCheckIn < r.temporadaFin && cartCheckOut > r.temporadaInicio)
+                      .filter(r => r.extraServiceId === svExtraServiceId && desde < r.temporadaFin && hasta > r.temporadaInicio)
                       .map(r => r.id)
                   );
                   if (overlappingRateIds.size <= 1) return null;
                   return (
                     <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold rounded flex items-center gap-1.5">
                       <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span>Tarifa mixta: hay {overlappingRateIds.size} temporadas distintas vigentes dentro del rango de fechas del expediente para este servicio. Verifique cuál corresponde antes de continuar.</span>
+                      <span>Tarifa mixta: las fechas de este servicio caen en {overlappingRateIds.size} temporadas distintas. Verifique cuál corresponde (o cárguelo como dos servicios) antes de continuar.</span>
                     </div>
                   );
                 })()}
