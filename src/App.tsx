@@ -1313,6 +1313,7 @@ export default function App() {
         status: updated.status,
         conductorAsignadoId: updated.conductorAsignadoId,
         observaciones: updated.observaciones,
+        esTercero: updated.esTercero,
         updatedAt: updated.updatedAt
       });
     } catch (e) {
@@ -1335,6 +1336,7 @@ export default function App() {
         status: newV.status,
         conductorAsignadoId: newV.conductorAsignadoId,
         observaciones: newV.observaciones,
+        esTercero: newV.esTercero,
         updatedAt: newV.updatedAt
       });
     } catch (e) {

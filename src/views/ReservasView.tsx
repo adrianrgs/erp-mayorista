@@ -5218,19 +5218,16 @@ export default function ReservasView({
                       onChange={(e) => setTransVehicle(e.target.value)}
                     >
                       {(() => {
-                        // Categorías según el ORIGEN del traslado:
-                        //  - Con proveedor/operador (tercero): categorías de los vehículos de ESE proveedor
-                        //    registrados en Operaciones → Flota → Vehículos de Terceros.
-                        //  - Sin proveedor (propio): categorías de la flota propia.
-                        //  - Fallback (nada registrado): categorías por defecto. Siempre incluye el valor actual.
+                        // Categorías del vehículo, priorizando el proveedor/operador del traslado pero
+                        // mostrando SIEMPRE los vehículos registrados (propios + terceros). Los defaults
+                        // solo si la flota está vacía. Siempre incluye el valor actual.
                         const prov = (transSupplier || "").trim();
-                        const catsTercero = prov
-                          ? Array.from(new Set(fleetVehicles.filter(v => v.esTercero && v.proveedor === prov).map(v => v.tipo).filter(Boolean)))
+                        const delProveedor = prov
+                          ? fleetVehicles.filter(v => v.esTercero && v.proveedor === prov).map(v => v.tipo)
                           : [];
-                        const catsPropios = Array.from(new Set(fleetVehicles.filter(v => !v.esTercero).map(v => v.tipo).filter(Boolean)));
-                        const base = prov
-                          ? (catsTercero.length ? catsTercero : DEFAULT_VEHICLE_CATEGORIES)
-                          : (catsPropios.length ? catsPropios : DEFAULT_VEHICLE_CATEGORIES);
+                        const todaLaFlota = fleetVehicles.map(v => v.tipo);
+                        const registradas = Array.from(new Set([...delProveedor, ...todaLaFlota].filter(Boolean)));
+                        const base = registradas.length ? registradas : DEFAULT_VEHICLE_CATEGORIES;
                         const opciones = Array.from(new Set([...base, transVehicle].filter(Boolean)));
                         return opciones.map(cat => <option key={cat} value={cat}>{cat}</option>);
                       })()}
