@@ -369,27 +369,27 @@ mutation DeleteTransferService($id: String!) @auth(level: PUBLIC) {
 mutation InsertFleetVehicle(
   $id: String!, $placa: String!, $tipo: String!, $marca: String!, $modelo: String!,
   $capacidad: Int!, $proveedor: String!, $status: String!, $conductorAsignadoId: String,
-  $observaciones: String
+  $observaciones: String, $esTercero: Boolean
 , $updatedAt: String) @auth(level: PUBLIC) {
   fleetVehicle_insert(data: {
     id: $id,
     updatedAt: $updatedAt, placa: $placa, tipo: $tipo, marca: $marca, modelo: $modelo,
     capacidad: $capacidad, proveedor: $proveedor, status: $status,
-    conductorAsignadoId: $conductorAsignadoId, observaciones: $observaciones
+    conductorAsignadoId: $conductorAsignadoId, observaciones: $observaciones, esTercero: $esTercero
   })
 }
 
 mutation UpdateFleetVehicle(
   $id: String!, $placa: String, $tipo: String, $marca: String, $modelo: String,
   $capacidad: Int, $proveedor: String, $status: String, $conductorAsignadoId: String,
-  $observaciones: String
+  $observaciones: String, $esTercero: Boolean
 , $updatedAt: String) @auth(level: PUBLIC) {
   fleetVehicle_update(id: $id,
     data: {
     updatedAt: $updatedAt,
     placa: $placa, tipo: $tipo, marca: $marca, modelo: $modelo,
     capacidad: $capacidad, proveedor: $proveedor, status: $status,
-    conductorAsignadoId: $conductorAsignadoId, observaciones: $observaciones
+    conductorAsignadoId: $conductorAsignadoId, observaciones: $observaciones, esTercero: $esTercero
   })
 }
 

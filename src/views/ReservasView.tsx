@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient, DirectClient, DirectClientTipo, ClientStatus, FleetVehicle, CompanyConfig, ReservationPassenger, PassengerType, ProjectView } from "../types";
+import { Reservation, HotelProperty, ServiceItem, ServiceType, B2BClient, DirectClient, DirectClientTipo, ClientStatus, FleetVehicle, CompanyConfig, ReservationPassenger, PassengerType, ProjectView, DEFAULT_VEHICLE_CATEGORIES } from "../types";
 import { AccionPermiso, ReglaAutorizacion, SolicitudAutorizacion, RegistroAuditoria } from "../types/usuarios";
 import { usePermissions } from "../hooks/usePermissions";
 import { useAuth } from "../context/AuthContext";
@@ -584,11 +584,12 @@ export default function ReservasView({
   const [svSupplier, setSvSupplier] = useState("");
   const [svManualDescription, setSvManualDescription] = useState("");
 
-  // Auto-selecciona la tarifa de Servicio Vario vigente para la fecha de check-in del
+  // Auto-selecciona la tarifa de Servicio Vario / Traslado vigente para la fecha de check-in del
   // expediente (cartCheckIn), en vez de forzar al vendedor a elegirla manualmente — mismo
-  // criterio que ya se usa para el plan de tarifa de Alojamiento.
+  // criterio que ya se usa para el plan de tarifa de Alojamiento. En Traslado el precio se
+  // calcula con los pasajeros del traslado (transPax) / 1 vehículo, como en la selección manual.
   React.useEffect(() => {
-    if (activeServiceType !== ServiceType.SERVICIO_VARIO) return;
+    if (activeServiceType !== ServiceType.SERVICIO_VARIO && activeServiceType !== ServiceType.TRASLADO) return;
     if (!svExtraServiceId || !cartCheckIn) return;
     const match = (serviceRates || []).find(r =>
       r.extraServiceId === svExtraServiceId &&
@@ -597,12 +598,16 @@ export default function ReservasView({
     );
     if (match && match.id !== svRateId) {
       setSvRateId(match.id);
+      const esTraslado = activeServiceType === ServiceType.TRASLADO;
       if (match.pricingModel === "Por Persona") {
-        setSalePrice((((match.ventaAdulto || 0) * svAdults) + ((match.ventaNino || 0) * svChildren)).toFixed(2));
-        setNetPrice((((match.netoAdulto || 0) * svAdults) + ((match.netoNino || 0) * svChildren)).toFixed(2));
+        const ad = esTraslado ? transPax : svAdults;
+        const ni = esTraslado ? 0 : svChildren;
+        setSalePrice((((match.ventaAdulto || 0) * ad) + ((match.ventaNino || 0) * ni)).toFixed(2));
+        setNetPrice((((match.netoAdulto || 0) * ad) + ((match.netoNino || 0) * ni)).toFixed(2));
       } else {
-        setSalePrice(((match.ventaTotal || 0) * svVehicles).toFixed(2));
-        setNetPrice(((match.netoTotal || 0) * svVehicles).toFixed(2));
+        const units = esTraslado ? 1 : svVehicles;
+        setSalePrice(((match.ventaTotal || 0) * units).toFixed(2));
+        setNetPrice(((match.netoTotal || 0) * units).toFixed(2));
       }
     }
   }, [activeServiceType, svExtraServiceId, cartCheckIn, serviceRates]);
@@ -1622,12 +1627,16 @@ export default function ReservasView({
   };
 
   // --- PASAJEROS (Level 2, pestaña Pasajeros) ---
-  const handleAddPasajero = () => {
-    setCartPasajeros(prev => [...prev, createEmptyPassenger(prev.length === 0)]);
+  const handleAddPasajero = (): string => {
+    const nuevo = createEmptyPassenger(false);
+    setCartPasajeros(prev => [...prev, { ...nuevo, esTitular: prev.length === 0 }]);
+    return nuevo.id;
   };
 
   const handleUpdatePasajeroNombre = (id: string, nombre: string) => {
-    setCartPasajeros(prev => prev.map(p => p.id === id ? { ...p, nombre } : p));
+    // Los nombres de pasajeros se guardan/muestran SIEMPRE en mayúsculas.
+    const upper = nombre.toUpperCase();
+    setCartPasajeros(prev => prev.map(p => p.id === id ? { ...p, nombre: upper } : p));
   };
 
   const handleUpdatePasajeroTipo = (id: string, tipo: PassengerType) => {
@@ -4202,7 +4211,7 @@ export default function ReservasView({
                 </div>
               ) : (
                 <div className="space-y-2.5">
-                  {(expedienteMode === "view" ? effectivePasajeros : cartPasajeros).map((p) => (
+                  {(expedienteMode === "view" ? effectivePasajeros : cartPasajeros).map((p, index) => (
                     <div key={p.id} className="flex items-center gap-3 border border-zinc-100 rounded-md p-3 bg-zinc-50/50">
                       {expedienteMode === "view" ? (
                         <>
@@ -4217,10 +4226,22 @@ export default function ReservasView({
                           <input
                             type="text"
                             required
+                            data-pax-id={p.id}
                             placeholder="Nombre completo"
                             value={p.nombre}
                             onChange={(e) => handleUpdatePasajeroNombre(p.id, e.target.value)}
-                            className="flex-1 p-2 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 focus:outline-none"
+                            onKeyDown={(e) => {
+                              // Tab en la ÚLTIMA fila (ya con nombre) crea una nueva y la enfoca,
+                              // para cargar pasajeros en cadena sin usar el mouse. Shift+Tab normal.
+                              if (e.key === "Tab" && !e.shiftKey && index === cartPasajeros.length - 1 && p.nombre.trim()) {
+                                e.preventDefault();
+                                const newId = handleAddPasajero();
+                                requestAnimationFrame(() => {
+                                  document.querySelector<HTMLInputElement>(`input[data-pax-id="${newId}"]`)?.focus();
+                                });
+                              }
+                            }}
+                            className="flex-1 p-2 border border-zinc-200 bg-white rounded text-xs font-semibold text-zinc-900 uppercase placeholder:normal-case focus:outline-none"
                           />
                           <select
                             value={p.tipo}
@@ -5196,18 +5217,14 @@ export default function ReservasView({
                       value={transVehicle}
                       onChange={(e) => setTransVehicle(e.target.value)}
                     >
-                      {fleetVehicles.length > 0 ? (
-                        Array.from(new Set(fleetVehicles.map(v => v.tipo))).map(tipo => (
-                          <option key={tipo} value={tipo}>{tipo}</option>
-                        ))
-                      ) : (
-                        <>
-                          <option value="Berlina Ejecutiva">Berlina Ejecutiva (Sedán 1-3 Pax)</option>
-                          <option value="Minivan Ejecutiva">Minivan Ejecutiva (SUV 1-6 Pax)</option>
-                          <option value="Mini Bus Charter">Mini Bus Charter (Coaster 7-19 Pax)</option>
-                          <option value="Autobús de Línea">Autobús de Línea (Coach 20+ Pax)</option>
-                        </>
-                      )}
+                      {(() => {
+                        // Categorías derivadas de la FLOTA (propios + terceros registrados en Operaciones)
+                        // + defaults como fallback + el valor actual, sin duplicados. No hardcodeadas.
+                        const flota = Array.from(new Set(fleetVehicles.map(v => v.tipo).filter(Boolean)));
+                        const base = flota.length ? flota : DEFAULT_VEHICLE_CATEGORIES;
+                        const opciones = Array.from(new Set([...base, transVehicle].filter(Boolean)));
+                        return opciones.map(cat => <option key={cat} value={cat}>{cat}</option>);
+                      })()}
                     </select>
                   </div>
                 </div>
@@ -5687,7 +5704,7 @@ export default function ReservasView({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">
-                      {activeServiceType === ServiceType.SEGURO ? "PVP por Pax ({getCurrencySymbol()})" : "Precio Venta PVP ({getCurrencySymbol()})"}
+                      {activeServiceType === ServiceType.SEGURO ? `PVP por Pax (${getCurrencySymbol()})` : `Precio Venta PVP (${getCurrencySymbol()})`}
                     </label>
                     <div className="relative">
                       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[10px]">{getCurrencySymbol()}</span>

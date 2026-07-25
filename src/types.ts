@@ -30,6 +30,14 @@ export interface CompanyConfig {
   alertDiasVencimiento?: number;
 }
 
+/** Categorías de vehículo por defecto (usadas si la empresa no configuró las suyas). */
+export const DEFAULT_VEHICLE_CATEGORIES = [
+  "Berlina Ejecutiva",
+  "Minivan Ejecutiva",
+  "Mini Bus Charter",
+  "Autobús de Línea",
+];
+
 export interface HotelProperty {
   updatedAt?: string;
   id: string;
@@ -391,6 +399,7 @@ export interface FleetVehicle {
   status: FleetVehicleStatus;
   conductorAsignadoId?: string;
   observaciones?: string;
+  esTercero?: boolean;    // true = vehículo subcontratado a un proveedor externo (no flota propia)
 }
 
 export interface FleetDriver {

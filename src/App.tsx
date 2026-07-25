@@ -2200,6 +2200,7 @@ onDeleteStopSale={handleDeleteStopSale}
                     fleetDrivers={fleetDrivers}
                     onUpdateDriver={handleUpdateDriver}
                     onAddDriver={handleAddDriver}
+                    proveedores={proveedores}
                   />
                 )}
                 {currentSection === ProjectView.ADMINISTRACION && (

@@ -41,10 +41,12 @@ import {
 
 import { DriverManifest } from "../components/operaciones/DriverManifest";
 import { DailyDispatchManifest } from "../components/operaciones/DailyDispatchManifest";
+import SearchableSelect from "../components/ui/SearchableSelect";
+import { Proveedor } from "../types/producto";
 
 // ─── TIPOS ────────────────────────────────────────────────────────────────────
 type OpsTab = "despacho" | "flota" | "alertas";
-type FleetSubTab = "vehiculos" | "conductores";
+type FleetSubTab = "vehiculos" | "conductores" | "terceros";
 type DespachoSubTab = "propio" | "terceros";
 
 interface OperacionesViewProps {
@@ -56,6 +58,7 @@ interface OperacionesViewProps {
   fleetDrivers: FleetDriver[];
   onUpdateDriver: (updated: FleetDriver) => void;
   onAddDriver: (d: FleetDriver) => void;
+  proveedores?: Proveedor[];
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -116,6 +119,7 @@ export default function OperacionesView({
   fleetDrivers,
   onUpdateDriver,
   onAddDriver,
+  proveedores = [],
 }: OperacionesViewProps) {
   const [activeTab, setActiveTab] = useState<OpsTab>("despacho");
   const [fleetSubTab, setFleetSubTab] = useState<FleetSubTab>("vehiculos");
@@ -141,7 +145,7 @@ export default function OperacionesView({
   // Formularios de registro
   const emptyVehicle: Omit<FleetVehicle, "id"> = {
     placa: "", tipo: "", marca: "", modelo: "", capacidad: 4,
-    proveedor: "", status: "Disponible", observaciones: ""
+    proveedor: "", status: "Disponible", observaciones: "", esTercero: false
   };
   const emptyDriver: Omit<FleetDriver, "id"> = {
     nombre: "", telefono: "", licencia: "",
@@ -149,6 +153,15 @@ export default function OperacionesView({
   };
   const [newVehicle, setNewVehicle] = useState(emptyVehicle);
   const [newDriver, setNewDriver] = useState(emptyDriver);
+
+  // Flota propia vs vehículos subcontratados a terceros (mismo FleetVehicle, flag esTercero).
+  const vehiculosPropios = fleetVehicles.filter(v => !v.esTercero);
+  const vehiculosTerceros = fleetVehicles.filter(v => v.esTercero);
+  // Abre el modal de registro con el flag correcto según la pestaña.
+  const abrirNuevoVehiculo = (esTercero: boolean) => {
+    setNewVehicle({ ...emptyVehicle, esTercero });
+    setShowVehicleModal(true);
+  };
 
   // Impresión
   const [printingManifests, setPrintingManifests] = useState<Array<{ driver: FleetDriver; date: Date; transfers: OperationalTransfer[] }>>([]);
@@ -1233,7 +1246,8 @@ export default function OperacionesView({
             {/* Sub-tabs Vehículos / Conductores */}
             <div className="flex items-center gap-1 border-b border-zinc-100 pb-0">
               {([
-                { id: "vehiculos", icon: Car,    label: `Vehículos (${fleetVehicles.length})` },
+                { id: "vehiculos", icon: Car,    label: `Vehículos Propios (${vehiculosPropios.length})` },
+                { id: "terceros", icon: Truck, label: `Vehículos de Terceros (${vehiculosTerceros.length})` },
                 { id: "conductores", icon: UserCheck, label: `Conductores (${fleetDrivers.length})` },
               ] as { id: FleetSubTab; icon: React.FC<any>; label: string }[]).map(t => (
                 <button
@@ -1256,10 +1270,10 @@ export default function OperacionesView({
             {fleetSubTab === "vehiculos" && (
               <div className="bg-white rounded-lg">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-xs font-bold text-zinc-700">Flota Registrada</h4>
+                  <h4 className="text-xs font-bold text-zinc-700">Flota Propia</h4>
                   <button
                     id="add-vehicle-btn"
-                    onClick={() => setShowVehicleModal(true)}
+                    onClick={() => abrirNuevoVehiculo(false)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-md transition-colors cursor-pointer"
                   >
                     <PlusCircle className="w-3.5 h-3.5" /> Nuevo Vehículo
@@ -1275,7 +1289,7 @@ export default function OperacionesView({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
-                      {fleetVehicles.map(v => {
+                      {vehiculosPropios.map(v => {
                         const driver = fleetDrivers.find(d => d.id === v.conductorAsignadoId);
                         const vc = vehicleStatusConfig[v.status];
                         return (
@@ -1301,6 +1315,61 @@ export default function OperacionesView({
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {/* Tabla de Vehículos de Terceros (subcontratados) */}
+            {fleetSubTab === "terceros" && (
+              <div className="bg-white rounded-lg">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h4 className="text-xs font-bold text-zinc-700">Vehículos de Terceros</h4>
+                    <p className="text-[10px] text-zinc-400">Unidades subcontratadas a operadores externos. Sus categorías aparecen al configurar traslados.</p>
+                  </div>
+                  <button
+                    onClick={() => abrirNuevoVehiculo(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-md transition-colors cursor-pointer"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" /> Nuevo Vehículo de Tercero
+                  </button>
+                </div>
+                {vehiculosTerceros.length === 0 ? (
+                  <div className="border border-dashed border-zinc-200 rounded-lg p-8 text-center text-zinc-400 text-xs">
+                    Aún no hay vehículos de terceros. Regístralos para que sus categorías estén disponibles en los traslados.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border border-zinc-200 rounded-lg">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-zinc-50 border-b border-zinc-200">
+                          {["Proveedor / Operador","Categoría","Cap.","Placa","Marca / Modelo","Estado","Notas"].map(h => (
+                            <th key={h} className="px-3 py-2.5 text-left text-[9px] font-extrabold uppercase tracking-widest text-zinc-400 whitespace-nowrap">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100">
+                        {vehiculosTerceros.map(v => {
+                          const vc = vehicleStatusConfig[v.status];
+                          return (
+                            <tr key={v.id} className="hover:bg-zinc-50 transition-colors">
+                              <td className="px-3 py-3 font-bold text-zinc-800 whitespace-nowrap">{v.proveedor || <span className="text-zinc-300">—</span>}</td>
+                              <td className="px-3 py-3 font-semibold text-zinc-700 whitespace-nowrap">{v.tipo}</td>
+                              <td className="px-3 py-3 font-bold text-zinc-800 text-center">{v.capacidad}</td>
+                              <td className="px-3 py-3 font-mono text-[10px] font-bold text-zinc-800">{v.placa || <span className="text-zinc-300">—</span>}</td>
+                              <td className="px-3 py-3 font-semibold text-zinc-600 whitespace-nowrap">{v.marca} {v.modelo}</td>
+                              <td className="px-3 py-3">
+                                <span className={`flex items-center gap-1.5 px-2 py-1 border rounded text-[9px] font-bold uppercase w-fit whitespace-nowrap ${vc.badge}`}>
+                                  <StatusDot className={vc.dot} />{v.status}
+                                </span>
+                              </td>
+                              <td className="px-3 py-3 text-zinc-400 max-w-[180px] truncate">{v.observaciones}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1431,24 +1500,36 @@ export default function OperacionesView({
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg border border-zinc-200">
             <div className="flex items-center justify-between p-5 border-b border-zinc-100">
-              <h3 className="font-bold text-sm text-zinc-900">Registrar Nuevo Vehículo</h3>
+              <h3 className="font-bold text-sm text-zinc-900">{newVehicle.esTercero ? "Registrar Vehículo de Tercero" : "Registrar Nuevo Vehículo"}</h3>
               <button onClick={() => setShowVehicleModal(false)} className="text-zinc-400 hover:text-zinc-700 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleAddVehicle} className="p-5 grid grid-cols-2 gap-3">
-              {[
-                { label: "Placa", key: "placa", type: "text" },
-                { label: "Tipo", key: "tipo", type: "text" },
-                { label: "Marca", key: "marca", type: "text" },
-                { label: "Modelo", key: "modelo", type: "text" },
-                { label: "Capacidad (pax)", key: "capacidad", type: "number" },
-                { label: "Proveedor", key: "proveedor", type: "text" },
-              ].map(({ label, key, type }) => (
+              {/* Proveedor / Operador: buscador de la lista de proveedores registrados. */}
+              <div className="col-span-2">
+                <label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">
+                  {newVehicle.esTercero ? "Proveedor / Operador (obligatorio)" : "Proveedor"}
+                </label>
+                <SearchableSelect
+                  value={newVehicle.proveedor}
+                  onChange={(val) => setNewVehicle(prev => ({ ...prev, proveedor: val }))}
+                  options={proveedores.map(p => ({ value: p.nombre, label: p.nombre, sublabel: p.tipo }))}
+                  placeholder="Buscar proveedor..."
+                  emptyLabel="No hay proveedores. Regístralos en el módulo Proveedores."
+                />
+              </div>
+              {([
+                { label: "Placa", key: "placa", type: "text", reqPropio: true, reqTercero: false },
+                { label: "Categoría (tipo de vehículo)", key: "tipo", type: "text", reqPropio: true, reqTercero: true },
+                { label: "Marca", key: "marca", type: "text", reqPropio: true, reqTercero: false },
+                { label: "Modelo", key: "modelo", type: "text", reqPropio: true, reqTercero: false },
+                { label: "Capacidad (pax)", key: "capacidad", type: "number", reqPropio: true, reqTercero: true },
+              ] as { label: string; key: string; type: string; reqPropio: boolean; reqTercero: boolean }[]).map(({ label, key, type, reqPropio, reqTercero }) => (
                 <div key={key}>
                   <label className="block text-[10px] font-bold uppercase text-zinc-400 mb-1">{label}</label>
                   <input
-                    required
+                    required={newVehicle.esTercero ? reqTercero : reqPropio}
                     type={type}
                     value={String((newVehicle as any)[key])}
                     onChange={e => setNewVehicle(prev => ({ ...prev, [key]: type === "number" ? Number(e.target.value) : e.target.value }))}

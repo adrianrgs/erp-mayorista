@@ -247,6 +247,7 @@ type FleetVehicle @table {
   status: String!
   conductorAsignadoId: String
   observaciones: String
+  esTercero: Boolean
   updatedAt: String
 }
 
