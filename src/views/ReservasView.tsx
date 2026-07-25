@@ -6216,7 +6216,49 @@ export default function ReservasView({
                                     </React.Fragment>
                                   );
                                 }
-                                
+
+                                // Traslado: render estructurado (título + ruta + fechas + pax), como alojamiento.
+                                if (s.tipo === ServiceType.TRASLADO && s.detalles) {
+                                  const d = s.detalles;
+                                  const esIdaVuelta = d.transTripType === "round-trip";
+                                  const catName = extraServices?.find(es => es.id === d.svExtraServiceId)?.nombre;
+                                  const titulo = catName || (esIdaVuelta ? "Traslado Ida y Vuelta" : "Traslado (Sólo Ida)");
+                                  const ruta = esIdaVuelta
+                                    ? `${d.transPickup} ➔ ${d.transDropoff} ➔ ${d.transReturnDropoff || d.transPickup}`
+                                    : `${d.transPickup} ➔ ${d.transDropoff}`;
+                                  return (
+                                    <tr key={s.id || idx} className="hover:bg-zinc-50/50 border-t border-zinc-200">
+                                      <td className="p-2 font-mono text-[10.5px] text-zinc-400">{s.id}</td>
+                                      <td className="p-2 font-bold text-zinc-900">{s.tipo}</td>
+                                      <td className="p-2 text-left leading-tight">
+                                        <span className="text-zinc-900 font-extrabold">{titulo}</span>
+                                        <span className="block text-[9.5px] text-zinc-500 font-medium mt-0.5">{ruta}</span>
+                                        <span className="block text-[9.5px] text-zinc-500 font-medium mt-0.5">
+                                          Ida: {formatDate(d.transDate)}{d.transTime ? ` ${d.transTime}` : ""}
+                                          {esIdaVuelta && d.transReturnDate ? ` · Vuelta: ${formatDate(d.transReturnDate)}${d.transReturnTime ? ` ${d.transReturnTime}` : ""}` : ""}
+                                        </span>
+                                        <span className="block text-[10px] text-zinc-600 font-semibold mt-0.5">
+                                          {d.transPax} Pax{d.transVehicle ? ` · ${d.transVehicle}` : ""}
+                                        </span>
+                                      </td>
+                                      {isDirecto ? (
+                                        renderDirectoPriceCells(pvp, (s as any).tratamientoIVA, "p-2")
+                                      ) : (
+                                        <>
+                                          <td className="p-2 text-right font-bold text-zinc-900">{formatCurrency(pvp, getOperatingCurrency())}</td>
+                                          <td className="p-2 text-center font-bold text-zinc-600">
+                                            {comisionPct}%
+                                            <span className="text-[10.5px] text-zinc-400 block font-normal">
+                                              ({formatCurrency(Math.max(0, comisionAmt), getOperatingCurrency())})
+                                            </span>
+                                          </td>
+                                          <td className="p-2 text-right font-bold text-zinc-950">{formatCurrency(s.precioVenta, getOperatingCurrency())}</td>
+                                        </>
+                                      )}
+                                    </tr>
+                                  );
+                                }
+
                                 return (
                                   <tr key={s.id || idx} className="hover:bg-zinc-50/50">
                                     <td className="p-2 font-mono text-[10.5px] text-zinc-400">{s.id}</td>
