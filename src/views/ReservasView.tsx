@@ -5218,10 +5218,19 @@ export default function ReservasView({
                       onChange={(e) => setTransVehicle(e.target.value)}
                     >
                       {(() => {
-                        // Categorías derivadas de la FLOTA (propios + terceros registrados en Operaciones)
-                        // + defaults como fallback + el valor actual, sin duplicados. No hardcodeadas.
-                        const flota = Array.from(new Set(fleetVehicles.map(v => v.tipo).filter(Boolean)));
-                        const base = flota.length ? flota : DEFAULT_VEHICLE_CATEGORIES;
+                        // Categorías según el ORIGEN del traslado:
+                        //  - Con proveedor/operador (tercero): categorías de los vehículos de ESE proveedor
+                        //    registrados en Operaciones → Flota → Vehículos de Terceros.
+                        //  - Sin proveedor (propio): categorías de la flota propia.
+                        //  - Fallback (nada registrado): categorías por defecto. Siempre incluye el valor actual.
+                        const prov = (transSupplier || "").trim();
+                        const catsTercero = prov
+                          ? Array.from(new Set(fleetVehicles.filter(v => v.esTercero && v.proveedor === prov).map(v => v.tipo).filter(Boolean)))
+                          : [];
+                        const catsPropios = Array.from(new Set(fleetVehicles.filter(v => !v.esTercero).map(v => v.tipo).filter(Boolean)));
+                        const base = prov
+                          ? (catsTercero.length ? catsTercero : DEFAULT_VEHICLE_CATEGORIES)
+                          : (catsPropios.length ? catsPropios : DEFAULT_VEHICLE_CATEGORIES);
                         const opciones = Array.from(new Set([...base, transVehicle].filter(Boolean)));
                         return opciones.map(cat => <option key={cat} value={cat}>{cat}</option>);
                       })()}
