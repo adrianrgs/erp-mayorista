@@ -250,6 +250,7 @@ placa
     status
     conductorAsignadoId
     observaciones
+    esTercero
   }
 }
 
