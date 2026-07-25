@@ -418,19 +418,24 @@ export default function OperacionesView({
     setTimeout(() => setActionMsg(""), 4000);
   };
 
-  const confirmDeleteVehicle = (v: FleetVehicle) => showConfirm({
-    title: "Eliminar vehículo",
-    message: `¿Eliminar "${[v.marca, v.modelo].filter(Boolean).join(" ") || v.tipo}" (${v.placa || v.proveedor || v.tipo})? Esta acción no se puede deshacer.`,
-    type: "danger",
-    confirmText: "Eliminar",
-    onConfirm: () => { onDeleteVehicle?.(v.id); notify("✓ Vehículo eliminado."); },
-  });
+  const confirmDeleteVehicle = (v: FleetVehicle) => {
+    const ref = v.placa || v.proveedor || v.tipo || v.id;
+    showConfirm({
+      title: "Eliminar Vehículo",
+      message: `¿Estás seguro que deseas eliminar el vehículo ${[v.marca, v.modelo].filter(Boolean).join(" ") || v.tipo} (${ref})? Esta acción no se puede deshacer.`,
+      type: "danger",
+      confirmText: "Eliminar",
+      requireInputToConfirm: ref,
+      onConfirm: () => { onDeleteVehicle?.(v.id); notify("✓ Vehículo eliminado."); },
+    });
+  };
 
   const confirmDeleteDriver = (d: FleetDriver) => showConfirm({
-    title: "Eliminar conductor",
-    message: `¿Eliminar a "${d.nombre}"? Esta acción no se puede deshacer.`,
+    title: "Eliminar Conductor",
+    message: `¿Estás seguro que deseas eliminar al conductor ${d.nombre}? Esta acción no se puede deshacer.`,
     type: "danger",
     confirmText: "Eliminar",
+    requireInputToConfirm: d.nombre,
     onConfirm: () => { onDeleteDriver?.(d.id); notify("✓ Conductor eliminado."); },
   });
 
