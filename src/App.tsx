@@ -2128,6 +2128,7 @@ onDeleteStopSale={handleDeleteStopSale}
                       extraServices={extraServices}
                       serviceRates={serviceRates}
                       proveedores={proveedores}
+                      fleetVehicles={fleetVehicles}
                       companyConfig={companyConfig}
                       jurisdiction={jurisdiction}
                       currentExchangeRate={todayExchangeRate}
