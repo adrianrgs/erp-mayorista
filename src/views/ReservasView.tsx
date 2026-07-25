@@ -677,6 +677,19 @@ export default function ReservasView({
       linkedFlight = boletos.find(b => b.pnr.toUpperCase() === cleanFlightNo || b.id === cleanFlightNo);
     }
 
+    // Guard: si NO hay vuelo vinculado NI hotel en el expediente, no autocompletar nada
+    // (antes rellenaba con valores de relleno "Aeropuerto Internacional / Hotel del cliente").
+    const svcParaChequeo = cartServices.length > 0 ? cartServices : (activeRes?.servicios || []);
+    const hayHotel = !!(hotelId || (hotelSearchQuery || "").trim() || svcParaChequeo.find(s => s.tipo === ServiceType.ALOJAMIENTO) || (activeRes?.hotelName || "").trim());
+    if (!linkedFlight && !hayHotel) {
+      showAlert({
+        title: "Autocompletar traslado",
+        message: "No hay un vuelo vinculado ni un hotel en el expediente. Vincula un vuelo o agrega el alojamiento primero para autocompletar.",
+        type: "warning",
+      });
+      return;
+    }
+
     let origin = "";
     let firstArrTime = "14:00";
     let lastDepTime = "14:00";
@@ -5074,17 +5087,6 @@ export default function ReservasView({
                     >
                       <option value="one-way">Sólo Ida (One Way)</option>
                       <option value="round-trip">Ida y Vuelta (Round Trip)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Modalidad de Servicio</label>
-                    <select
-                      className="w-full p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none cursor-pointer"
-                      value={transServiceType}
-                      onChange={(e) => setTransServiceType(e.target.value as "privado" | "compartido")}
-                    >
-                      <option value="privado">Privado</option>
-                      <option value="compartido">Compartido</option>
                     </select>
                   </div>
                   <div className="space-y-1.5">
