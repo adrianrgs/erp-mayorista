@@ -1313,14 +1313,14 @@ export default function ReservasView({
         nPrice = Math.round(pvpVal * (1 - (b2bComVal + ownComVal) / 100) * 100) / 100;
 
         const tripTypeLabel = transTripType === "one-way" ? "Sólo Ida" : "Ida y Vuelta";
-        const serviceTypeLabel = transServiceType === "privado" ? "Privado" : "Compartido";
         const routeDesc = transTripType === "one-way"
           ? `${transPickup} ➔ ${transDropoff}`
           : `${transPickup} ➔ ${transDropoff} ➔ ${transReturnDropoff || transPickup} (Retorno: ${formatDate(transReturnDate)})`;
 
         const srv = extraServices?.find(s => s.id === svExtraServiceId);
         const providerText = srv ? srv.nombre : (transSupplier || "Local");
-        desc = `(${tripTypeLabel} - ${serviceTypeLabel}): ${routeDesc} - ${transPax} Pax - Fecha: ${formatDate(transDate)} (${transVehicle}) - Op. ${providerText}`;
+        const vehiculoTxt = transVehicle ? ` (${transVehicle})` : "";
+        desc = `(${tripTypeLabel}): ${routeDesc} - ${transPax} Pax - Fecha: ${formatDate(transDate)}${vehiculoTxt} - Op. ${providerText}`;
         break;
       }
       case ServiceType.RENT_A_CAR: {
