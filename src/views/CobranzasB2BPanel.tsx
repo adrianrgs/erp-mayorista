@@ -91,6 +91,7 @@ export default function CobranzasB2BPanel({
   const [searchQuery, setSearchQuery] = useState("");
   const [invoiceSearchQuery, setInvoiceSearchQuery] = useState("");
   const [voucherSearch, setVoucherSearch] = useState("");
+  const [voucherPage, setVoucherPage] = useState(0); // paginación de comprobantes por cliente
   const [selectedClientId, setSelectedClientId] = useState<string | null>(clients[0]?.id || null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<FinancialInvoice | null>(null);
@@ -196,6 +197,7 @@ export default function CobranzasB2BPanel({
 
   // Al cambiar de cliente, limpiar la selección de facturas para no arrastrar ids ajenos.
   React.useEffect(() => { setSelectedInvoiceIds(new Set()); }, [selectedClientId]);
+  React.useEffect(() => { setVoucherPage(0); }, [selectedClientId, voucherSearch]);
 
   // ── Neteo de notas de crédito por localizador ─────────────────────────────────
   // La deuda pendiente de una factura debe descontar las notas de crédito (NC-) emitidas
@@ -400,6 +402,11 @@ export default function CobranzasB2BPanel({
       alert("Por favor, ingrese un monto válido.");
       return;
     }
+    // La referencia del comprobante es obligatoria, salvo pago desde la billetera virtual.
+    if (paymentForm.method !== "Billetera Virtual B2B" && !paymentForm.reference.trim()) {
+      alert("La referencia del comprobante es obligatoria (Nº de transferencia / recibo).");
+      return;
+    }
 
     // 1. Mark target invoice as "Pagado" if the sum of verified vouchers (including this payment) is >= its total amount
     const targetInvoice = paymentForm.invoiceId ? invoices.find(inv => inv.id === paymentForm.invoiceId) : undefined;
@@ -525,6 +532,11 @@ export default function CobranzasB2BPanel({
     const totalToPay = Number(conAbono.reduce((s, i) => s + abonoDe(i), 0).toFixed(2));
     if (isWallet && totalToPay > activeClient.saldoFavor) {
       alert("El saldo a favor disponible es insuficiente para el total distribuido.");
+      return;
+    }
+    // La referencia del comprobante es obligatoria, salvo pago desde la billetera virtual.
+    if (!isWallet && !consolidatedCollectForm.reference.trim()) {
+      alert("La referencia del comprobante es obligatoria (Nº de transferencia / recibo).");
       return;
     }
 
@@ -1525,6 +1537,11 @@ export default function CobranzasB2BPanel({
                         [v.id, v.reference, v.method, v.bankName, v.status, v.date, String(v.amount), v.invoiceId, v.notes]
                           .some(f => (f || "").toString().toLowerCase().includes(q))
                       );
+                      // Paginación de render (DOM acotado): 15 comprobantes por página.
+                      const vPageSize = 15;
+                      const vTotalPages = Math.max(1, Math.ceil(clientVouchers.length / vPageSize));
+                      const vSafePage = Math.min(voucherPage, vTotalPages - 1);
+                      const pageVouchers = clientVouchers.slice(vSafePage * vPageSize, vSafePage * vPageSize + vPageSize);
 
                       return (
                         <div className="space-y-4">
@@ -1558,7 +1575,7 @@ export default function CobranzasB2BPanel({
                                     </td>
                                   </tr>
                                 ) : (
-                                  clientVouchers.map((vou) => (
+                                  pageVouchers.map((vou) => (
                                     <tr key={vou.id} className="hover:bg-zinc-50/50 transition-colors">
                                       <td className="p-3 font-mono font-bold text-zinc-600">
                                         <p>{vou.id}</p>
@@ -1626,6 +1643,16 @@ export default function CobranzasB2BPanel({
                               </tbody>
                             </table>
                           </div>
+                          {clientVouchers.length > vPageSize && (
+                            <Pagination
+                              page={vSafePage}
+                              hasMore={vSafePage < vTotalPages - 1}
+                              loading={false}
+                              onPrev={() => setVoucherPage(p => Math.max(0, p - 1))}
+                              onNext={() => setVoucherPage(p => Math.min(vTotalPages - 1, p + 1))}
+                              count={pageVouchers.length}
+                            />
+                          )}
                         </div>
                       );
                     })()
@@ -1789,13 +1816,15 @@ export default function CobranzasB2BPanel({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Referencia comprobante</label>
+                  <label className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">
+                    Referencia comprobante {!isWallet && <span className="text-red-500">*</span>}
+                  </label>
                   <input
                     type="text"
-                    placeholder="Nº transferencia / recibo"
+                    placeholder={isWallet ? "Opcional (billetera)" : "Nº transferencia / recibo (obligatorio)"}
                     value={consolidatedCollectForm.reference}
                     onChange={e => setConsolidatedCollectForm(f => ({ ...f, reference: e.target.value }))}
-                    className="w-full p-2.5 border border-zinc-200 rounded text-sm font-bold text-zinc-900 focus:outline-none"
+                    className={`w-full p-2.5 border rounded text-sm font-bold text-zinc-900 focus:outline-none ${!isWallet && !consolidatedCollectForm.reference.trim() ? "border-amber-300 bg-amber-50/40" : "border-zinc-200"}`}
                   />
                 </div>
                 <div>
@@ -1830,7 +1859,7 @@ export default function CobranzasB2BPanel({
                 </button>
                 <button
                   type="submit"
-                  disabled={selected.length === 0 || total <= 0.005 || walletInsufficient}
+                  disabled={selected.length === 0 || total <= 0.005 || walletInsufficient || (!isWallet && !consolidatedCollectForm.reference.trim())}
                   className="flex-[2] px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-xs font-black uppercase tracking-wider cursor-pointer transition-all"
                 >
                   Registrar cobro de {formatCurrency(total, getOperatingCurrency())}
@@ -1917,11 +1946,13 @@ export default function CobranzasB2BPanel({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">Nº de Referencia / Aprobación</label>
+                  <label className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block">
+                    Nº de Referencia / Aprobación {paymentForm.method !== "Billetera Virtual B2B" && <span className="text-red-500">*</span>}
+                  </label>
                   <input
                     type="text"
-                    required
-                    placeholder="Ej: PM-12984729"
+                    required={paymentForm.method !== "Billetera Virtual B2B"}
+                    placeholder={paymentForm.method === "Billetera Virtual B2B" ? "Opcional (billetera)" : "Ej: PM-12984729"}
                     className="w-full p-2 border border-zinc-200 bg-white rounded text-xs font-mono font-semibold text-zinc-800 focus:outline-none"
                     value={paymentForm.reference}
                     onChange={(e) => setPaymentForm(prev => ({ ...prev, reference: e.target.value }))}
