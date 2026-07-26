@@ -160,6 +160,9 @@ export default function CobranzasB2BPanel({
   const [showConsolidatedCollectModal, setShowConsolidatedCollectModal] = useState(false);
   // Distribución manual: abono a aplicar por factura (id → monto en texto). Default = pendiente.
   const [allocations, setAllocations] = useState<Record<string, string>>({});
+  // Monto a distribuir en cascada (híbrido): al escribirlo, reparte de la factura más vieja a la
+  // más nueva; luego el trabajador puede ajustar manualmente cada abono.
+  const [montoDistribuir, setMontoDistribuir] = useState("");
   const [consolidatedCollectForm, setConsolidatedCollectForm] = useState({
     method: "Transferencia Bancaria",
     reference: "",
@@ -185,6 +188,7 @@ export default function CobranzasB2BPanel({
       }
     });
     setAllocations(init);
+    setMontoDistribuir("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showConsolidatedCollectModal]);
 
@@ -577,6 +581,7 @@ export default function CobranzasB2BPanel({
     setShowConsolidatedCollectModal(false);
     setSelectedInvoiceIds(new Set());
     setAllocations({});
+    setMontoDistribuir("");
     setConsolidatedCollectForm(f => ({ ...f, reference: "", notes: "", attachedFile: "" }));
     setStatusMessage(`✓ Cobro distribuido de ${formatCurrency(totalToPay, getOperatingCurrency())} registrado sobre ${conAbono.length} factura(s) de ${activeClient.nombre}.`);
     setTimeout(() => setStatusMessage(""), 5000);
@@ -1644,6 +1649,24 @@ export default function CobranzasB2BPanel({
         const isWallet = consolidatedCollectForm.method === "Billetera Virtual B2B";
         const walletInsufficient = isWallet && total > activeClient.saldoFavor;
         const setAbono = (id: string, v: string) => setAllocations(prev => ({ ...prev, [id]: v }));
+        // Reparte `montoStr` en cascada: de la factura más vieja (fecha asc) a la más nueva,
+        // saldando cada una hasta agotar el monto; la última alcanzada queda parcial.
+        const aplicarCascada = (montoStr: string) => {
+          setMontoDistribuir(montoStr);
+          const monto = parseFloat(montoStr);
+          const next: Record<string, string> = {};
+          let leftover = isNaN(monto) || monto < 0 ? 0 : monto;
+          const orden = [...selected].sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id));
+          orden.forEach(inv => {
+            const rem = Number((netByInvoice[inv.id]?.remaining ?? inv.amount).toFixed(2));
+            const give = Number(Math.max(0, Math.min(rem, leftover)).toFixed(2));
+            next[inv.id] = String(give);
+            leftover = Number((leftover - give).toFixed(2));
+          });
+          setAllocations(next);
+        };
+        const montoNum = parseFloat(montoDistribuir);
+        const porAsignar = !isNaN(montoNum) ? Number((montoNum - total).toFixed(2)) : null;
         return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans">
           <div className="bg-white border border-zinc-200 rounded-lg shadow-xl w-full max-w-lg overflow-hidden animate-fade-in flex flex-col max-h-[92vh]">
@@ -1659,6 +1682,32 @@ export default function CobranzasB2BPanel({
               <button onClick={() => setShowConsolidatedCollectModal(false)} className="text-zinc-400 hover:text-white cursor-pointer text-xl leading-none">×</button>
             </div>
             <form onSubmit={handleConsolidatedCollectSubmit} className="flex-1 overflow-y-auto p-5 space-y-4 text-left">
+              {/* Monto a distribuir (cascada sugerida, más vieja primero) */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                <label className="text-[9.5px] text-emerald-700 font-black uppercase tracking-wider block mb-1">Monto recibido a distribuir</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="Ej. 100"
+                    value={montoDistribuir}
+                    onChange={e => aplicarCascada(e.target.value)}
+                    className="flex-1 p-2.5 border border-emerald-300 rounded text-sm font-mono font-black text-zinc-900 focus:outline-none focus:border-emerald-500"
+                  />
+                  <span className="text-[10px] font-bold text-emerald-700 whitespace-nowrap">
+                    Cascada: más vieja → más nueva
+                  </span>
+                </div>
+                {porAsignar !== null && (
+                  <p className={`text-[10px] font-bold mt-1.5 ${Math.abs(porAsignar) < 0.005 ? "text-emerald-700" : "text-amber-700"}`}>
+                    Asignado {formatCurrency(total, getOperatingCurrency())} de {formatCurrency(montoNum, getOperatingCurrency())}
+                    {Math.abs(porAsignar) >= 0.005 && ` · ${porAsignar > 0 ? "por asignar" : "excedido"} ${formatCurrency(Math.abs(porAsignar), getOperatingCurrency())}`}
+                  </p>
+                )}
+                <p className="text-[9px] text-emerald-600/80 font-semibold mt-1">Puedes ajustar manualmente cada abono debajo.</p>
+              </div>
+
               {/* Facturas incluidas: pendiente + abono editable por factura */}
               <div className="border border-zinc-200 rounded-lg divide-y divide-zinc-100 max-h-56 overflow-y-auto">
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 text-[8.5px] font-black uppercase tracking-wider text-zinc-400">
@@ -1695,7 +1744,7 @@ export default function CobranzasB2BPanel({
                   <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Total a cobrar (distribuido)</span>
                   <button
                     type="button"
-                    onClick={() => setAllocations(Object.fromEntries(selected.map(i => [i.id, String(Number((netByInvoice[i.id]?.remaining ?? i.amount).toFixed(2)))])))}
+                    onClick={() => { setMontoDistribuir(""); setAllocations(Object.fromEntries(selected.map(i => [i.id, String(Number((netByInvoice[i.id]?.remaining ?? i.amount).toFixed(2)))]))); }}
                     className="text-[9px] font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-wider text-left cursor-pointer mt-0.5"
                   >
                     Rellenar todo (pagar completo)
