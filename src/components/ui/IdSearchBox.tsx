@@ -53,7 +53,7 @@ export default function IdSearchBox<T>({
         </button>
       </div>
       {status === "notfound" && <span className="text-[10.5px] text-amber-600 font-semibold">No existe “{q}” en la base.</span>}
-      {status === "error" && <span className="text-[10.5px] text-red-600 font-semibold">Error al buscar. Reintentá.</span>}
+      {status === "error" && <span className="text-[10.5px] text-red-600 font-semibold">Error al buscar. Intenta de nuevo.</span>}
     </div>
   );
 }
