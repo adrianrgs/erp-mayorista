@@ -1267,9 +1267,14 @@ export default function CobranzasB2BPanel({
                         .map(r => r.id);
 
                       const unpaidInvoices = invoices.filter(inv => {
-                        const matchesClient = inv.clientId === activeClient.id ||
-                                              inv.clientName.toLowerCase().includes(activeClient.nombre.toLowerCase()) ||
-                                              activeResIds.some(rid => inv.clientName.includes(rid));
+                        // Atribución SEGURA: si la factura tiene clientId, se compara SOLO por id
+                        // (el clientName lleva el nombre del pasajero + localizador, no la agencia,
+                        // así que el match por substring de nombre contaminaba otras cuentas).
+                        // Solo las facturas legacy sin clientId caen al match por localizador/nombre.
+                        const matchesClient = inv.clientId
+                          ? inv.clientId === activeClient.id
+                          : (activeResIds.includes(inv.reservationId || "") ||
+                             inv.clientName.toLowerCase().includes(activeClient.nombre.toLowerCase()));
                         const isUnpaid = inv.status === "Facturado" || inv.status === "Vencido";
                         const isCollection = inv.type === "Cobro";
                         return matchesClient && isUnpaid && isCollection;
