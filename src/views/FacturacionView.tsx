@@ -741,7 +741,11 @@ export default function FacturacionView({
     const aHasReq = ((a.servicios || []).some(s => s.statusFacturacion === "Solicitado") || aJointFlights.some(f => f.expedienteAereo?.status === "Solicitado")) ? 1 : 0;
     const bHasReq = ((b.servicios || []).some(s => s.statusFacturacion === "Solicitado") || bJointFlights.some(f => f.expedienteAereo?.status === "Solicitado")) ? 1 : 0;
     if (aHasReq !== bHasReq) return bHasReq - aHasReq;
-    // A igual prioridad, apilar por creación: expedientes más nuevos (mayor RES-N) primero.
+    // A igual prioridad, apilar cronológicamente: expedientes más recientes primero (por
+    // fecha de creación). A igual día, desempata por id secuencial para un orden estable.
+    const fa = a.createdAt || "";
+    const fb = b.createdAt || "";
+    if (fa !== fb) return fb.localeCompare(fa);
     return seqNum(b.id) - seqNum(a.id);
   });
 
