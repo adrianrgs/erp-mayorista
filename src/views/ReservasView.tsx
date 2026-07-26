@@ -4205,20 +4205,37 @@ export default function ReservasView({
                               </div>
                             </div>
                           </div>
-                          <label className="flex items-center gap-2 mt-1 cursor-pointer w-max">
-                            <input
-                              type="checkbox"
-                              className="w-3.5 h-3.5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-600"
-                              checked={linked.facturarConjunto}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                setCartLinkedFlights(prev => prev.map(f => f.id === b.id ? { ...f, facturarConjunto: checked } : f));
-                              }}
-                            />
-                            <span className="text-[10px] font-bold text-emerald-800">
-                              Facturar conjuntamente con esta reserva terrestre (Unifica precios y voucher)
-                            </span>
-                          </label>
+                          {(() => {
+                            // Si el boleto ya pasó por facturación (enviado/facturado/cerrado), no se
+                            // puede cambiar cómo se factura (sería doble facturación). Queda como está:
+                            // si fue standalone, se vincula solo como referencia; si ya iba conjunto,
+                            // se conserva. El checkbox se muestra en modo lectura.
+                            const yaFacturado = !!(b.expedienteAereo && b.expedienteAereo.status && b.expedienteAereo.status !== "Borrador");
+                            return (<>
+                              <label className={`flex items-center gap-2 mt-1 w-max ${yaFacturado ? "cursor-not-allowed opacity-70" : "cursor-pointer"}`}>
+                                <input
+                                  type="checkbox"
+                                  disabled={yaFacturado}
+                                  className="w-3.5 h-3.5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-600 disabled:opacity-50"
+                                  checked={linked.facturarConjunto}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    setCartLinkedFlights(prev => prev.map(f => f.id === b.id ? { ...f, facturarConjunto: checked } : f));
+                                  }}
+                                />
+                                <span className="text-[10px] font-bold text-emerald-800">
+                                  Facturar conjuntamente con esta reserva terrestre (Unifica precios y voucher)
+                                </span>
+                              </label>
+                              {yaFacturado && (
+                                <span className="text-[9.5px] text-amber-700 font-semibold -mt-1.5">
+                                  {linked.facturarConjunto
+                                    ? `Ya facturado junto a esta reserva (${b.expedienteAereo?.status}).`
+                                    : `Este boleto ya fue facturado individualmente (${b.expedienteAereo?.status}); queda vinculado solo como referencia.`}
+                                </span>
+                              )}
+                            </>);
+                          })()}
                         </div>
                       );
                     })}
