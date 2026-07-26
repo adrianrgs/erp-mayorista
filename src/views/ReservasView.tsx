@@ -60,7 +60,7 @@ import { resolveSaleClient, isCreditEligible } from "../lib/clientResolver";
 import { printElementById } from "../lib/print";
 import { getReservationReceivable } from "../lib/receivables";
 import EstadoCuentaReservaPDF from "../components/EstadoCuentaReservaPDF";
-import { nextSequentialId } from "../lib/idGenerator";
+import { nextSequentialId, seqNum } from "../lib/idGenerator";
 import { parseAttachment, downloadAttachment } from "../lib/attachments";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { computeVatBreakdown } from "../lib/quoteVat";
@@ -952,10 +952,10 @@ export default function ReservasView({
         if (da !== db) return da.localeCompare(db);
         return (a.checkIn || "").localeCompare(b.checkIn || "");
       } else if (sortBy === "ultimas") {
-        const dateA = a.createdAt || "";
-        const dateB = b.createdAt || "";
-        if (dateB !== dateA) return dateB.localeCompare(dateA);
-        return b.id.localeCompare(a.id);
+        // Orden de creación real: el número del id es estrictamente secuencial (RES-N).
+        // Antes usaba createdAt (solo día) + id como string, que desordenaba el mismo día
+        // (RES-9 quedaba antes de RES-11). Ahora los más nuevos van siempre primero.
+        return seqNum(b.id) - seqNum(a.id);
       } else {
         const checkA = a.checkIn || "";
         const checkB = b.checkIn || "";

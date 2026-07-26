@@ -10,7 +10,7 @@ import type { FlightTicket } from "../types/aereos";
 import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile, getOperatingCurrency, formatCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { round2 } from "../lib/money";
 import { printElementById } from "../lib/print";
-import { nextSequentialId } from "../lib/idGenerator";
+import { nextSequentialId, seqNum } from "../lib/idGenerator";
 import { formatGDSDate } from "../lib/parsers/pnrParser";
 import { 
   FileCheck, 
@@ -740,7 +740,9 @@ export default function FacturacionView({
 
     const aHasReq = ((a.servicios || []).some(s => s.statusFacturacion === "Solicitado") || aJointFlights.some(f => f.expedienteAereo?.status === "Solicitado")) ? 1 : 0;
     const bHasReq = ((b.servicios || []).some(s => s.statusFacturacion === "Solicitado") || bJointFlights.some(f => f.expedienteAereo?.status === "Solicitado")) ? 1 : 0;
-    return bHasReq - aHasReq;
+    if (aHasReq !== bHasReq) return bHasReq - aHasReq;
+    // A igual prioridad, apilar por creación: expedientes más nuevos (mayor RES-N) primero.
+    return seqNum(b.id) - seqNum(a.id);
   });
 
   // Shared per-reservation status computation, used both to classify each row into a queue tab

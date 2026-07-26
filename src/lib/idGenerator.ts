@@ -16,3 +16,22 @@ export function nextSequentialId(prefix: string, existingIds: (string | undefine
   }
   return `${prefix}-${max + 1}`;
 }
+
+/**
+ * Extrae el número secuencial embebido en un id tipo PREFIX-N (ej. "RES-12" → 12).
+ * Devuelve 0 si el id no matchea. Como los ids se asignan de forma estrictamente
+ * secuencial, este número ES el orden de creación (mayor = más nuevo).
+ */
+export function seqNum(id?: string | null): number {
+  if (!id) return 0;
+  const m = id.match(/-(\d+)$/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+/**
+ * Comparador para Array.sort: apila los más nuevos primero (mayor número de id arriba).
+ * Uso: lista.sort(byNewestFirst)
+ */
+export function byNewestFirst<T extends { id?: string | null }>(a: T, b: T): number {
+  return seqNum(b.id) - seqNum(a.id);
+}

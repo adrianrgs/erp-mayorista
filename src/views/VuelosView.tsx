@@ -33,7 +33,7 @@ import {
   UserCircle
 } from "lucide-react";
 import type { FlightLeg, B2BClient, DirectClient, CompanyConfig, PayableObligation, FinancialInvoice, PaymentVoucher } from "../types";
-import { nextSequentialId } from "../lib/idGenerator";
+import { nextSequentialId, seqNum } from "../lib/idGenerator";
 import { ProjectView } from "../types";
 import type { FlightTicket, Passenger, FlightSegment } from "../types/aereos";
 import { AccionPermiso } from "../types/usuarios";
@@ -325,7 +325,9 @@ function ListadoView({
     const ruta = buildRoute(b.segmentos?.map ? b.segmentos : []).toLowerCase();
     const expId = (b.expedienteAereo?.id || "").toLowerCase();
     return (b.pnr || "").toLowerCase().includes(q) || paxNames.includes(q) || ruta.includes(q) || expId.includes(q);
-  });
+  })
+    // Apilados por creación: los boletos más nuevos (mayor AER-N) primero.
+    .sort((a, b) => seqNum(b.id) - seqNum(a.id));
 
   return (
     <div className="space-y-6">
