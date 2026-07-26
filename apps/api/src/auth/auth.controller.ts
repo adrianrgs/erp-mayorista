@@ -25,4 +25,10 @@ export class AuthController {
   me(@Req() req: any) {
     return this.auth.me(req.user.userId);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('heartbeat')
+  heartbeat(@Req() req: any) {
+    return this.auth.heartbeat(req.user.userId);
+  }
 }

@@ -1209,6 +1209,12 @@ mutation DeleteUsuario($id: String!) @auth(level: PUBLIC) {
   usuario_delete(id: $id)
 }
 
+# Heartbeat de presencia: actualiza SOLO lastSeenAt (no toca otros campos, para no
+# arriesgar sobrescribir username/passwordHash con nulls). Ver Monitoreo de Accesos.
+mutation UpdateUsuarioLastSeen($id: String!, $lastSeenAt: String!) @auth(level: PUBLIC) {
+  usuario_update(id: $id, data: { lastSeenAt: $lastSeenAt })
+}
+
 mutation InsertReglaAutorizacion(
   $id: String!
   $modulo: String!

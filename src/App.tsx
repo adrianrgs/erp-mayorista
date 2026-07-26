@@ -29,7 +29,7 @@ import {
   listCustomRates, upsertCustomRate, deleteCustomRate,
   listWalletTransactions, insertWalletTransaction,
   deleteWithholdingCertificate, insertJournalEntry,
-  listUsuarios, insertUsuario, updateUsuario, deleteUsuario,
+  listUsuarios, insertUsuario, updateUsuario, deleteUsuario, sendHeartbeat,
   listRoles, insertRol, updateRol, deleteRol,
   listReglasAutorizacion, insertReglaAutorizacion, updateReglaAutorizacion,
   listSolicitudesAutorizacion, insertSolicitudAutorizacion, resolveSolicitudAutorizacion,
@@ -797,6 +797,41 @@ export default function App() {
       }
     }
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authenticated]);
+
+  // ── PRESENCIA EN VIVO (Monitoreo de Accesos) ────────────────────────────────
+  // Mientras la sesión esté abierta, enviamos un "latido" periódico que marca al usuario
+  // como en línea, y refrescamos la lista de usuarios para ver la presencia de los demás.
+  // Ambos se pausan si la pestaña está oculta (no cuenta como "en línea" una pestaña en
+  // segundo plano) y se reanudan al volver el foco.
+  React.useEffect(() => {
+    if (!authenticated) return;
+    let cancelled = false;
+
+    const beat = () => {
+      if (document.visibilityState === "hidden") return;
+      sendHeartbeat().catch(() => {});
+    };
+    const refreshUsuarios = () => {
+      if (document.visibilityState === "hidden") return;
+      listUsuarios(dataConnect)
+        .then(r => { if (!cancelled && r.data.usuarios.length > 0) setUsuarios(r.data.usuarios); })
+        .catch(() => {});
+    };
+
+    beat(); // latido inmediato al montar/loguear
+    const beatTimer = setInterval(beat, 45_000);          // heartbeat cada 45s
+    const refreshTimer = setInterval(refreshUsuarios, 45_000); // ver a los demás cada 45s
+    const onVisible = () => { if (document.visibilityState === "visible") { beat(); refreshUsuarios(); } };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      clearInterval(beatTimer);
+      clearInterval(refreshTimer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authenticated]);
 

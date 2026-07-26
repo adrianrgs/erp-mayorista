@@ -475,6 +475,9 @@ type Usuario @table {
   rolId: String!
   activo: Boolean!
   updatedAt: String
+  # Timestamp ISO del último "latido" del usuario (heartbeat). Alimenta la presencia
+  # en vivo del Monitoreo de Accesos: en línea si es reciente (ventana de inactividad).
+  lastSeenAt: String
 }
 
 type ReglaAutorizacion @table {

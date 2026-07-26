@@ -30,8 +30,29 @@ export class AuthService {
       detalle: `Login exitoso (${username})`,
     });
 
+    // Marca presencia inmediata al entrar (el heartbeat luego la mantiene fresca).
+    await this.touchLastSeen(user.id);
+
     const payload = { sub: user.id, username: user.username, rolId: user.rolId };
     return { access_token: this.jwt.sign(payload), user: sesion };
+  }
+
+  /** Heartbeat de presencia: registra que el usuario sigue activo (Monitoreo de Accesos). */
+  async heartbeat(userId: string) {
+    await this.touchLastSeen(userId);
+    return { ok: true };
+  }
+
+  private async touchLastSeen(userId: string) {
+    try {
+      await this.dc.executeMutation('UpdateUsuarioLastSeen', {
+        id: userId,
+        lastSeenAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      // La presencia es best-effort: no debe tumbar el login ni el heartbeat.
+      console.error('[presence] no se pudo actualizar lastSeenAt', e);
+    }
   }
 
   async me(userId: string) {

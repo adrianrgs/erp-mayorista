@@ -503,6 +503,11 @@ export const listUsuarios = async (_dc?: any) => {
   return { data: { usuarios: r.data } };
 };
 
+// Heartbeat de presencia: marca al usuario logueado como "en línea ahora" (Monitoreo de Accesos).
+export const sendHeartbeat = async () => {
+  await api.post("/auth/heartbeat");
+};
+
 export const insertUsuario = async (_dc: any, vars: any) => {
   await api.post("/usuarios", vars);
   return { data: {} };

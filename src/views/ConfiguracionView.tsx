@@ -442,25 +442,54 @@ function TasasTab({ customRates, onUpsertCustomRate, onDeleteCustomRate }: {
   );
 }
 
-// ─── MONITOREO DE ACCESOS (movido desde Administración) ────────────────────────
+// ─── MONITOREO DE ACCESOS (presencia en vivo por heartbeat) ────────────────────
+
+// En línea si el último latido fue hace menos de esta ventana. El heartbeat va cada 45s,
+// así que 2 min tolera un latido perdido / jitter de red sin marcar "desconectado" de más.
+const PRESENCE_WINDOW_MS = 120_000;
+
+/** Reloj que avanza para recomputar la presencia (los usuarios pasan a offline solos). */
+function useNow(intervalMs = 20_000) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(t);
+  }, [intervalMs]);
+  return now;
+}
+
+function estaEnLinea(u: { lastSeenAt?: string }, now: number): boolean {
+  if (!u.lastSeenAt) return false;
+  const t = new Date(u.lastSeenAt).getTime();
+  return Number.isFinite(t) && now - t < PRESENCE_WINDOW_MS;
+}
 
 function AccesosMonitor({ usuarios, roles }: { usuarios: Usuario[]; roles: Rol[] }) {
+  const now = useNow();
   const palette = ["bg-violet-500", "bg-indigo-500", "bg-emerald-500", "bg-amber-500", "bg-rose-500", "bg-cyan-500", "bg-fuchsia-500", "bg-teal-500"];
   const grupos = roles
     .map((rol, idx) => {
       const delRol = usuarios.filter(u => u.rolId === rol.id);
-      return { name: rol.nombre, active: delRol.filter(u => u.activo).length, total: delRol.length, color: palette[idx % palette.length] };
+      return { name: rol.nombre, active: delRol.filter(u => estaEnLinea(u, now)).length, total: delRol.length, color: palette[idx % palette.length] };
     })
     .filter(g => g.total > 0);
   const sinRol = usuarios.filter(u => !roles.some(r => r.id === u.rolId));
   if (sinRol.length > 0) {
-    grupos.push({ name: "Sin rol asignado", active: sinRol.filter(u => u.activo).length, total: sinRol.length, color: "bg-zinc-400" });
+    grupos.push({ name: "Sin rol asignado", active: sinRol.filter(u => estaEnLinea(u, now)).length, total: sinRol.length, color: "bg-zinc-400" });
   }
+  const totalEnLinea = usuarios.filter(u => estaEnLinea(u, now)).length;
 
   return (
     <div className="bg-white border border-zinc-200 rounded-lg p-6 shadow-xs space-y-3">
       <h3 className="font-black text-xs text-zinc-900 uppercase tracking-widest flex items-center gap-2 border-b border-zinc-100 pb-3">
-        <Users className="w-4 h-4 text-zinc-500" /> Monitoreo de Accesos (Usuarios Activos)
+        <Users className="w-4 h-4 text-zinc-500" /> Monitoreo de Accesos
+        <span className="flex items-center gap-1.5 ml-1 text-[9px] font-bold text-emerald-600 normal-case tracking-normal">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          {totalEnLinea} en línea ahora
+        </span>
       </h3>
       {grupos.length === 0 && (
         <p className="text-[11px] text-zinc-400 font-semibold italic">Sin usuarios registrados en el sistema.</p>
@@ -471,13 +500,16 @@ function AccesosMonitor({ usuarios, roles }: { usuarios: Usuario[]; roles: Rol[]
             <span className="text-[10px] font-black text-zinc-600 leading-tight block">{g.name}</span>
             <div className="flex items-center justify-between gap-2 mt-2">
               <span className="flex items-center gap-1.5 text-xs font-black text-zinc-900">
-                <span className={`w-1.5 h-1.5 rounded-full ${g.color}`} /> {g.active} / {g.total}
+                <span className={`w-1.5 h-1.5 rounded-full ${g.active > 0 ? "bg-emerald-500" : "bg-zinc-300"}`} /> {g.active} / {g.total}
               </span>
-              <span className="text-[8px] bg-zinc-200 font-black px-1.5 py-0.5 text-zinc-500 rounded uppercase">Activos</span>
+              <span className="text-[8px] bg-zinc-200 font-black px-1.5 py-0.5 text-zinc-500 rounded uppercase">En línea</span>
             </div>
           </div>
         ))}
       </div>
+      <p className="text-[9px] text-zinc-400 font-medium pt-1">
+        En línea = con sesión activa en los últimos 2 minutos. Distinto de “Activo” (cuenta habilitada) en la tabla de abajo.
+      </p>
     </div>
   );
 }
@@ -638,6 +670,7 @@ function UsuariosTab({
   sesionUsuarioId: string;
 }) {
   const { showConfirm } = useDialog();
+  const now = useNow();
   const emptyForm = { nombre: "", username: "", email: "", password: "", rolId: roles[0]?.id || "" };
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -704,7 +737,15 @@ function UsuariosTab({
             )}
             {usuarios.map(u => (
               <tr key={u.id} className="border-b border-zinc-50 hover:bg-zinc-50/60">
-                <td className="px-4 py-2.5 font-bold text-zinc-800">{u.nombre}</td>
+                <td className="px-4 py-2.5 font-bold text-zinc-800">
+                  <span className="inline-flex items-center gap-2">
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${estaEnLinea(u, now) ? "bg-emerald-500" : "bg-zinc-300"}`}
+                      title={estaEnLinea(u, now) ? "En línea ahora" : "Desconectado"}
+                    />
+                    {u.nombre}
+                  </span>
+                </td>
                 <td className="px-4 py-2.5 font-mono text-zinc-500">{u.username}</td>
                 <td className="px-4 py-2.5 text-zinc-600 font-semibold">{nombreRol(u.rolId)}</td>
                 <td className="px-4 py-2.5">

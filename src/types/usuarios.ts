@@ -77,6 +77,8 @@ export interface Usuario {
   rolId: string;
   activo: boolean;
   updatedAt?: string;
+  // Último heartbeat (ISO). Alimenta la presencia en vivo del Monitoreo de Accesos.
+  lastSeenAt?: string;
   // Sin passwordHash a propósito: ese dato nunca debe llegar al frontend.
 }
 

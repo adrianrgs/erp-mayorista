@@ -481,6 +481,7 @@ query ListUsuarios @auth(level: PUBLIC) {
     email
     rolId
     activo
+    lastSeenAt
   }
 }
 
