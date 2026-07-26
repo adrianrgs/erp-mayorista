@@ -62,6 +62,7 @@ interface FacturacionViewProps {
   invoices: FinancialInvoice[];
   onUpdateReservation: (updated: Reservation) => void;
   onEnsureReservationLoaded?: (res: Reservation) => void;
+  onEnsureBoletoLoaded?: (b: FlightTicket) => void;
   onAddInvoice?: (newInv: FinancialInvoice) => void;
   onUpdateInvoice?: (updated: FinancialInvoice) => void;
   clients: B2BClient[];
@@ -93,6 +94,7 @@ export default function FacturacionView({
   invoices,
   onUpdateReservation,
   onEnsureReservationLoaded = () => {},
+  onEnsureBoletoLoaded = () => {},
   onAddInvoice,
   onUpdateInvoice,
   clients,
@@ -816,17 +818,28 @@ export default function FacturacionView({
   // Paginación de RENDER: 25 expedientes por página en la cola (DOM acotado = fluidez).
   const queuePage = useClientPagination(queueTabFiltered, 25, `${search}|${queueTab}`);
 
-  // Buscador por id inteligente: RES- abre el expediente; AER- resuelve el boleto y abre el
-  // expediente al que está vinculado (en Facturación todo boleto se factura dentro de uno).
-  const facturacionIdFetch = async (rawId: string): Promise<Reservation | null> => {
+  // Buscador por id inteligente. Devuelve el id a seleccionar en la cola:
+  //  - RES- → ese expediente terrestre.
+  //  - AER- vinculado (facturarConjunto) → el expediente terrestre al que pertenece.
+  //  - AER- individual → su pseudo-expediente aéreo (id = AER-x), que se muestra en la cola.
+  const facturacionIdFetch = async (rawId: string): Promise<{ selectId: string } | null> => {
     const id = normalizeEntityId(rawId);
     if (id.startsWith("AER-")) {
-      const bol = await getFlightTicketById(id);
-      const expId = (bol as any)?.expedienteId;
-      if (!expId) return null; // boleto sin expediente vinculado: no facturable acá
-      return await getReservationById(expId);
+      const bol = await getFlightTicketById(id) as FlightTicket | null;
+      if (!bol) return null;
+      onEnsureBoletoLoaded(bol); // fusiona a memoria para que la cola arme su fila
+      if (bol.facturarConjunto && (bol as any).expedienteId) {
+        const res = await getReservationById((bol as any).expedienteId);
+        if (res) onEnsureReservationLoaded(res);
+        return { selectId: (bol as any).expedienteId };
+      }
+      // Aéreo individual: la cola lo expone como pseudo-expediente con id = AER-x.
+      return { selectId: bol.expedienteAereo?.id || bol.id };
     }
-    return await getReservationById(id);
+    const res = await getReservationById(id);
+    if (!res) return null;
+    onEnsureReservationLoaded(res);
+    return { selectId: res.id };
   };
 
   const activeRes = selectedResId ? realBookings.find(r => r.id === selectedResId) : undefined;
@@ -1915,11 +1928,11 @@ export default function FacturacionView({
             </div>
 
             {/* Buscador por ID (RES- abre el expediente; AER- abre el expediente del boleto). */}
-            <IdSearchBox
+            <IdSearchBox<{ selectId: string }>
               label="Ir a expediente por ID (RES- o AER-)"
               placeholder="Ej. RES-1234 o AER-45"
               fetcher={facturacionIdFetch}
-              onFound={(res: Reservation) => { onEnsureReservationLoaded(res); setSelectedResId(res.id); }}
+              onFound={(hit) => setSelectedResId(hit.selectId)}
             />
 
             <Tabs

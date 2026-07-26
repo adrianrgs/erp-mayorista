@@ -2248,6 +2248,7 @@ onDeleteStopSale={handleDeleteStopSale}
                        invoices={invoices}
                        onUpdateReservation={handleUpdateReservation}
                        onEnsureReservationLoaded={handleEnsureReservationLoaded}
+                       onEnsureBoletoLoaded={handleEnsureBoletoLoaded}
                        onAddInvoice={handleAddInvoice}
                        onUpdateInvoice={handleUpdateInvoice}
                        clients={clients}
