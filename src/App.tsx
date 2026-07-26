@@ -33,7 +33,7 @@ import {
   listRoles, insertRol, updateRol, deleteRol,
   listReglasAutorizacion, insertReglaAutorizacion, updateReglaAutorizacion,
   listSolicitudesAutorizacion, insertSolicitudAutorizacion, resolveSolicitudAutorizacion,
-  listRegistrosAuditoria, insertRegistroAuditoria, deleteRegistrosAuditoriaByEntidad,
+  insertRegistroAuditoria, deleteRegistrosAuditoriaByEntidad,
 } from "./lib/dataconnect-shim";
 import { isAuthenticated } from "./lib/api";
 import LoginScreen from "./components/LoginScreen";
@@ -347,7 +347,8 @@ export default function App() {
   const [roles, setRoles] = useState<Rol[]>([]);
   const [reglasAutorizacion, setReglasAutorizacion] = useState<ReglaAutorizacion[]>([]);
   const [solicitudesAutorizacion, setSolicitudesAutorizacion] = useState<SolicitudAutorizacion[]>([]);
-  const [registrosAuditoria, setRegistrosAuditoria] = useState<RegistroAuditoria[]>([]);
+  // Auditoría: sin estado global (Fase 1). El tab de Auditoría y el Historial por expediente
+  // traen su propia página server-side; ver ConfiguracionView / ReservasView.
 
   const parseRol = (r: any): Rol => ({ ...r, permisos: r.permisosJson ? JSON.parse(r.permisosJson) : {} });
 
@@ -426,17 +427,11 @@ export default function App() {
   };
 
   const handleAddRegistroAuditoria = async (registro: Omit<RegistroAuditoria, "id" | "createdAt">) => {
-    // El id se genera acá (no en cada call-site) porque este es el único lugar que tiene
-    // la lista completa y actualizada de registros — generarlo con una lista parcial o
-    // vacía produce el mismo id siempre y choca contra la unique key en el 2do insert.
-    const full: RegistroAuditoria = {
-      ...registro,
-      id: nextSequentialId("AUD", registrosAuditoria.map(r => r.id)),
-      createdAt: new Date().toISOString(),
-    };
-    setRegistrosAuditoria(prev => [full, ...prev]);
+    // El id y el createdAt los asigna el backend (colisión-libre, sin depender de tener toda
+    // la lista en memoria — la auditoría ya se pagina server-side). Escritura best-effort:
+    // el tab de Auditoría y el Historial refrescan su propia página al abrirse.
     try {
-      await insertRegistroAuditoria(dataConnect, full);
+      await insertRegistroAuditoria(dataConnect, { ...registro });
     } catch (e) {
       console.error("Failed to insert registro de auditoría", e);
     }
@@ -788,10 +783,8 @@ export default function App() {
           const solicitudes = await listSolicitudesAutorizacion(dataConnect);
           if (solicitudes.data.solicitudes.length > 0) setSolicitudesAutorizacion(solicitudes.data.solicitudes);
         } catch (e) {}
-        try {
-          const auditoria = await listRegistrosAuditoria(dataConnect);
-          if (auditoria.data.registros.length > 0) setRegistrosAuditoria(auditoria.data.registros);
-        } catch (e) {}
+        // La auditoría ya NO se carga entera en memoria (Fase 1: paginación server-side).
+        // El tab de Auditoría y el Historial por expediente traen sus propias páginas.
       } catch (err) {
         console.error("Failed to load Firebase data", err);
       }
@@ -945,7 +938,6 @@ export default function App() {
       // 3. Auditoría del expediente (cascada) + log GLOBAL de la eliminación (sin entidadId → no
       //    aparece en ningún expediente, pero sí en Configuración → Historial de Auditoría).
       await deleteRegistrosAuditoriaByEntidad(dataConnect, { entidadTipo: "Reserva", entidadId: id });
-      setRegistrosAuditoria(prev => prev.filter(r => !(r.entidadTipo === "Reserva" && r.entidadId === id)));
       handleAddRegistroAuditoria({
         tipo: "ReservaEliminada",
         detalle: `Expediente ${id} eliminado — ${relInvoices.length} factura(s), ${relObligations.length} obligación(es), ${relVouchers.length} cobro(s), ${relTransfers.length} traslado(s) borrados; ${relBoletos.length} boleto(s) desvinculado(s).`,
@@ -2215,7 +2207,6 @@ onDeleteStopSale={handleDeleteStopSale}
                       onCreateSolicitudAutorizacion={handleCreateSolicitudAutorizacion}
                       onAddRegistroAuditoria={handleAddRegistroAuditoria}
                       onDeleteReservation={handleDeleteReservation}
-                      registrosAuditoria={registrosAuditoria}
                     />
                   )}
                   {currentSection === ProjectView.FACTURACION && (
@@ -2379,7 +2370,6 @@ onDeleteStopSale={handleDeleteStopSale}
                     roles={roles}
                     reglasAutorizacion={reglasAutorizacion}
                     solicitudesAutorizacion={solicitudesAutorizacion}
-                    registrosAuditoria={registrosAuditoria}
                     onAddUsuario={handleAddUsuario}
                     onUpdateUsuario={handleUpdateUsuario}
                     onDeleteUsuario={handleDeleteUsuario}

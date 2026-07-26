@@ -10,8 +10,33 @@ export class AuditoriaService {
     return data.registroAuditorias || [];
   }
 
+  /**
+   * Página de auditoría (Fase 1: paginación server-side). Pide limit+1 filas para saber si
+   * hay página siguiente sin necesidad de un count. Devuelve { items, hasMore }.
+   */
+  async findPaged(limit: number, offset: number) {
+    const take = Math.max(1, Math.min(limit, 200));
+    const data = await this.dc.executeQuery<{ registroAuditorias: any[] }>(
+      'ListRegistrosAuditoriaPaged',
+      { limit: take + 1, offset: Math.max(0, offset) },
+    );
+    const rows = data.registroAuditorias || [];
+    return { items: rows.slice(0, take), hasMore: rows.length > take };
+  }
+
+  /** Historial acotado a una entidad (ej. un expediente), filtrado en la base. */
+  async findByEntidad(entidadTipo: string, entidadId: string, limit: number, offset: number) {
+    const take = Math.max(1, Math.min(limit, 500));
+    const data = await this.dc.executeQuery<{ registroAuditorias: any[] }>(
+      'ListRegistrosAuditoriaByEntidad',
+      { entidadTipo, entidadId, limit: take + 1, offset: Math.max(0, offset) },
+    );
+    const rows = data.registroAuditorias || [];
+    return { items: rows.slice(0, take), hasMore: rows.length > take };
+  }
+
   async create(dto: {
-    id: string;
+    id?: string;
     tipo: string;
     usuarioId: string;
     usuarioNombre: string;
@@ -19,8 +44,11 @@ export class AuditoriaService {
     entidadTipo?: string;
     entidadId?: string;
   }) {
+    // El id se asigna server-side: colisión-libre sin depender de tener toda la lista en el
+    // cliente (necesario ahora que la auditoría ya no se carga entera en memoria).
+    const id = `AUD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     await this.dc.executeMutation('InsertRegistroAuditoria', {
-      id: dto.id,
+      id,
       tipo: dto.tipo,
       usuarioId: dto.usuarioId,
       usuarioNombre: dto.usuarioNombre,
@@ -29,7 +57,7 @@ export class AuditoriaService {
       entidadId: dto.entidadId ?? null,
       createdAt: new Date().toISOString(),
     });
-    return { success: true, id: dto.id };
+    return { success: true, id };
   }
 
   async removeByEntidad(entidadTipo: string, entidadId: string) {

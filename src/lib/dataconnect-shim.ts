@@ -589,6 +589,22 @@ export const insertRegistroAuditoria = async (_dc: any, vars: any) => {
   return { data: {} };
 };
 
+export type AuditPage = { items: any[]; hasMore: boolean };
+
+// Página global de auditoría (paginación server-side).
+export const listRegistrosAuditoriaPaged = async (limit: number, offset: number): Promise<AuditPage> => {
+  const r = await api.get("/auditoria", { params: { limit, offset } });
+  return r.data as AuditPage;
+};
+
+// Historial de auditoría acotado a una entidad (ej. un expediente), filtrado en la base.
+export const listRegistrosAuditoriaByEntidad = async (
+  entidadTipo: string, entidadId: string, limit = 200, offset = 0,
+): Promise<AuditPage> => {
+  const r = await api.get(`/auditoria/entidad/${encodeURIComponent(entidadTipo)}/${encodeURIComponent(entidadId)}`, { params: { limit, offset } });
+  return r.data as AuditPage;
+};
+
 export const deleteRegistrosAuditoriaByEntidad = async (_dc: any, vars: { entidadTipo: string; entidadId: string }) => {
   await api.delete(`/auditoria/entidad/${encodeURIComponent(vars.entidadTipo)}/${encodeURIComponent(vars.entidadId)}`);
   return { data: {} };

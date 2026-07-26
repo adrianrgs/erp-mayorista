@@ -61,6 +61,7 @@ import { printElementById } from "../lib/print";
 import { getReservationReceivable } from "../lib/receivables";
 import EstadoCuentaReservaPDF from "../components/EstadoCuentaReservaPDF";
 import { nextSequentialId, seqNum } from "../lib/idGenerator";
+import { listRegistrosAuditoriaByEntidad } from "../lib/dataconnect-shim";
 import { parseAttachment, downloadAttachment } from "../lib/attachments";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { computeVatBreakdown } from "../lib/quoteVat";
@@ -99,9 +100,6 @@ interface ReservasViewProps {
   reglasAutorizacion?: ReglaAutorizacion[];
   onCreateSolicitudAutorizacion?: (solicitud: SolicitudAutorizacion) => void;
   onAddRegistroAuditoria?: (registro: Omit<RegistroAuditoria, "createdAt">) => void;
-  // Bitácora global de auditoría (solo lectura). El expediente filtra los eventos ligados a
-  // esta reserva (entidadTipo="Reserva", entidadId=id) para la pestaña "Historial".
-  registrosAuditoria?: RegistroAuditoria[];
 }
 
 // Helper to calculate pricing for an individual room. Usa el mismo prorrateo por tramos de
@@ -232,7 +230,6 @@ export default function ReservasView({
   reglasAutorizacion = [],
   onCreateSolicitudAutorizacion = () => {},
   onAddRegistroAuditoria = () => {},
-  registrosAuditoria = [],
 }: ReservasViewProps) {
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   // Celdas de precio de la cotización DIRECTO: 1 columna (Precio) o, con el toggle de IVA activo,
@@ -270,6 +267,9 @@ export default function ReservasView({
   // Pestaña activa dentro del expediente unificado (Level 2)
   type ExpedienteTab = "resumen" | "datosGenerales" | "pasajeros" | "servicios" | "administracion" | "historial";
   const [activeExpedienteTab, setActiveExpedienteTab] = useState<ExpedienteTab>("resumen");
+  // Historial del expediente: se trae filtrado por entidad desde la base (Fase 1), ya no del
+  // estado global de auditoría. Acotado a un expediente, así que cabe en una sola página.
+  const [historialEventos, setHistorialEventos] = useState<RegistroAuditoria[]>([]);
   const [cartPasajeros, setCartPasajeros] = useState<ReservationPassenger[]>([]);
 
   // Search & Filters (Level 1)
@@ -652,6 +652,18 @@ export default function ReservasView({
   const [submitSuccess, setSubmitSuccess] = useState("");
 
   const activeRes = reservations.find(r => r.id === selectedResId);
+
+  // Trae el historial del expediente activo (filtrado en la base). Refresca al cambiar de
+  // expediente y al entrar a la pestaña "Historial", para reflejar eventos recién registrados.
+  const activeResId = activeRes?.id;
+  React.useEffect(() => {
+    if (!activeResId) { setHistorialEventos([]); return; }
+    let cancelled = false;
+    listRegistrosAuditoriaByEntidad("Reserva", activeResId, 500)
+      .then(res => { if (!cancelled) setHistorialEventos(res.items); })
+      .catch(() => { if (!cancelled) setHistorialEventos([]); });
+    return () => { cancelled = true; };
+  }, [activeResId, activeExpedienteTab]);
 
   // Modo derivado del expediente unificado: sin reserva activa = creando una nueva;
   // con reserva activa + edición en curso = editando; si no, solo viendo (solo lectura).
@@ -2668,7 +2680,7 @@ export default function ReservasView({
                   { key: "pasajeros", label: "Pasajeros", badge: effectivePasajeros.length },
                   { key: "servicios", label: "Servicios", badge: cartServices.length },
                   { key: "administracion", label: "Administración", badge: pendingAdminCount > 0 ? pendingAdminCount : undefined, badgeVariant: "alert" },
-                  { key: "historial", label: "Historial", badge: activeRes ? (registrosAuditoria.filter(r => r.entidadTipo === "Reserva" && r.entidadId === activeRes.id).length || undefined) : undefined },
+                  { key: "historial", label: "Historial", badge: activeRes ? (historialEventos.length || undefined) : undefined },
                 ]}
                 active={activeExpedienteTab}
                 onChange={(k) => setActiveExpedienteTab(k as ExpedienteTab)}
@@ -3095,9 +3107,9 @@ export default function ReservasView({
           )}
 
           {activeExpedienteTab === "historial" && activeRes && (() => {
-            // Eventos ligados a este expediente, en orden cronológico (desde su creación en adelante).
-            const eventos = registrosAuditoria
-              .filter(r => r.entidadTipo === "Reserva" && r.entidadId === activeRes.id)
+            // Eventos ligados a este expediente (traídos filtrados de la base), en orden
+            // cronológico (desde su creación en adelante).
+            const eventos = [...historialEventos]
               .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
 
             // Etiqueta + color por tipo de evento (dot del timeline y chip).

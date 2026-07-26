@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { AuditoriaService } from './auditoria.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -7,8 +7,22 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class AuditoriaController {
   constructor(private readonly service: AuditoriaService) {}
 
+  // Página global de auditoría (Fase 1). Devuelve { items, hasMore }.
   @Get()
-  findAll() { return this.service.findAll(); }
+  findPaged(@Query('limit') limit = '25', @Query('offset') offset = '0') {
+    return this.service.findPaged(parseInt(limit, 10) || 25, parseInt(offset, 10) || 0);
+  }
+
+  // Historial de una entidad concreta (ej. un expediente), filtrado en la base.
+  @Get('entidad/:entidadTipo/:entidadId')
+  findByEntidad(
+    @Param('entidadTipo') entidadTipo: string,
+    @Param('entidadId') entidadId: string,
+    @Query('limit') limit = '200',
+    @Query('offset') offset = '0',
+  ) {
+    return this.service.findByEntidad(entidadTipo, entidadId, parseInt(limit, 10) || 200, parseInt(offset, 10) || 0);
+  }
 
   @Post()
   create(@Body() dto: any) { return this.service.create(dto); }

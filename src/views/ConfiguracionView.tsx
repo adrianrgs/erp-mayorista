@@ -9,6 +9,9 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../components/ui/DialogProvider";
 import { nextSequentialId } from "../lib/idGenerator";
+import { usePaginatedList } from "../hooks/usePaginatedList";
+import { listRegistrosAuditoriaPaged } from "../lib/dataconnect-shim";
+import Pagination from "../components/ui/Pagination";
 import Button from "../components/ui/Button";
 import {
   Building2,
@@ -43,7 +46,6 @@ interface ConfiguracionViewProps {
   onDeleteCustomRate: (id: string) => void;
   reglasAutorizacion: ReglaAutorizacion[];
   solicitudesAutorizacion: SolicitudAutorizacion[];
-  registrosAuditoria: RegistroAuditoria[];
   onAddUsuario: (dto: { id: string; username: string; password: string; nombre: string; email: string; rolId: string }) => void;
   onUpdateUsuario: (id: string, dto: any) => void;
   onDeleteUsuario: (id: string) => void;
@@ -67,7 +69,7 @@ const MODULOS_CON_ACCIONES = Object.values(ProjectView).filter(v => ACCIONES_POR
 export default function ConfiguracionView({
   config, onUpdateConfig,
   customRates, onUpsertCustomRate, onDeleteCustomRate,
-  usuarios, roles, reglasAutorizacion, solicitudesAutorizacion, registrosAuditoria,
+  usuarios, roles, reglasAutorizacion, solicitudesAutorizacion,
   onAddUsuario, onUpdateUsuario, onDeleteUsuario, onAddRol, onUpdateRol, onDeleteRol,
   onAddReglaAutorizacion, onUpdateReglaAutorizacion, onResolveSolicitudAutorizacion, onAddRegistroAuditoria,
   payableObligations, onUpdateObligation, invoices, onUpdateInvoice,
@@ -287,7 +289,6 @@ export default function ConfiguracionView({
               roles={roles}
               reglasAutorizacion={reglasAutorizacion}
               solicitudesAutorizacion={solicitudesAutorizacion}
-              registrosAuditoria={registrosAuditoria}
               onAddReglaAutorizacion={onAddReglaAutorizacion}
               onUpdateReglaAutorizacion={onUpdateReglaAutorizacion}
               onResolveSolicitudAutorizacion={onResolveSolicitudAutorizacion}
@@ -1003,14 +1004,13 @@ function PermisosTab({
 // ─── TAB: AUTORIZACIONES ────────────────────────────────────────────────────
 
 function AutorizacionesTab({
-  roles, reglasAutorizacion, solicitudesAutorizacion, registrosAuditoria,
+  roles, reglasAutorizacion, solicitudesAutorizacion,
   onAddReglaAutorizacion, onUpdateReglaAutorizacion, onResolveSolicitudAutorizacion, onAddRegistroAuditoria,
   sesion,
 }: {
   roles: Rol[];
   reglasAutorizacion: ReglaAutorizacion[];
   solicitudesAutorizacion: SolicitudAutorizacion[];
-  registrosAuditoria: RegistroAuditoria[];
   onAddReglaAutorizacion: (regla: ReglaAutorizacion) => void;
   onUpdateReglaAutorizacion: (regla: ReglaAutorizacion) => void;
   onResolveSolicitudAutorizacion: (id: string, dto: { estado: "Aprobada" | "Rechazada"; comentarioResolucion?: string; resolutorId: string }) => void;
@@ -1018,6 +1018,9 @@ function AutorizacionesTab({
   sesion: { id: string; nombre: string; rol: Rol } | null;
 }) {
   const [nuevaRegla, setNuevaRegla] = useState<{ modulo: ProjectView | ""; accion: AccionPermiso | ""; rolAprobadorId: string }>({ modulo: "", accion: "", rolAprobadorId: roles.find(r => r.esAdministrador)?.id || roles[0]?.id || "" });
+
+  // Historial de auditoría paginado server-side (Fase 1) — ya no se carga entero en memoria.
+  const audit = usePaginatedList(listRegistrosAuditoriaPaged, 25);
 
   const nombreRol = (id: string) => roles.find(r => r.id === id)?.nombre || "Sin rol";
   const nombreModulo = (m: ProjectView) => NOMBRE_MODULO[m];
@@ -1119,9 +1122,18 @@ function AutorizacionesTab({
       </div>
 
       <div className="bg-white border border-zinc-200 rounded-lg shadow-xs p-5">
-        <h3 className="font-black text-xs text-zinc-900 uppercase tracking-widest border-b border-zinc-100 pb-3 mb-4 flex items-center gap-2">
-          <History className="w-4 h-4 text-zinc-600" /> Historial de Auditoría
-        </h3>
+        <div className="flex items-center justify-between border-b border-zinc-100 pb-3 mb-4">
+          <h3 className="font-black text-xs text-zinc-900 uppercase tracking-widest flex items-center gap-2">
+            <History className="w-4 h-4 text-zinc-600" /> Historial de Auditoría
+          </h3>
+          <button
+            type="button"
+            onClick={audit.refresh}
+            className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-700 cursor-pointer"
+          >
+            Actualizar
+          </button>
+        </div>
         <table className="w-full text-xs">
           <thead>
             <tr className="text-[9px] uppercase text-zinc-400 font-bold tracking-wider border-b border-zinc-100">
@@ -1132,10 +1144,12 @@ function AutorizacionesTab({
             </tr>
           </thead>
           <tbody>
-            {registrosAuditoria.length === 0 && (
-              <tr><td colSpan={4} className="px-2 py-6 text-center text-zinc-400 text-[11px]">Sin actividad registrada todavía.</td></tr>
+            {audit.items.length === 0 && (
+              <tr><td colSpan={4} className="px-2 py-6 text-center text-zinc-400 text-[11px]">
+                {audit.loading ? "Cargando…" : audit.error ? `Error: ${audit.error}` : "Sin actividad registrada todavía."}
+              </td></tr>
             )}
-            {registrosAuditoria.map(r => (
+            {audit.items.map(r => (
               <tr key={r.id} className="border-b border-zinc-50">
                 <td className="px-2 py-2 font-bold text-zinc-600">{r.tipo}</td>
                 <td className="px-2 py-2 text-zinc-500">{r.usuarioNombre}</td>
@@ -1145,6 +1159,14 @@ function AutorizacionesTab({
             ))}
           </tbody>
         </table>
+        <Pagination
+          page={audit.page}
+          hasMore={audit.hasMore}
+          loading={audit.loading}
+          onPrev={audit.prev}
+          onNext={audit.next}
+          count={audit.items.length}
+        />
       </div>
     </div>
   );

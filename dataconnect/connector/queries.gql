@@ -527,3 +527,37 @@ query ListRegistrosAuditoria @auth(level: PUBLIC) {
     createdAt
   }
 }
+
+# Paginación server-side (Fase 1): trae una página ordenada por fecha desc.
+# El backend pide limit+1 para saber si hay página siguiente sin un count.
+query ListRegistrosAuditoriaPaged($limit: Int!, $offset: Int!) @auth(level: PUBLIC) {
+  registroAuditorias(orderBy: [{ createdAt: DESC }], limit: $limit, offset: $offset) {
+    id
+    tipo
+    usuarioId
+    usuarioNombre
+    detalle
+    entidadTipo
+    entidadId
+    createdAt
+  }
+}
+
+# Historial acotado a una entidad (ej. un expediente): filtra en la base, no en el cliente.
+query ListRegistrosAuditoriaByEntidad($entidadTipo: String!, $entidadId: String!, $limit: Int!, $offset: Int!) @auth(level: PUBLIC) {
+  registroAuditorias(
+    where: { entidadTipo: { eq: $entidadTipo }, entidadId: { eq: $entidadId } }
+    orderBy: [{ createdAt: DESC }]
+    limit: $limit
+    offset: $offset
+  ) {
+    id
+    tipo
+    usuarioId
+    usuarioNombre
+    detalle
+    entidadTipo
+    entidadId
+    createdAt
+  }
+}
