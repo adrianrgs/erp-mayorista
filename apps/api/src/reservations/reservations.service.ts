@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { DataConnectService } from '../shared/dataconnect/dataconnect.service';
 import { FinancialReconcilerService } from '../shared/financial-reconciler.service';
 import { parseJsonField } from '../shared/parse-json.util';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
+import { nextSequentialId } from '../shared/next-sequential-id.util';
 
 @Injectable()
 export class ReservationsService {
@@ -33,10 +34,15 @@ export class ReservationsService {
     return this.parseReservation(reservation);
   }
 
+  private async getAllReservationIds(): Promise<Set<string>> {
+    const data = await this.dc.executeQuery<{ reservations: any[] }>('ListReservations');
+    return new Set((data.reservations || []).map((r) => r.id).filter(Boolean));
+  }
+
   async create(dto: CreateReservationDto) {
     const now = new Date().toISOString();
-    await this.dc.executeMutation('InsertReservation', {
-      id: dto.id,
+    // Campos fijos del expediente; el id se resuelve de forma atómica más abajo.
+    const baseFields = {
       holder: dto.holder,
       hotelName: dto.hotelName,
       checkIn: dto.checkIn,
@@ -61,8 +67,37 @@ export class ReservationsService {
       asesor: dto.asesor || null,
       createdAt: now.split('T')[0],
       updatedAt: now,
-    });
-    return { success: true, id: dto.id };
+    };
+
+    // Asignación de id server-side, a prueba de concurrencia (10 asesores creando a la vez):
+    // se honra el id propuesto por el cliente si sigue libre; ante colisión real (otro asesor
+    // tomó ese RES-N entre la lectura y el insert) se recalcula el siguiente y se reintenta.
+    // El id es clave primaria en Postgres, así que un duplicado JAMÁS pasa silenciosamente.
+    const MAX_ATTEMPTS = 8;
+    let lastErr: any;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const usedIds = await this.getAllReservationIds();
+      const proposed = dto.id;
+      const id =
+        attempt === 0 && proposed && !usedIds.has(proposed)
+          ? proposed
+          : nextSequentialId('RES', usedIds);
+      try {
+        await this.dc.executeMutation('InsertReservation', { ...baseFields, id });
+        return { success: true, id, reassigned: id !== proposed };
+      } catch (e) {
+        lastErr = e;
+        // ¿Fue colisión de clave primaria (carrera con otro insert concurrente)?
+        // Si el id que intentamos ahora ya existe, sí: recalculamos y reintentamos.
+        // Si no existe, es un error real (validación, red, etc.) y lo propagamos de una.
+        const after = await this.getAllReservationIds();
+        if (after.has(id)) continue;
+        throw e;
+      }
+    }
+    throw new ConflictException(
+      `No se pudo asignar un identificador único para la reserva tras ${MAX_ATTEMPTS} intentos`,
+    );
   }
 
   async update(id: string, dto: UpdateReservationDto) {

@@ -74,7 +74,7 @@ interface ReservasViewProps {
   clients: B2BClient[];
   directClients: DirectClient[];
   onAddDirectClient: (newClient: DirectClient) => void;
-  onAddReservation: (newRes: Reservation) => void;
+  onAddReservation: (newRes: Reservation) => Promise<string | null> | void;
   onUpdateReservation?: (updatedRes: Reservation) => void;
   onDeleteReservation?: (id: string) => void;
   onAddInvoice?: (newInv: FinancialInvoice) => void;
@@ -1857,7 +1857,7 @@ export default function ReservasView({
   };
 
   // Save the entire booking file (Level 3 to Level 2)
-  const handleConfirmExpediente = (e?: React.FormEvent) => {
+  const handleConfirmExpediente = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!cartHolder.trim()) {
       showAlert({ title: "Atención", message: "Por favor ingrese el titular del viaje.", type: "warning" });
@@ -1987,24 +1987,32 @@ export default function ReservasView({
         localizadorProveedor: cartLocalizadorProveedor || undefined
       };
 
-      onAddReservation(newRes);
+      // El backend asigna el id de forma atómica (anti-colisión con 10 asesores a la vez) y
+      // devuelve el definitivo, que puede diferir de cartId si otro tomó ese RES-N en paralelo.
+      // Usamos ese id real para vincular boletos, seleccionar y mostrar el mensaje.
+      const result = await onAddReservation(newRes);
+      if (result === null) {
+        // El guardado falló (ya se avisó al usuario); no navegamos ni vinculamos nada.
+        return;
+      }
+      const finalId = result || cartId;
 
       // ── AUTO-VINCULAR boletos seleccionados (NUEVO) ──────────────────────────────
       if (onUpdateBoleto) {
         cartLinkedFlights.forEach(linked => {
           const b = boletos.find(x => x.id === linked.id);
           if (b) {
-            onUpdateBoleto({ ...b, vinculadoAExpediente: true, expedienteId: cartId, facturarConjunto: linked.facturarConjunto });
+            onUpdateBoleto({ ...b, vinculadoAExpediente: true, expedienteId: finalId, facturarConjunto: linked.facturarConjunto });
           }
         });
       }
       setCartLinkedFlights([]);
       // ─────────────────────────────────────────────────────────────────────
 
-      setSelectedResId(cartId);
+      setSelectedResId(finalId);
       setActiveExpedienteTab("resumen");
       setViewLevel(2);
-      setSubmitSuccess(`✓ Expediente "${cartId}" creado exitosamente.`);
+      setSubmitSuccess(`✓ Expediente "${finalId}" creado exitosamente.`);
     }
 
     setTimeout(() => setSubmitSuccess(""), 4000);

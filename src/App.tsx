@@ -921,15 +921,16 @@ export default function App() {
       console.error("Error in handleDeleteReservation:", e);
     }
   };
-  const handleAddReservation = async (newRes: any) => {
+  const handleAddReservation = async (newRes: any): Promise<string | null> => {
     newRes.updatedAt = new Date().toISOString();
     // Asesor: username del usuario logueado al momento de crear la reserva (control y comisiones).
     // Se respeta si ya viniera asignado; si no hay sesión, queda sin asesor.
     if (!newRes.asesor) newRes.asesor = usuario?.username || undefined;
+    const proposedId = newRes.id;
     setReservations(prev => [newRes, ...prev]);
 
     try {
-      await insertReservation(dataConnect, {
+      const res = await insertReservation(dataConnect, {
         id: newRes.id,
         holder: newRes.holder,
         hotelName: newRes.hotelName,
@@ -962,9 +963,20 @@ export default function App() {
         asesor: newRes.asesor,
         updatedAt: newRes.updatedAt
       });
+      // El backend asigna el id de forma atómica. Si otro asesor tomó ese RES-N en paralelo,
+      // devuelve uno distinto: reconciliamos el estado local para que coincida con la base.
+      const assignedId = (res as any)?.data?.id;
+      if (assignedId && assignedId !== proposedId) {
+        newRes.id = assignedId;
+        setReservations(prev => prev.map(r => (r.id === proposedId ? { ...r, id: assignedId } : r)));
+      }
     } catch (e) {
       console.error("[DB] Failed to insert reservation:", e);
+      // Rollback del alta optimista: el insert falló, la reserva NO existe en la base y no
+      // debe quedar como "guardada" en pantalla (antes quedaba un expediente fantasma).
+      setReservations(prev => prev.filter(r => r.id !== proposedId));
       alert(`Error al guardar expediente: ${(e as any)?.message || e}`);
+      return null;
     }
 
     logReserva(
@@ -995,6 +1007,8 @@ export default function App() {
         });
       }
     }
+
+    return newRes.id;
   };
 
   const handleUpdateReservation = async (updatedRes: any) => {
@@ -1555,7 +1569,7 @@ export default function App() {
     const nuevoId = nextSequentialId("AER", boletos.flatMap(b => [b.id, b.expedienteAereo?.id]));
     const nAer = nuevoId.replace(/^AER-/, ""); // número para los BOL-[n]-[k]
     const segmentos = (newBol.segmentos || []).map((s, i) => ({ ...s, boletoId: `BOL-${nAer}-${i + 1}` }));
-    const finalBol: FlightTicket = {
+    let finalBol: FlightTicket = {
       ...newBol,
       id: nuevoId,
       // Asesor: username del usuario logueado al crear el boleto (control y comisiones).
@@ -1571,13 +1585,31 @@ export default function App() {
     };
     setBoletos(prev => [...prev, finalBol]);
     try {
-      await insertFlightTicket(dataConnect, { ...finalBol });
+      const resp = await insertFlightTicket(dataConnect, { ...finalBol });
+      // El backend asigna el id (= AER) de forma atómica. Si otro asesor tomó ese AER-N en
+      // paralelo, devuelve uno distinto: reconciliamos id, expediente y boletoId de segmentos.
+      const assignedId = (resp as any)?.data?.id;
+      if (assignedId && assignedId !== nuevoId) {
+        const nA = assignedId.replace(/^AER-/, "");
+        finalBol = {
+          ...finalBol,
+          id: assignedId,
+          segmentos: (finalBol.segmentos || []).map((s, i) => ({ ...s, boletoId: `BOL-${nA}-${i + 1}` })),
+          expedienteAereo: finalBol.expedienteAereo ? { ...finalBol.expedienteAereo, id: assignedId } : finalBol.expedienteAereo,
+        };
+        setBoletos(prev => prev.map(b => (b.id === nuevoId ? finalBol : b)));
+      }
       logReserva(
         (finalBol as any).expedienteId,
         "BoletoEmitido",
         `Boleto aéreo ${finalBol.id} emitido${(finalBol as any).agenteNombre ? ` (agente ${(finalBol as any).agenteNombre})` : ""}`,
       );
-    } catch (e) { console.error("Failed to insert flight ticket", e); }
+    } catch (e) {
+      console.error("Failed to insert flight ticket", e);
+      // Rollback del alta optimista: el insert falló, el boleto NO existe en la base.
+      setBoletos(prev => prev.filter(b => b.id !== nuevoId));
+      alert(`Error al emitir el boleto aéreo: ${(e as any)?.message || e}. Por favor reintente.`);
+    }
     return finalBol;
   };
   const handleUpdateBoleto = async (updated: FlightTicket) => {

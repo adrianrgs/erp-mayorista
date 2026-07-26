@@ -95,8 +95,10 @@ export const listProviderStatements = async (_dc?: any) => {
 // ─── MUTATIONS: RESERVATIONS ─────────────────────────────────────────────────
 
 export const insertReservation = async (_dc: any, vars: any) => {
-  await api.post("/reservations", vars);
-  return { data: {} };
+  // El backend asigna el id de forma atómica (anti-colisión) y lo devuelve; puede diferir
+  // del propuesto si otro asesor tomó ese RES-N. Se retorna para que el cliente reconcilie.
+  const r = await api.post("/reservations", vars);
+  return { data: r.data as { success?: boolean; id?: string; reassigned?: boolean } };
 };
 
 export const updateReservation = async (_dc: any, vars: any) => {
@@ -239,8 +241,10 @@ export const deleteStopSale = async (_dc: any, vars: { id: string }) => {
 // ─── MUTATIONS: FLIGHT TICKETS ────────────────────────────────────────────────
 
 export const insertFlightTicket = async (_dc: any, vars: any) => {
-  await api.post("/flights/tickets", vars);
-  return { data: {} };
+  // El backend asigna el id (= AER) de forma atómica y lo devuelve; puede diferir del
+  // propuesto si otro asesor tomó ese AER-N en paralelo. Se retorna para reconciliar.
+  const r = await api.post("/flights/tickets", vars);
+  return { data: r.data as { success?: boolean; id?: string; reassigned?: boolean } };
 };
 
 export const updateFlightTicket = async (_dc: any, vars: any) => {
