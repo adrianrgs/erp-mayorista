@@ -11,7 +11,7 @@ import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile
 import { round2 } from "../lib/money";
 import { printElementById } from "../lib/print";
 import { nextSequentialId, seqNum } from "../lib/idGenerator";
-import { getReservationById } from "../lib/dataconnect-shim";
+import { getReservationById, getFlightTicketById, normalizeEntityId } from "../lib/dataconnect-shim";
 import { useClientPagination } from "../hooks/useClientPagination";
 import Pagination from "../components/ui/Pagination";
 import IdSearchBox from "../components/ui/IdSearchBox";
@@ -815,6 +815,19 @@ export default function FacturacionView({
 
   // Paginación de RENDER: 25 expedientes por página en la cola (DOM acotado = fluidez).
   const queuePage = useClientPagination(queueTabFiltered, 25, `${search}|${queueTab}`);
+
+  // Buscador por id inteligente: RES- abre el expediente; AER- resuelve el boleto y abre el
+  // expediente al que está vinculado (en Facturación todo boleto se factura dentro de uno).
+  const facturacionIdFetch = async (rawId: string): Promise<Reservation | null> => {
+    const id = normalizeEntityId(rawId);
+    if (id.startsWith("AER-")) {
+      const bol = await getFlightTicketById(id);
+      const expId = (bol as any)?.expedienteId;
+      if (!expId) return null; // boleto sin expediente vinculado: no facturable acá
+      return await getReservationById(expId);
+    }
+    return await getReservationById(id);
+  };
 
   const activeRes = selectedResId ? realBookings.find(r => r.id === selectedResId) : undefined;
   const activeResId = activeRes?.id || null;
@@ -1901,11 +1914,11 @@ export default function FacturacionView({
               </div>
             </div>
 
-            {/* Buscador por ID: trae el expediente de la base (aunque no esté cargado) y lo abre. */}
+            {/* Buscador por ID (RES- abre el expediente; AER- abre el expediente del boleto). */}
             <IdSearchBox
-              label="Ir a expediente por ID (lo trae de la base)"
-              placeholder="Ej. RES-1234"
-              fetcher={getReservationById}
+              label="Ir a expediente por ID (RES- o AER-)"
+              placeholder="Ej. RES-1234 o AER-45"
+              fetcher={facturacionIdFetch}
               onFound={(res: Reservation) => { onEnsureReservationLoaded(res); setSelectedResId(res.id); }}
             />
 
