@@ -675,7 +675,7 @@ export default function CobranzasB2BPanel({
           </div>
 
           {/* Buscador por localizador: trae de la base y abre el cliente del expediente */}
-          <IdSearchBox<{ clientId?: string; clientName: string }>
+          <IdSearchBox<{ clientId: string }>
             label="Buscar cobro por expediente (RES- o AER-)"
             placeholder="Ej. RES-1234 o AER-45"
             fetcher={buscarPorLocalizador}
