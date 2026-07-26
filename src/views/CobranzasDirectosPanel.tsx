@@ -7,7 +7,7 @@ import type { FlightTicket } from "../types/aereos";
 import { round2 } from "../lib/money";
 import { facturasConReciboDeCobro, esFacturaCobradaPorRecibo } from "../lib/receivables";
 import WalletClienteModal from "../components/WalletClienteModal";
-import { nextSequentialId } from "../lib/idGenerator";
+import { nextSequentialId, seqNum } from "../lib/idGenerator";
 import { getInvoicesByLocator, getInvoiceById, normalizeEntityId } from "../lib/dataconnect-shim";
 import { useClientPagination } from "../hooks/useClientPagination";
 import Pagination from "../components/ui/Pagination";
@@ -1302,13 +1302,14 @@ export default function CobranzasDirectosPanel({
         const isWallet = consolidatedCollectForm.method === "Billetera Virtual Directo";
         const walletInsufficient = isWallet && total > activeClient.saldoFavor;
         const setAbono = (id: string, v: string) => setAllocations(prev => ({ ...prev, [id]: v }));
-        // Reparte `montoStr` en cascada: de la factura más vieja (fecha asc) a la más nueva.
+        // Reparte `montoStr` en cascada: de la factura más antigua (menor número de id) a la más
+        // nueva, saldando cada una hasta agotar el monto; la última alcanzada queda parcial.
         const aplicarCascada = (montoStr: string) => {
           setMontoDistribuir(montoStr);
           const monto = parseFloat(montoStr);
           const next: Record<string, string> = {};
           let leftover = isNaN(monto) || monto < 0 ? 0 : monto;
-          const orden = [...selected].sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id));
+          const orden = [...selected].sort((a, b) => seqNum(a.id) - seqNum(b.id));
           orden.forEach(inv => {
             const rem = Number((netByInvoice[inv.id]?.remaining ?? inv.amount).toFixed(2));
             const give = Number(Math.max(0, Math.min(rem, leftover)).toFixed(2));

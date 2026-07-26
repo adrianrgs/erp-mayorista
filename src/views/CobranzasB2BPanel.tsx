@@ -5,7 +5,7 @@ import { facturasConReciboDeCobro, esFacturaCobradaPorRecibo } from "../lib/rece
 import WalletClienteModal from "../components/WalletClienteModal";
 import type { FlightTicket } from "../types/aereos";
 import { TaxJurisdiction, formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
-import { nextSequentialId } from "../lib/idGenerator";
+import { nextSequentialId, seqNum } from "../lib/idGenerator";
 import { getInvoicesByLocator, getInvoiceById, normalizeEntityId } from "../lib/dataconnect-shim";
 import { useClientPagination } from "../hooks/useClientPagination";
 import Pagination from "../components/ui/Pagination";
@@ -1649,14 +1649,14 @@ export default function CobranzasB2BPanel({
         const isWallet = consolidatedCollectForm.method === "Billetera Virtual B2B";
         const walletInsufficient = isWallet && total > activeClient.saldoFavor;
         const setAbono = (id: string, v: string) => setAllocations(prev => ({ ...prev, [id]: v }));
-        // Reparte `montoStr` en cascada: de la factura más vieja (fecha asc) a la más nueva,
-        // saldando cada una hasta agotar el monto; la última alcanzada queda parcial.
+        // Reparte `montoStr` en cascada: de la factura más antigua (menor número de id) a la más
+        // nueva, saldando cada una hasta agotar el monto; la última alcanzada queda parcial.
         const aplicarCascada = (montoStr: string) => {
           setMontoDistribuir(montoStr);
           const monto = parseFloat(montoStr);
           const next: Record<string, string> = {};
           let leftover = isNaN(monto) || monto < 0 ? 0 : monto;
-          const orden = [...selected].sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id));
+          const orden = [...selected].sort((a, b) => seqNum(a.id) - seqNum(b.id));
           orden.forEach(inv => {
             const rem = Number((netByInvoice[inv.id]?.remaining ?? inv.amount).toFixed(2));
             const give = Number(Math.max(0, Math.min(rem, leftover)).toFixed(2));
