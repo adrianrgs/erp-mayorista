@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
+import { useClientPagination } from "../hooks/useClientPagination";
+import Pagination from "../components/ui/Pagination";
 import { B2BClient, ClientType, ClientStatus, FinancialInvoice, Reservation, ServiceType, WalletTransaction, CompanyConfig } from "../types";
 import { FlightTicket } from "../types/aereos";
 import { round2 } from "../lib/money";
@@ -328,6 +330,9 @@ export default function ClientesB2BPanel({
     return matchesSearch && matchesType && matchesStatus && matchesMoroso;
   });
 
+  // Paginación de render (DOM acotado a medida que crece el directorio de clientes B2B).
+  const clientesPage = useClientPagination(filteredClients, 20, `${searchQuery}|${selectedType}|${selectedStatus}|${filterMorosoOnly}`);
+
   // Notification helper
   const [notification, setNotification] = useState("");
   const triggerNotify = (msg: string) => {
@@ -603,7 +608,7 @@ export default function ClientesB2BPanel({
                       </td>
                     </tr>
                   ) : (
-                    filteredClients.map((c) => {
+                    clientesPage.pageItems.map((c) => {
                       const activeResIds = allBookings.filter(r => r.agenciaName && r.agenciaName.toLowerCase() === c.nombre.toLowerCase()).map(r => r.id);
                       const clientInvoices = invoices.filter(inv => inv.clientName.toLowerCase().includes(c.nombre.toLowerCase()) || activeResIds.some(rid => inv.clientName.includes(rid)));
                       const unpaidClientInvoices = clientInvoices.filter(inv => (inv.status === "Facturado" || inv.status === "Vencido") && inv.type === "Cobro");
@@ -656,6 +661,18 @@ export default function ClientesB2BPanel({
                   )}
                 </tbody>
               </table>
+              {filteredClients.length > 0 && (
+                <div className="px-4 pb-2">
+                  <Pagination
+                    page={clientesPage.page}
+                    hasMore={clientesPage.hasMore}
+                    loading={false}
+                    onPrev={clientesPage.prev}
+                    onNext={clientesPage.next}
+                    count={clientesPage.pageItems.length}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </>

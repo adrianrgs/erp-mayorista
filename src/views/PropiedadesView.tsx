@@ -14,6 +14,8 @@ import {
 } from "../types/producto";
 import DateRangePicker from "../components/ui/DateRangePicker";
 import MultiDayCalendar from "../components/ui/MultiDayCalendar";
+import { useClientPagination } from "../hooks/useClientPagination";
+import Pagination from "../components/ui/Pagination";
 import {
   Building2,
   MapPin,
@@ -409,6 +411,9 @@ export default function PropiedadesView({
 
     return matchesSearch && matchesCountry && matchesState && matchesStatus;
   });
+
+  // Paginación de render (DOM acotado a medida que crece el catálogo de propiedades).
+  const propPage = useClientPagination(filteredProperties, 12, `${searchQuery}|${selectedCountry}|${selectedState}|${selectedStatus}`);
 
   // Extract unique countries and states for filter selectors
   const uniqueCountries = ["Todos", ...Array.from(new Set(localProperties.map(p => p.pais)))];
@@ -832,7 +837,7 @@ export default function PropiedadesView({
                       </td>
                     </tr>
                   ) : (
-                    filteredProperties.map(p => {
+                    propPage.pageItems.map(p => {
                       const associatedRoomsCount = roomTypes.filter(rt => rt.property_id === p.id).length;
                       return (
                         <tr
@@ -945,6 +950,18 @@ export default function PropiedadesView({
                   )}
                 </tbody>
               </table>
+              {filteredProperties.length > 0 && (
+                <div className="px-4 pb-2">
+                  <Pagination
+                    page={propPage.page}
+                    hasMore={propPage.hasMore}
+                    loading={false}
+                    onPrev={propPage.prev}
+                    onNext={propPage.next}
+                    count={propPage.pageItems.length}
+                  />
+                </div>
+              )}
             </div>
 
             {/* List footer info */}

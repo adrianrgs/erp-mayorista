@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
+import { useClientPagination } from "../hooks/useClientPagination";
+import Pagination from "../components/ui/Pagination";
 import { DirectClient, DirectClientTipo, ClientStatus, FinancialInvoice, Reservation, ServiceType, WalletTransaction, CompanyConfig } from "../types";
 import { FlightTicket } from "../types/aereos";
 import { round2 } from "../lib/money";
@@ -258,6 +260,9 @@ export default function ClientesDirectosPanel({
 
     return matchesSearch && matchesType && matchesStatus && matchesMoroso;
   });
+
+  // Paginación de render (DOM acotado a medida que crece el directorio de clientes directos).
+  const clientesPage = useClientPagination(filteredClients, 20, `${searchQuery}|${selectedType}|${selectedStatus}|${filterMorosoOnly}`);
 
   // Notification helper
   const [notification, setNotification] = useState("");
@@ -531,7 +536,7 @@ export default function ClientesDirectosPanel({
                       </td>
                     </tr>
                   ) : (
-                    filteredClients.map((c) => {
+                    clientesPage.pageItems.map((c) => {
                       const clientInvoices = invoices.filter(inv => inv.clientId === c.id);
                       const unpaidClientInvoices = clientInvoices.filter(inv => (inv.status === "Facturado" || inv.status === "Vencido") && inv.type === "Cobro");
                       const calculatedDeuda = unpaidClientInvoices.reduce((sum, inv) => sum + inv.amount, 0);
@@ -582,6 +587,18 @@ export default function ClientesDirectosPanel({
                   )}
                 </tbody>
               </table>
+              {filteredClients.length > 0 && (
+                <div className="px-4 pb-2">
+                  <Pagination
+                    page={clientesPage.page}
+                    hasMore={clientesPage.hasMore}
+                    loading={false}
+                    onPrev={clientesPage.prev}
+                    onNext={clientesPage.next}
+                    count={clientesPage.pageItems.length}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </>

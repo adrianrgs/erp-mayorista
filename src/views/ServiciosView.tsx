@@ -8,6 +8,8 @@ import { Search, Plus, MapPin, Edit3, Trash2, Tag, Compass, X, Save } from "luci
 import { ProjectView } from "../types";
 import { AccionPermiso } from "../types/usuarios";
 import { usePermissions } from "../hooks/usePermissions";
+import { useClientPagination } from "../hooks/useClientPagination";
+import Pagination from "../components/ui/Pagination";
 
 interface ServiciosViewProps {
   extraServices: ExtraService[];
@@ -66,6 +68,9 @@ export default function ServiciosView({
     const matchesCat = filterCategory === "ALL" || s.category === filterCategory;
     return matchesSearch && matchesCat;
   });
+
+  // Paginación de render (DOM acotado a medida que crece el catálogo de servicios).
+  const servPage = useClientPagination(filteredServices, 20, `${searchTerm}|${filterCategory}`);
 
   const handleOpenService = (s?: ExtraService) => {
     if (s) {
@@ -201,7 +206,7 @@ export default function ServiciosView({
                     No hay servicios que coincidan con la búsqueda.
                   </td>
                 </tr>
-              ) : filteredServices.map(s => (
+              ) : servPage.pageItems.map(s => (
                 <tr key={s.id} className="hover:bg-zinc-50 transition-colors">
                   <td className="px-6 py-3">
                     <div className="font-bold text-zinc-900">{s.nombre}</div>
@@ -247,6 +252,18 @@ export default function ServiciosView({
               ))}
             </tbody>
           </table>
+          {filteredServices.length > 0 && (
+            <div className="px-4 pb-2">
+              <Pagination
+                page={servPage.page}
+                hasMore={servPage.hasMore}
+                loading={false}
+                onPrev={servPage.prev}
+                onNext={servPage.next}
+                count={servPage.pageItems.length}
+              />
+            </div>
+          )}
         </div>
       </div>
 

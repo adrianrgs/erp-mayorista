@@ -6,6 +6,8 @@ import { ProjectView } from "../types";
 import { AccionPermiso } from "../types/usuarios";
 import { usePermissions } from "../hooks/usePermissions";
 import { useDialog } from "../components/ui/DialogProvider";
+import { useClientPagination } from "../hooks/useClientPagination";
+import Pagination from "../components/ui/Pagination";
 
 interface ProveedoresViewProps {
   proveedores: Proveedor[];
@@ -58,6 +60,9 @@ export default function ProveedoresView({ proveedores, onAddProveedor, onUpdateP
     const matchTipo = filterTipo === "ALL" || p.tipo === filterTipo;
     return matchSearch && matchTipo;
   });
+
+  // Paginación de render (DOM acotado a medida que crece el catálogo).
+  const provPage = useClientPagination(filtered, 20, `${searchTerm}|${filterTipo}`);
 
   const handleOpen = (p?: Proveedor) => {
     if (p) {
@@ -173,7 +178,7 @@ export default function ProveedoresView({ proveedores, onAddProveedor, onUpdateP
                   </td>
                 </tr>
               ) : (
-                filtered.map(p => (
+                provPage.pageItems.map(p => (
                   <tr
                     key={p.id}
                     className="hover:bg-zinc-50 transition-colors cursor-pointer"
@@ -243,6 +248,18 @@ export default function ProveedoresView({ proveedores, onAddProveedor, onUpdateP
               )}
             </tbody>
           </table>
+          {filtered.length > 0 && (
+            <div className="px-4 pb-2">
+              <Pagination
+                page={provPage.page}
+                hasMore={provPage.hasMore}
+                loading={false}
+                onPrev={provPage.prev}
+                onNext={provPage.next}
+                count={provPage.pageItems.length}
+              />
+            </div>
+          )}
         </div>
       </div>
 
