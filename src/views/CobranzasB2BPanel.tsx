@@ -251,12 +251,19 @@ export default function CobranzasB2BPanel({
   const clientesPage = useClientPagination<B2BClient>(filteredClients, 25, searchQuery);
 
   // Buscador por localizador (RES-/AER-): trae de la base las facturas del expediente, las
-  // fusiona a memoria y selecciona/muestra el cliente dueño de esas facturas.
-  const buscarPorLocalizador = async (rawId: string): Promise<{ clientId?: string; clientName: string } | null> => {
+  // fusiona a memoria y selecciona el cliente dueño. En B2B el cobro suele NO tener clientId
+  // (se asocia por el nombre de la agencia dentro de clientName), así que se resuelve por ahí.
+  const buscarPorLocalizador = async (rawId: string): Promise<{ clientId: string } | null> => {
     const invs = await getInvoicesByLocator(rawId);
     if (!invs.length) return null;
     onEnsureInvoicesLoaded(invs);
-    return { clientId: invs[0].clientId, clientName: invs[0].clientName };
+    const inv0 = invs[0];
+    const cn = (inv0.clientName || "").toLowerCase();
+    const client =
+      (inv0.clientId ? clients.find(c => c.id === inv0.clientId) : undefined) ||
+      clients.find(c => c.nombre && cn.includes(c.nombre.toLowerCase()));
+    if (!client) return null; // facturas existen pero no se pudo resolver la agencia
+    return { clientId: client.id };
   };
 
   const formatDate = (dateStr?: string): string => {
@@ -672,7 +679,7 @@ export default function CobranzasB2BPanel({
             label="Buscar cobro por expediente (RES- o AER-)"
             placeholder="Ej. RES-1234 o AER-45"
             fetcher={buscarPorLocalizador}
-            onFound={(hit) => { if (hit.clientId) setSelectedClientId(hit.clientId); }}
+            onFound={(hit) => { setSearchQuery(""); setSelectedClientId(hit.clientId); }}
           />
 
           {/* Search bar (filtra la cartera cargada) */}

@@ -225,12 +225,19 @@ export default function CobranzasDirectosPanel({
   const clientesPage = useClientPagination<DirectClient>(filteredClients, 25, searchQuery);
 
   // Buscador por localizador (RES-/AER-): trae de la base las facturas del expediente, las
-  // fusiona a memoria y selecciona el cliente directo dueño de esas facturas.
-  const buscarPorLocalizador = async (rawId: string): Promise<{ clientId?: string } | null> => {
+  // fusiona a memoria y selecciona el cliente directo dueño. Resuelve por clientId y, como
+  // respaldo, por el nombre del cliente dentro de clientName.
+  const buscarPorLocalizador = async (rawId: string): Promise<{ clientId: string } | null> => {
     const invs = await getInvoicesByLocator(rawId);
     if (!invs.length) return null;
     onEnsureInvoicesLoaded(invs);
-    return { clientId: invs[0].clientId };
+    const inv0 = invs[0];
+    const cn = (inv0.clientName || "").toLowerCase();
+    const client =
+      (inv0.clientId ? clients.find(c => c.id === inv0.clientId) : undefined) ||
+      clients.find(c => c.nombre && cn.includes(c.nombre.toLowerCase()));
+    if (!client) return null; // no pertenece a un cliente directo de este panel
+    return { clientId: client.id };
   };
 
   const formatDate = (dateStr?: string): string => {
@@ -646,7 +653,7 @@ export default function CobranzasDirectosPanel({
             label="Buscar cobro por expediente (RES- o AER-)"
             placeholder="Ej. RES-1234 o AER-45"
             fetcher={buscarPorLocalizador}
-            onFound={(hit) => { if (hit.clientId) setSelectedClientId(hit.clientId); }}
+            onFound={(hit) => { setSearchQuery(""); setSelectedClientId(hit.clientId); }}
           />
 
           {/* Search bar (filtra la cartera cargada) */}
