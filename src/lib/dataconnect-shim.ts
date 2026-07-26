@@ -263,6 +263,12 @@ export const getPayableObligationsByLocator = async (locatorId: string): Promise
   return (r.data as any[]) ?? [];
 };
 
+// Buscador por localizador (Cobranzas): trae de la base las facturas de un expediente.
+export const getInvoicesByLocator = async (reservationId: string): Promise<any[]> => {
+  const r = await api.get(`/finances/invoices/by-locator/${encodeURIComponent(normalizeEntityId(reservationId))}`);
+  return (r.data as any[]) ?? [];
+};
+
 // Buscador por id (point-read): trae UN boleto por su id (= AER), o null si no existe.
 export const getFlightTicketById = async (id: string): Promise<any | null> => {
   try {

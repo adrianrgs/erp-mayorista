@@ -14,6 +14,12 @@ export class FinancesController {
   @Get('invoices')
   findAllInvoices() { return this.service.findAllInvoices(); }
 
+  // Buscador por localizador (RES-/AER-): facturas de un expediente, traídas de la base.
+  @Get('invoices/by-locator/:reservationId')
+  findInvoicesByLocator(@Param('reservationId') reservationId: string) {
+    return this.service.findInvoicesByLocator(reservationId);
+  }
+
   @Post('invoices')
   @RequierePermiso(Accion.CREAR, Modulo.FACTURACION, Modulo.COBRANZAS)
   createInvoice(@Body() dto: any) { return this.service.createInvoice(dto); }

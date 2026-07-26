@@ -13,6 +13,14 @@ export class FinancesService {
     return data.financialInvoices || [];
   }
 
+  // Buscador por localizador (RES-/AER-): trae solo las facturas de ese expediente.
+  async findInvoicesByLocator(reservationId: string) {
+    const data = await this.dc.executeQuery<{ financialInvoices: any[] }>(
+      'GetInvoicesByLocator', { reservationId },
+    );
+    return data.financialInvoices || [];
+  }
+
   async createInvoice(dto: any) {
     await this.dc.executeMutation('InsertInvoice', { ...dto, updatedAt: new Date().toISOString() });
     return { success: true, id: dto.id };

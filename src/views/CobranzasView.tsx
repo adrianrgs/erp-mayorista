@@ -25,6 +25,7 @@ interface CobranzasViewProps {
   onDeleteWithholdingCertificate?: (id: string) => void;
   walletTransactions: WalletTransaction[];
   onAddWalletTransaction: (tx: WalletTransaction) => void;
+  onEnsureInvoicesLoaded?: (invs: FinancialInvoice[]) => void;
 }
 
 export default function CobranzasView({
@@ -47,6 +48,7 @@ export default function CobranzasView({
   onDeleteWithholdingCertificate,
   walletTransactions,
   onAddWalletTransaction,
+  onEnsureInvoicesLoaded = () => {},
 }: CobranzasViewProps) {
   const [activeTab, setActiveTab] = useState<"b2b" | "directos">("b2b");
 
@@ -105,6 +107,7 @@ export default function CobranzasView({
           onDeleteWithholdingCertificate={onDeleteWithholdingCertificate}
           walletTransactions={walletTransactions}
           onAddWalletTransaction={onAddWalletTransaction}
+          onEnsureInvoicesLoaded={onEnsureInvoicesLoaded}
         />
       ) : (
         <CobranzasDirectosPanel
@@ -125,6 +128,7 @@ export default function CobranzasView({
           onAddWithholdingCertificate={onAddWithholdingCertificate}
           onDeleteWithholdingCertificate={onDeleteWithholdingCertificate}
           jurisdiction={jurisdiction}
+          onEnsureInvoicesLoaded={onEnsureInvoicesLoaded}
         />
       )}
     </div>

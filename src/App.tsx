@@ -970,6 +970,15 @@ export default function App() {
       return Array.from(byId.values());
     });
   };
+  // Buscador por localizador en Cobranzas: fusiona a memoria las facturas traídas de la base.
+  const handleEnsureInvoicesLoaded = (invs: FinancialInvoice[]) => {
+    if (!invs?.length) return;
+    setInvoices(prev => {
+      const byId = new Map(prev.map(i => [i.id, i]));
+      for (const i of invs) byId.set(i.id, i);
+      return Array.from(byId.values());
+    });
+  };
 
   // "Abrir registro" desde el buscador global: fusiona el registro traído por id, lo marca
   // como pendiente de abrir y navega a su módulo, que lo abre al recibir el id.
@@ -2381,6 +2390,7 @@ onDeleteStopSale={handleDeleteStopSale}
                     onDeleteWithholdingCertificate={handleDeleteWithholdingCertificate}
                     walletTransactions={walletTransactions}
                     onAddWalletTransaction={handleAddWalletTransaction}
+                    onEnsureInvoicesLoaded={handleEnsureInvoicesLoaded}
                   />
                 )}
                 {currentSection === ProjectView.CONTABILIDAD && (

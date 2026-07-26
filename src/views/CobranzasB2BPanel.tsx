@@ -6,6 +6,10 @@ import WalletClienteModal from "../components/WalletClienteModal";
 import type { FlightTicket } from "../types/aereos";
 import { TaxJurisdiction, formatCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { nextSequentialId } from "../lib/idGenerator";
+import { getInvoicesByLocator } from "../lib/dataconnect-shim";
+import { useClientPagination } from "../hooks/useClientPagination";
+import Pagination from "../components/ui/Pagination";
+import IdSearchBox from "../components/ui/IdSearchBox";
 import { printElementById } from "../lib/print";
 import EstadoCuentaClientePDF, { StatementConfig, DEFAULT_STATEMENT_CONFIG } from "../components/EstadoCuentaClientePDF";
 import EstadoCuentaConfigModal from "../components/EstadoCuentaConfigModal";
@@ -61,6 +65,7 @@ interface CobranzasB2BPanelProps {
   onDeleteWithholdingCertificate?: (id: string) => void;
   walletTransactions?: WalletTransaction[];
   onAddWalletTransaction?: (tx: WalletTransaction) => void;
+  onEnsureInvoicesLoaded?: (invs: FinancialInvoice[]) => void;
 }
 
 export default function CobranzasB2BPanel({
@@ -81,6 +86,7 @@ export default function CobranzasB2BPanel({
   onDeleteWithholdingCertificate,
   walletTransactions = [],
   onAddWalletTransaction,
+  onEnsureInvoicesLoaded = () => {},
 }: CobranzasB2BPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [invoiceSearchQuery, setInvoiceSearchQuery] = useState("");
@@ -240,6 +246,18 @@ export default function CobranzasB2BPanel({
            c.rif.toLowerCase().includes(searchQuery.toLowerCase()) ||
            c.id.toLowerCase().includes(searchQuery.toLowerCase());
   });
+
+  // Paginación de RENDER de la cartera (DOM acotado).
+  const clientesPage = useClientPagination<B2BClient>(filteredClients, 25, searchQuery);
+
+  // Buscador por localizador (RES-/AER-): trae de la base las facturas del expediente, las
+  // fusiona a memoria y selecciona/muestra el cliente dueño de esas facturas.
+  const buscarPorLocalizador = async (rawId: string): Promise<{ clientId?: string; clientName: string } | null> => {
+    const invs = await getInvoicesByLocator(rawId);
+    if (!invs.length) return null;
+    onEnsureInvoicesLoaded(invs);
+    return { clientId: invs[0].clientId, clientName: invs[0].clientName };
+  };
 
   const formatDate = (dateStr?: string): string => {
     if (!dateStr) return '';
@@ -649,12 +667,20 @@ export default function CobranzasB2BPanel({
             <p className="text-[10px] text-zinc-400 mt-1">Seleccione un cliente para gestionar sus cuentas corrientes</p>
           </div>
 
-          {/* Search bar */}
+          {/* Buscador por localizador: trae de la base y abre el cliente del expediente */}
+          <IdSearchBox<{ clientId?: string; clientName: string }>
+            label="Buscar cobro por expediente (RES- o AER-)"
+            placeholder="Ej. RES-1234 o AER-45"
+            fetcher={buscarPorLocalizador}
+            onFound={(hit) => { if (hit.clientId) setSelectedClientId(hit.clientId); }}
+          />
+
+          {/* Search bar (filtra la cartera cargada) */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
             <input
               type="text"
-              placeholder="Buscar por nombre, RIF..."
+              placeholder="Filtrar por nombre, RIF..."
               className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-500 font-semibold"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -663,7 +689,7 @@ export default function CobranzasB2BPanel({
 
           {/* Clients List */}
           <div className="divide-y divide-zinc-100 max-h-[55vh] overflow-y-auto pr-1">
-            {filteredClients.map((client) => {
+            {clientesPage.pageItems.map((client) => {
               const isSelected = client.id === selectedClientId;
               const hasDebt = client.saldoDeber > 0;
               return (
@@ -707,6 +733,16 @@ export default function CobranzasB2BPanel({
               );
             })}
           </div>
+          {filteredClients.length > 0 && (
+            <Pagination
+              page={clientesPage.page}
+              hasMore={clientesPage.hasMore}
+              loading={false}
+              onPrev={clientesPage.prev}
+              onNext={clientesPage.next}
+              count={clientesPage.pageItems.length}
+            />
+          )}
         </div>
 
         {/* Right Column: Client details and accounts receivable cards */}

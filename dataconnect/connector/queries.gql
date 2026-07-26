@@ -140,6 +140,33 @@ query ListInvoices @auth(level: PUBLIC) {
   }
 }
 
+# Buscador por localizador (RES-/AER-): trae de la base las facturas de un expediente,
+# sin cargar toda la tabla. Base del buscador de Cobranzas.
+query GetInvoicesByLocator($reservationId: String!) @auth(level: PUBLIC) {
+  financialInvoices(where: { reservationId: { eq: $reservationId } }) {
+    id
+    updatedAt
+    clientName
+    clientId
+    reservationId
+    date
+    dueDate
+    amount
+    vatAmount
+    type
+    status
+    taxableBase
+    surchargeAmount
+    vatWithheld
+    incomeTaxWithheld
+    exchangeRate
+    localCurrencyAmount
+    fiscalDocNumber
+    isExempt
+    paymentMethod
+  }
+}
+
 query ListProperties @auth(level: PUBLIC) {
   hotelProperties {
     id
