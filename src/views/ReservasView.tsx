@@ -105,6 +105,9 @@ interface ReservasViewProps {
   onAddRegistroAuditoria?: (registro: Omit<RegistroAuditoria, "createdAt">) => void;
   // Buscador por id: fusiona a memoria un expediente traído de la base (carga perezosa).
   onEnsureReservationLoaded?: (res: Reservation) => void;
+  // Abrir un expediente puntual desde afuera (buscador global). Se consume al abrirlo.
+  openResId?: string | null;
+  onOpenConsumed?: () => void;
 }
 
 // Helper to calculate pricing for an individual room. Usa el mismo prorrateo por tramos de
@@ -236,6 +239,8 @@ export default function ReservasView({
   onCreateSolicitudAutorizacion = () => {},
   onAddRegistroAuditoria = () => {},
   onEnsureReservationLoaded = () => {},
+  openResId = null,
+  onOpenConsumed = () => {},
 }: ReservasViewProps) {
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   // Celdas de precio de la cotización DIRECTO: 1 columna (Precio) o, con el toggle de IVA activo,
@@ -1650,6 +1655,15 @@ export default function ReservasView({
     setActiveExpedienteTab("resumen");
     setViewLevel(2);
   };
+
+  // Abrir un expediente pedido desde el buscador global (openResId) y consumirlo.
+  React.useEffect(() => {
+    if (openResId) {
+      handleOpenReservation(openResId);
+      onOpenConsumed();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openResId]);
 
   // Backing out from cart
   const handleCancelCart = () => {

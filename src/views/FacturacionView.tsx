@@ -11,6 +11,10 @@ import { calculateTaxes, TaxJurisdiction, DEFAULT_JURISDICTION, ClientTaxProfile
 import { round2 } from "../lib/money";
 import { printElementById } from "../lib/print";
 import { nextSequentialId, seqNum } from "../lib/idGenerator";
+import { getReservationById } from "../lib/dataconnect-shim";
+import { useClientPagination } from "../hooks/useClientPagination";
+import Pagination from "../components/ui/Pagination";
+import IdSearchBox from "../components/ui/IdSearchBox";
 import { formatGDSDate } from "../lib/parsers/pnrParser";
 import { 
   FileCheck, 
@@ -57,6 +61,7 @@ interface FacturacionViewProps {
   reservations: Reservation[];
   invoices: FinancialInvoice[];
   onUpdateReservation: (updated: Reservation) => void;
+  onEnsureReservationLoaded?: (res: Reservation) => void;
   onAddInvoice?: (newInv: FinancialInvoice) => void;
   onUpdateInvoice?: (updated: FinancialInvoice) => void;
   clients: B2BClient[];
@@ -87,6 +92,7 @@ export default function FacturacionView({
   reservations,
   invoices,
   onUpdateReservation,
+  onEnsureReservationLoaded = () => {},
   onAddInvoice,
   onUpdateInvoice,
   clients,
@@ -806,6 +812,9 @@ export default function FacturacionView({
   }, {} as Record<"anuladas" | "atencion" | "proveedor" | "facturadas", number>);
 
   const queueTabFiltered = sortedAndFiltered.filter(r => getBookingStatus(r).bucket === queueTab);
+
+  // Paginación de RENDER: 25 expedientes por página en la cola (DOM acotado = fluidez).
+  const queuePage = useClientPagination(queueTabFiltered, 25, `${search}|${queueTab}`);
 
   const activeRes = selectedResId ? realBookings.find(r => r.id === selectedResId) : undefined;
   const activeResId = activeRes?.id || null;
@@ -1892,6 +1901,14 @@ export default function FacturacionView({
               </div>
             </div>
 
+            {/* Buscador por ID: trae el expediente de la base (aunque no esté cargado) y lo abre. */}
+            <IdSearchBox
+              label="Ir a expediente por ID (lo trae de la base)"
+              placeholder="Ej. RES-1234"
+              fetcher={getReservationById}
+              onFound={(res: Reservation) => { onEnsureReservationLoaded(res); setSelectedResId(res.id); }}
+            />
+
             <Tabs
               tabs={[
                 { key: "atencion", label: "Necesitan Atención", badge: queueTabCounts.atencion || undefined, badgeVariant: "alert" },
@@ -1922,7 +1939,7 @@ export default function FacturacionView({
                       </td>
                     </tr>
                   ) : (
-                    queueTabFiltered.map((r) => {
+                    queuePage.pageItems.map((r) => {
                       const {
                         services, jointFlights, billedCount, requestedCount, totalCount, percent,
                         hasRequest, draftCount, pendingVariationSupplements, pendingVariationCredits,
@@ -2031,6 +2048,16 @@ export default function FacturacionView({
                   )}
                 </tbody>
               </table>
+              {queueTabFiltered.length > 0 && (
+                <Pagination
+                  page={queuePage.page}
+                  hasMore={queuePage.hasMore}
+                  loading={false}
+                  onPrev={queuePage.prev}
+                  onNext={queuePage.next}
+                  count={queuePage.pageItems.length}
+                />
+              )}
             </div>
           </div>
         </>

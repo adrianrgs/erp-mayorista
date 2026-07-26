@@ -955,6 +955,27 @@ export default function App() {
       ? prev.map(r => (r.id === res.id ? res : r))
       : [res, ...prev]);
   };
+  const handleEnsureBoletoLoaded = (bol: FlightTicket) => {
+    setBoletos(prev => prev.some(b => b.id === bol.id)
+      ? prev.map(b => (b.id === bol.id ? bol : b))
+      : [bol, ...prev]);
+  };
+
+  // "Abrir registro" desde el buscador global: fusiona el registro traído por id, lo marca
+  // como pendiente de abrir y navega a su módulo, que lo abre al recibir el id.
+  const [pendingOpenResId, setPendingOpenResId] = useState<string | null>(null);
+  const [pendingOpenBoletoId, setPendingOpenBoletoId] = useState<string | null>(null);
+  const handleOpenSearchRecord = (item: { type: "reserva"; data: Reservation } | { type: "vuelo"; data: FlightTicket }) => {
+    if (item.type === "reserva") {
+      handleEnsureReservationLoaded(item.data);
+      setPendingOpenResId(item.data.id);
+      setCurrentSection(ProjectView.RESERVAS);
+    } else {
+      handleEnsureBoletoLoaded(item.data);
+      setPendingOpenBoletoId(item.data.id);
+      setCurrentSection(ProjectView.VUELOS);
+    }
+  };
 
   const handleAddReservation = async (newRes: any): Promise<string | null> => {
     newRes.updatedAt = new Date().toISOString();
@@ -2174,6 +2195,7 @@ onDeleteStopSale={handleDeleteStopSale}
                       boletos={boletos}
                       payableObligations={payableObligations}
                       onNavigate={setCurrentSection}
+                      onOpenRecord={handleOpenSearchRecord}
                     />
                   )}
                   {currentSection === ProjectView.PROVEEDORES && (
@@ -2216,6 +2238,8 @@ onDeleteStopSale={handleDeleteStopSale}
                       onAddRegistroAuditoria={handleAddRegistroAuditoria}
                       onDeleteReservation={handleDeleteReservation}
                       onEnsureReservationLoaded={handleEnsureReservationLoaded}
+                      openResId={pendingOpenResId}
+                      onOpenConsumed={() => setPendingOpenResId(null)}
                     />
                   )}
                   {currentSection === ProjectView.FACTURACION && (
@@ -2223,6 +2247,7 @@ onDeleteStopSale={handleDeleteStopSale}
                        reservations={reservations}
                        invoices={invoices}
                        onUpdateReservation={handleUpdateReservation}
+                       onEnsureReservationLoaded={handleEnsureReservationLoaded}
                        onAddInvoice={handleAddInvoice}
                        onUpdateInvoice={handleUpdateInvoice}
                        clients={clients}
@@ -2269,6 +2294,9 @@ onDeleteStopSale={handleDeleteStopSale}
                     companyConfig={companyConfig}
                     jurisdiction={jurisdiction}
                     currentExchangeRate={todayExchangeRate}
+                    onEnsureBoletoLoaded={handleEnsureBoletoLoaded}
+                    openBoletoId={pendingOpenBoletoId}
+                    onOpenConsumed={() => setPendingOpenBoletoId(null)}
                   />
                 )}
 

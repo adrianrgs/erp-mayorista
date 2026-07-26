@@ -5,7 +5,9 @@ import { formatCurrency, getOperatingCurrency } from "../lib/taxEngine";
 import type { FlightTicket } from "../types/aereos";
 import { ProjectView } from "../types";
 import IdSearchBox from "../components/ui/IdSearchBox";
-import { getReservationById, getFlightTicketById } from "../lib/dataconnect-shim";
+import { getReservationById, getFlightTicketById, normalizeEntityId } from "../lib/dataconnect-shim";
+
+type SearchHit = { type: "reserva"; data: Reservation } | { type: "vuelo"; data: FlightTicket };
 
 interface BuscadorProps {
   reservations: Reservation[];
@@ -13,6 +15,7 @@ interface BuscadorProps {
   invoices: FinancialInvoice[];
   payableObligations: PayableObligation[];
   onNavigate: (view: ProjectView) => void;
+  onOpenRecord: (item: SearchHit) => void;
 }
 
 export default function BuscadorGlobalView({
@@ -20,8 +23,20 @@ export default function BuscadorGlobalView({
   boletos,
   invoices,
   payableObligations,
-  onNavigate
+  onNavigate,
+  onOpenRecord
 }: BuscadorProps) {
+  // Buscador por id inteligente: detecta el prefijo (AER- → boleto, si no → expediente RES-)
+  // y trae ese registro de la base, sin importar la pestaña activa.
+  const smartIdFetch = async (rawId: string): Promise<SearchHit | null> => {
+    const id = normalizeEntityId(rawId);
+    if (id.startsWith("AER-")) {
+      const b = await getFlightTicketById(id);
+      return b ? { type: "vuelo", data: b } : null;
+    }
+    const r = await getReservationById(id);
+    return r ? { type: "reserva", data: r } : null;
+  };
   const [activeTab, setActiveTab] = useState<"reservas" | "vuelos">("reservas");
   
   // Reservas Search State
@@ -151,28 +166,18 @@ export default function BuscadorGlobalView({
           </button>
         </div>
 
-        {/* Buscador por id directo: trae de la base (aunque no esté cargado) y lo abre. */}
-        {activeTab === "reservas" ? (
-          <IdSearchBox
-            label="Traer expediente por ID desde la base"
-            placeholder="Ej. RES-1234"
-            fetcher={getReservationById}
-            onFound={(res: Reservation) => {
-              setFetchedReservas(prev => [res, ...prev.filter(r => r.id !== res.id)]);
-              setSelectedItem({ type: "reserva", data: res });
-            }}
-          />
-        ) : (
-          <IdSearchBox
-            label="Traer boleto por ID desde la base"
-            placeholder="Ej. AER-1234"
-            fetcher={getFlightTicketById}
-            onFound={(bol: FlightTicket) => {
-              setFetchedVuelos(prev => [bol, ...prev.filter(b => b.id !== bol.id)]);
-              setSelectedItem({ type: "vuelo", data: bol });
-            }}
-          />
-        )}
+        {/* Buscador por id directo (trae de la base, detecta RES-/AER- solo). */}
+        <IdSearchBox<SearchHit>
+          label="Traer por ID desde la base (RES- o AER-)"
+          placeholder="Ej. RES-1234 o AER-45"
+          fetcher={smartIdFetch}
+          onFound={(hit) => {
+            if (hit.type === "reserva") setFetchedReservas(prev => [hit.data, ...prev.filter(r => r.id !== hit.data.id)]);
+            else setFetchedVuelos(prev => [hit.data, ...prev.filter(b => b.id !== hit.data.id)]);
+            setActiveTab(hit.type === "reserva" ? "reservas" : "vuelos");
+            setSelectedItem(hit);
+          }}
+        />
 
         {activeTab === "reservas" ? (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -456,12 +461,13 @@ export default function BuscadorGlobalView({
             <div className="p-4 border-t border-zinc-200 bg-white flex justify-end">
                <button
                  onClick={() => {
+                   const item = selectedItem;
                    setSelectedItem(null);
-                   onNavigate(selectedItem.type === "reserva" ? ProjectView.RESERVAS : ProjectView.VUELOS);
+                   onOpenRecord(item);
                  }}
                  className="flex items-center gap-2 px-6 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-lg transition-colors cursor-pointer text-sm"
                >
-                 Revisar Expediente Completo <ExternalLink className="w-4 h-4" />
+                 {selectedItem.type === "reserva" ? "Abrir Expediente" : "Abrir Boleto"} <ExternalLink className="w-4 h-4" />
                </button>
             </div>
           </div>

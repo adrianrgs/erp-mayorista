@@ -34,6 +34,10 @@ import {
 } from "lucide-react";
 import type { FlightLeg, B2BClient, DirectClient, CompanyConfig, PayableObligation, FinancialInvoice, PaymentVoucher } from "../types";
 import { nextSequentialId, seqNum } from "../lib/idGenerator";
+import { getFlightTicketById } from "../lib/dataconnect-shim";
+import { useClientPagination } from "../hooks/useClientPagination";
+import Pagination from "../components/ui/Pagination";
+import IdSearchBox from "../components/ui/IdSearchBox";
 import { ProjectView } from "../types";
 import type { FlightTicket, Passenger, FlightSegment } from "../types/aereos";
 import { AccionPermiso } from "../types/usuarios";
@@ -104,6 +108,11 @@ interface VuelosViewProps {
   companyConfig: CompanyConfig;
   jurisdiction?: TaxJurisdiction;
   currentExchangeRate?: number;
+  // Buscador por id: fusiona a memoria un boleto traído de la base (carga perezosa).
+  onEnsureBoletoLoaded?: (b: FlightTicket) => void;
+  // Abrir un boleto puntual desde afuera (buscador global). Se consume al abrirlo.
+  openBoletoId?: string | null;
+  onOpenConsumed?: () => void;
 }
 
 type SubView = "listado" | "nuevo" | "expediente";
@@ -178,11 +187,20 @@ function Badge({
 
 // ─── VISTA PRINCIPAL ──────────────────────────────────────────────────────────
 
-export default function VuelosView({ flights: _flights, boletos, onAddBoleto, onUpdateBoleto, onDeleteBoleto, clients = [], directClients = [], payableObligations = [], onAddObligation, onUpdateObligation, invoices = [], onAddInvoice, vouchers = [], onUpdateClient, onUpdateDirectClient, companyConfig, jurisdiction, currentExchangeRate }: VuelosViewProps) {
+export default function VuelosView({ flights: _flights, boletos, onAddBoleto, onUpdateBoleto, onDeleteBoleto, clients = [], directClients = [], payableObligations = [], onAddObligation, onUpdateObligation, invoices = [], onAddInvoice, vouchers = [], onUpdateClient, onUpdateDirectClient, companyConfig, jurisdiction, currentExchangeRate, onEnsureBoletoLoaded = () => {}, openBoletoId = null, onOpenConsumed = () => {} }: VuelosViewProps) {
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const [subView, setSubView] = useState<SubView>("listado");
   const [search, setSearch] = useState("");
   const [selectedBoletoId, setSelectedBoletoId] = useState<string | null>(null);
+
+  // Abrir un boleto pedido desde el buscador global (openBoletoId) y consumirlo.
+  React.useEffect(() => {
+    if (openBoletoId) {
+      setSelectedBoletoId(openBoletoId);
+      onOpenConsumed();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openBoletoId]);
 
   const [activeVoucherBoleto, setActiveVoucherBoleto] = useState<FlightTicket | null>(null);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
@@ -210,6 +228,7 @@ export default function VuelosView({ flights: _flights, boletos, onAddBoleto, on
           }}
           onEliminar={(id) => onDeleteBoleto(id)}
           onShowVoucher={handleOpenVoucher}
+          onEnsureBoletoLoaded={onEnsureBoletoLoaded}
           jurisdiction={jur}
           currentExchangeRate={currentExchangeRate}
         />
@@ -281,6 +300,7 @@ function ListadoView({
   onToggleVinculo,
   onEliminar,
   onShowVoucher,
+  onEnsureBoletoLoaded,
   jurisdiction,
   currentExchangeRate,
 }: {
@@ -292,6 +312,7 @@ function ListadoView({
   onToggleVinculo: (id: string) => void;
   onEliminar: (id: string) => void;
   onShowVoucher: (boleto: FlightTicket) => void;
+  onEnsureBoletoLoaded: (b: FlightTicket) => void;
   jurisdiction?: TaxJurisdiction;
   currentExchangeRate?: number;
 }) {
@@ -328,6 +349,9 @@ function ListadoView({
   })
     // Apilados por creación: los boletos más nuevos (mayor AER-N) primero.
     .sort((a, b) => seqNum(b.id) - seqNum(a.id));
+
+  // Paginación de RENDER: 25 boletos por página (DOM acotado = fluidez).
+  const boletosPage = useClientPagination(filtered, 25, `${search}|${activeTab}|${asesorFilter}`);
 
   return (
     <div className="space-y-6">
@@ -375,14 +399,24 @@ function ListadoView({
         </button>
       </div>
 
-      {/* Buscador + filtro por asesor */}
+      {/* Buscador por ID (trae de la base, aunque no esté cargado) */}
+      <div className="bg-white p-3 border border-zinc-200 rounded-lg">
+        <IdSearchBox
+          label="Ir a boleto por ID (lo trae de la base)"
+          placeholder="Ej. AER-45"
+          fetcher={getFlightTicketById}
+          onFound={(bol: FlightTicket) => { onEnsureBoletoLoaded(bol); onExpediente(bol.id); }}
+        />
+      </div>
+
+      {/* Buscador + filtro por asesor (filtra lo cargado) */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
           <input
             id="vuelos-search"
             type="text"
-            placeholder="Buscar por PNR, expediente (AER-), pasajero o ruta..."
+            placeholder="Filtrar cargados por PNR, expediente (AER-), pasajero o ruta..."
             className="w-full pl-9 pr-4 py-2.5 border border-zinc-200 rounded text-xs bg-white focus:outline-none focus:border-zinc-500 font-medium"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -442,7 +476,7 @@ function ListadoView({
           </div>
 
           {/* Filas */}
-          {filtered.map((boleto) => {
+          {boletosPage.pageItems.map((boleto) => {
             const segmentos = boleto.segmentos?.map ? boleto.segmentos : [];
             const pasajeros = boleto.pasajeros?.map ? boleto.pasajeros : [];
             const primerSeg = segmentos[0];
@@ -619,6 +653,18 @@ function ListadoView({
               </div>
             );
           })}
+          {filtered.length > 0 && (
+            <div className="px-5 py-2">
+              <Pagination
+                page={boletosPage.page}
+                hasMore={boletosPage.hasMore}
+                loading={false}
+                onPrev={boletosPage.prev}
+                onNext={boletosPage.next}
+                count={boletosPage.pageItems.length}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
