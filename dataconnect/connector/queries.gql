@@ -140,6 +140,32 @@ query ListInvoices @auth(level: PUBLIC) {
   }
 }
 
+# Point-read por id de factura (buscador por FAC-/NC-/… en Cobranzas).
+query GetInvoiceById($id: String!) @auth(level: PUBLIC) {
+  financialInvoices(where: { id: { eq: $id } }, limit: 1) {
+    id
+    updatedAt
+    clientName
+    clientId
+    reservationId
+    date
+    dueDate
+    amount
+    vatAmount
+    type
+    status
+    taxableBase
+    surchargeAmount
+    vatWithheld
+    incomeTaxWithheld
+    exchangeRate
+    localCurrencyAmount
+    fiscalDocNumber
+    isExempt
+    paymentMethod
+  }
+}
+
 # Buscador por localizador (RES-/AER-): trae de la base las facturas de un expediente,
 # sin cargar toda la tabla. Base del buscador de Cobranzas.
 query GetInvoicesByLocator($reservationId: String!) @auth(level: PUBLIC) {

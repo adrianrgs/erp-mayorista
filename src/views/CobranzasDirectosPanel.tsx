@@ -8,7 +8,7 @@ import { round2 } from "../lib/money";
 import { facturasConReciboDeCobro, esFacturaCobradaPorRecibo } from "../lib/receivables";
 import WalletClienteModal from "../components/WalletClienteModal";
 import { nextSequentialId } from "../lib/idGenerator";
-import { getInvoicesByLocator } from "../lib/dataconnect-shim";
+import { getInvoicesByLocator, getInvoiceById, normalizeEntityId } from "../lib/dataconnect-shim";
 import { useClientPagination } from "../hooks/useClientPagination";
 import Pagination from "../components/ui/Pagination";
 import IdSearchBox from "../components/ui/IdSearchBox";
@@ -224,11 +224,27 @@ export default function CobranzasDirectosPanel({
   // Paginación de RENDER de la cartera (DOM acotado).
   const clientesPage = useClientPagination<DirectClient>(filteredClients, 25, searchQuery);
 
-  // Buscador por localizador (RES-/AER-): trae de la base las facturas del expediente, las
-  // fusiona a memoria y selecciona el cliente directo dueño. Resuelve por clientId y, como
-  // respaldo, por el nombre del cliente dentro de clientName.
-  const buscarPorLocalizador = async (rawId: string): Promise<{ clientId: string } | null> => {
-    const invs = await getInvoicesByLocator(rawId);
+  // Resaltado temporal (unos segundos) de las facturas encontradas, para ubicarlas fácil.
+  const [flashInvoiceIds, setFlashInvoiceIds] = useState<Set<string>>(new Set());
+  const flashTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashInvoices = (ids: string[]) => {
+    setFlashInvoiceIds(new Set(ids));
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlashInvoiceIds(new Set()), 4500);
+  };
+
+  // Buscador inteligente por id: RES-/AER- trae las facturas del expediente; cualquier otro
+  // (FAC-/NC-/…) trae esa factura por id. Resuelve el cliente directo dueño (por clientId o,
+  // de respaldo, por el nombre dentro de clientName).
+  const buscarPorId = async (rawId: string): Promise<{ clientId: string; invoiceIds: string[] } | null> => {
+    const id = normalizeEntityId(rawId);
+    let invs: any[];
+    if (id.startsWith("RES-") || id.startsWith("AER-")) {
+      invs = await getInvoicesByLocator(id);
+    } else {
+      const inv = await getInvoiceById(id);
+      invs = inv ? [inv] : [];
+    }
     if (!invs.length) return null;
     onEnsureInvoicesLoaded(invs);
     const inv0 = invs[0];
@@ -237,7 +253,7 @@ export default function CobranzasDirectosPanel({
       (inv0.clientId ? clients.find(c => c.id === inv0.clientId) : undefined) ||
       clients.find(c => c.nombre && cn.includes(c.nombre.toLowerCase()));
     if (!client) return null; // no pertenece a un cliente directo de este panel
-    return { clientId: client.id };
+    return { clientId: client.id, invoiceIds: invs.map(i => i.id) };
   };
 
   const formatDate = (dateStr?: string): string => {
@@ -649,11 +665,11 @@ export default function CobranzasDirectosPanel({
           </div>
 
           {/* Buscador por localizador: trae de la base y abre el cliente del expediente */}
-          <IdSearchBox<{ clientId?: string }>
-            label="Buscar cobro por expediente (RES- o AER-)"
-            placeholder="Ej. RES-1234 o AER-45"
-            fetcher={buscarPorLocalizador}
-            onFound={(hit) => { setSearchQuery(""); setSelectedClientId(hit.clientId); }}
+          <IdSearchBox<{ clientId: string; invoiceIds: string[] }>
+            label="Buscar cobro por expediente o factura (RES-, AER- o FAC-)"
+            placeholder="Ej. RES-1234, AER-45 o FAC-678"
+            fetcher={buscarPorId}
+            onFound={(hit) => { setSearchQuery(""); setSelectedClientId(hit.clientId); setActiveTab("facturas"); flashInvoices(hit.invoiceIds); }}
           />
 
           {/* Search bar (filtra la cartera cargada) */}
@@ -1018,7 +1034,7 @@ export default function CobranzasDirectosPanel({
                                     const locatorMatch = inv.clientName.match(/((?:RES|AER)-\d+)/);
                                     const locator = locatorMatch ? locatorMatch[1] : null;
                                     return (
-                                    <tr key={inv.id} className={`hover:bg-zinc-50/50 transition-colors ${selectedInvoiceIds.has(inv.id) ? "bg-emerald-50/40" : ""}`}>
+                                    <tr key={inv.id} className={`hover:bg-zinc-50/50 transition-colors ${flashInvoiceIds.has(inv.id) ? "bg-amber-100 ring-2 ring-inset ring-amber-400 animate-pulse" : selectedInvoiceIds.has(inv.id) ? "bg-emerald-50/40" : ""}`}>
                                       <td className="p-3">
                                         <input
                                           type="checkbox"

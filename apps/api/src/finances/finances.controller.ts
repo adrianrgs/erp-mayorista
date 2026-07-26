@@ -14,6 +14,10 @@ export class FinancesController {
   @Get('invoices')
   findAllInvoices() { return this.service.findAllInvoices(); }
 
+  // Point-read por id de factura (buscador por FAC-/NC-/… en Cobranzas).
+  @Get('invoices/by-id/:id')
+  findInvoiceById(@Param('id') id: string) { return this.service.findInvoiceById(id); }
+
   // Buscador por localizador (RES-/AER-): facturas de un expediente, traídas de la base.
   @Get('invoices/by-locator/:reservationId')
   findInvoicesByLocator(@Param('reservationId') reservationId: string) {

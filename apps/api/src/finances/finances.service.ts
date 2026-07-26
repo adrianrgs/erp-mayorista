@@ -13,6 +13,12 @@ export class FinancesService {
     return data.financialInvoices || [];
   }
 
+  // Point-read por id de factura (buscador por FAC-/NC-/… en Cobranzas).
+  async findInvoiceById(id: string) {
+    const data = await this.dc.executeQuery<{ financialInvoices: any[] }>('GetInvoiceById', { id });
+    return (data.financialInvoices || [])[0] ?? null;
+  }
+
   // Buscador por localizador (RES-/AER-): trae solo las facturas de ese expediente.
   async findInvoicesByLocator(reservationId: string) {
     const data = await this.dc.executeQuery<{ financialInvoices: any[] }>(

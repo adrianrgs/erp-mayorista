@@ -263,6 +263,12 @@ export const getPayableObligationsByLocator = async (locatorId: string): Promise
   return (r.data as any[]) ?? [];
 };
 
+// Buscador por id de factura (FAC-/NC-/… en Cobranzas): trae UNA factura, o null.
+export const getInvoiceById = async (id: string): Promise<any | null> => {
+  const r = await api.get(`/finances/invoices/by-id/${encodeURIComponent(normalizeEntityId(id))}`);
+  return r.data ?? null;
+};
+
 // Buscador por localizador (Cobranzas): trae de la base las facturas de un expediente.
 export const getInvoicesByLocator = async (reservationId: string): Promise<any[]> => {
   const r = await api.get(`/finances/invoices/by-locator/${encodeURIComponent(normalizeEntityId(reservationId))}`);
