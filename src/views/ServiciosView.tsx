@@ -10,6 +10,7 @@ import { AccionPermiso } from "../types/usuarios";
 import { usePermissions } from "../hooks/usePermissions";
 import { useClientPagination } from "../hooks/useClientPagination";
 import Pagination from "../components/ui/Pagination";
+import PickerModal from "../components/ui/PickerModal";
 
 interface ServiciosViewProps {
   extraServices: ExtraService[];
@@ -38,8 +39,7 @@ export default function ServiciosView({
   const { puede } = usePermissions();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState<ServiceCategory | "ALL">("ALL");
-  const [providerSearch, setProviderSearch] = useState("");
-  const [showProviderDropdown, setShowProviderDropdown] = useState(false);
+  const [showProviderPicker, setShowProviderPicker] = useState(false);
 
   const [activeServiceId, setActiveServiceId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"detalles" | "tarifas">("detalles");
@@ -76,7 +76,6 @@ export default function ServiciosView({
     if (s) {
       setActiveServiceId(s.id);
       setServiceForm(s);
-      setProviderSearch(s.providerName || "");
     } else {
       setActiveServiceId("new");
       setServiceForm({
@@ -88,7 +87,6 @@ export default function ServiciosView({
         politicasCancelacion: "",
         status: "Activo"
       });
-      setProviderSearch("");
     }
     setActiveTab("detalles");
     setEditingRateId(null);
@@ -96,6 +94,11 @@ export default function ServiciosView({
   };
 
   const handleSaveService = () => {
+    // Forzar proveedor del catálogo (ya no se admite texto libre): debe tener providerId.
+    if (!serviceForm.providerId) {
+      showAlert({ title: "Falta el proveedor", message: "Selecciona un proveedor del catálogo para este servicio.", type: "warning" });
+      return;
+    }
     if (activeServiceId === "new") {
       const newSrv = { ...serviceForm, id: nextSequentialId("srv", extraServices.map(s => s.id)) } as ExtraService;
       onAddExtraService(newSrv);
@@ -318,77 +321,42 @@ export default function ServiciosView({
                         className="w-full px-3 py-2 border border-zinc-200 rounded text-sm font-semibold bg-white"
                       />
                     </div>
-                    <div className="space-y-1.5 relative">
+                    <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Proveedor Local (DMC)</label>
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
-                        <input
-                          type="text"
-                          value={providerSearch}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setProviderSearch(val);
-                            setShowProviderDropdown(true);
-                            // Free typing without picking a suggestion just records the name as-is,
-                            // same fallback behavior as before when no proveedores catalog existed.
-                            const matched = proveedores.find(p => p.nombre.toLowerCase() === val.toLowerCase());
-                            setServiceForm({
-                              ...serviceForm,
-                              providerName: val,
-                              providerId: matched?.id
-                            });
-                          }}
-                          onFocus={() => setShowProviderDropdown(true)}
-                          placeholder="Buscar o escribir proveedor..."
-                          className="w-full pl-8 pr-7 py-2 border border-zinc-200 rounded text-sm font-semibold bg-white"
-                        />
-                        {providerSearch && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setProviderSearch("");
-                              setServiceForm({ ...serviceForm, providerName: "", providerId: undefined });
-                            }}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-zinc-100 rounded text-zinc-400 cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-
-                      {showProviderDropdown && (
-                        <div className="fixed inset-0 z-40" onClick={() => setShowProviderDropdown(false)} />
-                      )}
-
-                      {showProviderDropdown && proveedores.length > 0 && (() => {
-                        const query = providerSearch.toLowerCase();
-                        const matches = proveedores.filter(p => p.status === "Activo" && p.nombre.toLowerCase().includes(query));
-                        return (
-                          <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-52 overflow-y-auto divide-y divide-zinc-100">
-                            {matches.length === 0 ? (
-                              <div className="p-3 text-xs text-zinc-400 italic">
-                                Ningún proveedor del catálogo coincide. Se guardará como "{providerSearch || "Manual"}".
-                              </div>
-                            ) : (
-                              matches.map(p => (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setProviderSearch(p.nombre);
-                                    setServiceForm({ ...serviceForm, providerId: p.id, providerName: p.nombre });
-                                    setShowProviderDropdown(false);
-                                  }}
-                                  className="w-full text-left px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 cursor-pointer"
-                                >
-                                  {p.nombre} <span className="text-zinc-400 font-normal">({p.tipo})</span>
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        );
-                      })()}
+                      <button
+                        type="button"
+                        onClick={() => setShowProviderPicker(true)}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 border border-zinc-200 rounded text-sm font-semibold bg-white hover:border-zinc-400 cursor-pointer text-left"
+                      >
+                        <span className={serviceForm.providerName ? "text-zinc-900 truncate" : "text-zinc-400"}>
+                          {serviceForm.providerName || "Seleccionar proveedor del catálogo…"}
+                        </span>
+                        <Search className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                      </button>
+                      <p className="text-[9px] text-zinc-400 font-medium">Debe elegirse del catálogo de proveedores.</p>
                     </div>
+                    <PickerModal<Proveedor>
+                      open={showProviderPicker}
+                      onClose={() => setShowProviderPicker(false)}
+                      onSelect={(p) => setServiceForm({ ...serviceForm, providerId: p.id, providerName: p.nombre })}
+                      title="Seleccionar proveedor"
+                      placeholder="Buscar proveedor por nombre…"
+                      search={(term) => {
+                        const q = term.trim().toLowerCase();
+                        return proveedores
+                          .filter(p => p.status === "Activo" && (q === "" || p.nombre.toLowerCase().includes(q)))
+                          .sort((a, b) => a.nombre.localeCompare(b.nombre));
+                      }}
+                      getKey={(p) => p.id}
+                      renderItem={(p) => (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-bold text-zinc-800">{p.nombre}</span>
+                          <span className="text-[10px] font-semibold text-zinc-400 uppercase shrink-0">{p.tipo}</span>
+                        </div>
+                      )}
+                      emptyHint="Sin proveedores activos en el catálogo."
+                      noResultsHint="Ningún proveedor coincide."
+                    />
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">Categoría</label>
                       <select 
