@@ -94,10 +94,15 @@ export const listProviderStatements = async (_dc?: any) => {
 
 // ─── MUTATIONS: RESERVATIONS ─────────────────────────────────────────────────
 
+// Normaliza un id tipeado: guion largo/medio → guion normal, mayúsculas y sin espacios.
+// (El autocorrector de macOS suele convertir "-" en "–", lo que rompería la búsqueda.)
+export const normalizeEntityId = (id: string): string =>
+  id.trim().replace(/[‐‑‒–—―]/g, "-").toUpperCase();
+
 // Buscador por id (point-read): trae UN expediente por su id, o null si no existe (404).
 export const getReservationById = async (id: string): Promise<any | null> => {
   try {
-    const r = await api.get(`/reservations/${encodeURIComponent(id)}`);
+    const r = await api.get(`/reservations/${encodeURIComponent(normalizeEntityId(id))}`);
     return r.data ?? null;
   } catch (e: any) {
     if (e?.response?.status === 404) return null;
@@ -254,7 +259,7 @@ export const deleteStopSale = async (_dc: any, vars: { id: string }) => {
 // Buscador por id (point-read): trae UN boleto por su id (= AER), o null si no existe.
 export const getFlightTicketById = async (id: string): Promise<any | null> => {
   try {
-    const r = await api.get(`/flights/tickets/${encodeURIComponent(id)}`);
+    const r = await api.get(`/flights/tickets/${encodeURIComponent(normalizeEntityId(id))}`);
     return r.data ?? null;
   } catch (e: any) {
     if (e?.response?.status === 404) return null;
