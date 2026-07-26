@@ -20,6 +20,14 @@ export class FlightsService {
     }));
   }
 
+  // Point-read por id (buscador directo): trae solo ese boleto, no toda la tabla.
+  async findTicketById(id: string) {
+    const data = await this.dc.executeQuery<{ flightTickets: any[] }>('GetFlightTicketById', { id });
+    const t = (data.flightTickets || [])[0];
+    if (!t) return null;
+    return { ...t, pasajeros: parseJsonField(t.pasajeros, []), segmentos: parseJsonField(t.segmentos, []) };
+  }
+
   async findAllLegs() {
     const data = await this.dc.executeQuery<{ flightLegs: any[] }>('ListFlightLegs');
     return data.flightLegs || [];

@@ -28,8 +28,9 @@ export class ReservationsService {
   }
 
   async findOne(id: string) {
-    const data = await this.dc.executeQuery<{ reservations: any[] }>('ListReservations');
-    const reservation = (data.reservations || []).find((r) => r.id === id);
+    // Point-read por id (buscador directo): trae solo ese expediente, no toda la tabla.
+    const data = await this.dc.executeQuery<{ reservations: any[] }>('GetReservationById', { id });
+    const reservation = (data.reservations || [])[0];
     if (!reservation) throw new NotFoundException(`Reserva ${id} no encontrada`);
     return this.parseReservation(reservation);
   }

@@ -61,7 +61,10 @@ import { printElementById } from "../lib/print";
 import { getReservationReceivable } from "../lib/receivables";
 import EstadoCuentaReservaPDF from "../components/EstadoCuentaReservaPDF";
 import { nextSequentialId, seqNum } from "../lib/idGenerator";
-import { listRegistrosAuditoriaByEntidad } from "../lib/dataconnect-shim";
+import { listRegistrosAuditoriaByEntidad, getReservationById } from "../lib/dataconnect-shim";
+import { useClientPagination } from "../hooks/useClientPagination";
+import Pagination from "../components/ui/Pagination";
+import IdSearchBox from "../components/ui/IdSearchBox";
 import { parseAttachment, downloadAttachment } from "../lib/attachments";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { computeVatBreakdown } from "../lib/quoteVat";
@@ -100,6 +103,8 @@ interface ReservasViewProps {
   reglasAutorizacion?: ReglaAutorizacion[];
   onCreateSolicitudAutorizacion?: (solicitud: SolicitudAutorizacion) => void;
   onAddRegistroAuditoria?: (registro: Omit<RegistroAuditoria, "createdAt">) => void;
+  // Buscador por id: fusiona a memoria un expediente traído de la base (carga perezosa).
+  onEnsureReservationLoaded?: (res: Reservation) => void;
 }
 
 // Helper to calculate pricing for an individual room. Usa el mismo prorrateo por tramos de
@@ -230,6 +235,7 @@ export default function ReservasView({
   reglasAutorizacion = [],
   onCreateSolicitudAutorizacion = () => {},
   onAddRegistroAuditoria = () => {},
+  onEnsureReservationLoaded = () => {},
 }: ReservasViewProps) {
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   // Celdas de precio de la cotización DIRECTO: 1 columna (Precio) o, con el toggle de IVA activo,
@@ -974,6 +980,10 @@ export default function ReservasView({
         return checkA.localeCompare(checkB);
       }
     });
+
+  // Paginación de RENDER: la lista pinta 25 por página (DOM acotado = fluidez). Los datos
+  // siguen en memoria; el filtro/orden se aplican antes. Vuelve a la página 0 al cambiar filtro.
+  const reservasPage = useClientPagination(filteredAndSorted, 25, `${search}|${filterStatus}|${sortBy}|${asesorFilter}`);
 
   // Init cart and navigate to Level 3
   const handleStartNewExpediente = () => {
@@ -2218,12 +2228,23 @@ export default function ReservasView({
 
           {/* Filtros */}
           <div className="bg-white p-4 border border-zinc-200 rounded-lg shadow-xs space-y-3">
-            {/* Fila 1: búsqueda a todo lo ancho */}
+            {/* Buscador por ID (trae de la base, no filtra en memoria): abre el expediente
+                aunque no esté cargado en la lista. */}
+            <IdSearchBox
+              label="Ir a expediente por ID (lo trae de la base)"
+              placeholder="Ej. RES-1234"
+              fetcher={getReservationById}
+              onFound={(res: Reservation) => { onEnsureReservationLoaded(res); handleOpenReservation(res.id); }}
+            />
+
+            <div className="border-t border-zinc-100" />
+
+            {/* Fila 1: filtro sobre los expedientes cargados */}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
               <input
                 type="text"
-                placeholder="Buscar por localizador, titular, teléfono, email..."
+                placeholder="Filtrar cargados por localizador, titular, teléfono, email..."
                 className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-500 font-semibold"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -2326,9 +2347,9 @@ export default function ReservasView({
                       </td>
                     </tr>
                   ) : (
-                    filteredAndSorted.map((r) => (
+                    reservasPage.pageItems.map((r) => (
                       <React.Fragment key={r.id}>
-                        <tr 
+                        <tr
                           onClick={() => { handleOpenReservation(r.id); }}
                           className="hover:bg-zinc-50/60 transition-colors cursor-pointer group"
                         >
@@ -2464,6 +2485,18 @@ export default function ReservasView({
                   )}
                 </tbody>
               </table>
+              {filteredAndSorted.length > 0 && (
+                <div className="px-2">
+                  <Pagination
+                    page={reservasPage.page}
+                    hasMore={reservasPage.hasMore}
+                    loading={false}
+                    onPrev={reservasPage.prev}
+                    onNext={reservasPage.next}
+                    count={reservasPage.pageItems.length}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </>

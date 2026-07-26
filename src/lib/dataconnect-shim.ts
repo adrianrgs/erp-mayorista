@@ -94,6 +94,17 @@ export const listProviderStatements = async (_dc?: any) => {
 
 // ─── MUTATIONS: RESERVATIONS ─────────────────────────────────────────────────
 
+// Buscador por id (point-read): trae UN expediente por su id, o null si no existe (404).
+export const getReservationById = async (id: string): Promise<any | null> => {
+  try {
+    const r = await api.get(`/reservations/${encodeURIComponent(id)}`);
+    return r.data ?? null;
+  } catch (e: any) {
+    if (e?.response?.status === 404) return null;
+    throw e;
+  }
+};
+
 export const insertReservation = async (_dc: any, vars: any) => {
   // El backend asigna el id de forma atómica (anti-colisión) y lo devuelve; puede diferir
   // del propuesto si otro asesor tomó ese RES-N. Se retorna para que el cliente reconcilie.
@@ -239,6 +250,17 @@ export const deleteStopSale = async (_dc: any, vars: { id: string }) => {
 };
 
 // ─── MUTATIONS: FLIGHT TICKETS ────────────────────────────────────────────────
+
+// Buscador por id (point-read): trae UN boleto por su id (= AER), o null si no existe.
+export const getFlightTicketById = async (id: string): Promise<any | null> => {
+  try {
+    const r = await api.get(`/flights/tickets/${encodeURIComponent(id)}`);
+    return r.data ?? null;
+  } catch (e: any) {
+    if (e?.response?.status === 404) return null;
+    throw e;
+  }
+};
 
 export const insertFlightTicket = async (_dc: any, vars: any) => {
   // El backend asigna el id (= AER) de forma atómica y lo devuelve; puede diferir del

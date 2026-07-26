@@ -16,6 +16,10 @@ export class FlightsController {
   @Get('legs')
   findAllLegs() { return this.service.findAllLegs(); }
 
+  // Point-read por id (buscador directo). Devuelve el boleto o null (200) si no existe.
+  @Get('tickets/:id')
+  findTicketById(@Param('id') id: string) { return this.service.findTicketById(id); }
+
   @Post('parse-pnr')
   parsePnr(@Body() body: { rawText: string }) {
     return this.service.parsePnr(body.rawText);

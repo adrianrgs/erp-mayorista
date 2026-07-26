@@ -948,6 +948,14 @@ export default function App() {
       console.error("Error in handleDeleteReservation:", e);
     }
   };
+  // Buscador por id: cuando se trae un expediente de la base que no estaba en memoria, lo
+  // fusiona a la lista (carga perezosa) para poder abrirlo y usarlo como cualquier otro.
+  const handleEnsureReservationLoaded = (res: Reservation) => {
+    setReservations(prev => prev.some(r => r.id === res.id)
+      ? prev.map(r => (r.id === res.id ? res : r))
+      : [res, ...prev]);
+  };
+
   const handleAddReservation = async (newRes: any): Promise<string | null> => {
     newRes.updatedAt = new Date().toISOString();
     // Asesor: username del usuario logueado al momento de crear la reserva (control y comisiones).
@@ -2207,6 +2215,7 @@ onDeleteStopSale={handleDeleteStopSale}
                       onCreateSolicitudAutorizacion={handleCreateSolicitudAutorizacion}
                       onAddRegistroAuditoria={handleAddRegistroAuditoria}
                       onDeleteReservation={handleDeleteReservation}
+                      onEnsureReservationLoaded={handleEnsureReservationLoaded}
                     />
                   )}
                   {currentSection === ProjectView.FACTURACION && (

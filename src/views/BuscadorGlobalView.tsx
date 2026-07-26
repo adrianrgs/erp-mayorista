@@ -4,6 +4,8 @@ import type { Reservation, FinancialInvoice, PayableObligation } from "../types"
 import { formatCurrency, getOperatingCurrency } from "../lib/taxEngine";
 import type { FlightTicket } from "../types/aereos";
 import { ProjectView } from "../types";
+import IdSearchBox from "../components/ui/IdSearchBox";
+import { getReservationById, getFlightTicketById } from "../lib/dataconnect-shim";
 
 interface BuscadorProps {
   reservations: Reservation[];
@@ -35,6 +37,11 @@ export default function BuscadorGlobalView({
   const [vueloFecha, setVueloFecha] = useState("");
 
   const [selectedItem, setSelectedItem] = useState<{ type: "reserva", data: Reservation } | { type: "vuelo", data: FlightTicket } | null>(null);
+
+  // Buscador por id: registros traídos de la base por su id (aunque no estén cargados en
+  // memoria). Se muestran al tope de los resultados, deduplicados por id.
+  const [fetchedReservas, setFetchedReservas] = useState<Reservation[]>([]);
+  const [fetchedVuelos, setFetchedVuelos] = useState<FlightTicket[]>([]);
 
   const clearFilters = () => {
     if (activeTab === "reservas") {
@@ -93,6 +100,14 @@ export default function BuscadorGlobalView({
     });
   }, [boletos, vueloPnr, vueloPax, vueloAerolinea, vueloFecha]);
 
+  // Resultados a mostrar = traídos por id (al tope) + filtrados en memoria, deduplicados por id.
+  const dedupById = <T extends { id: string }>(rows: T[]): T[] => {
+    const seen = new Set<string>();
+    return rows.filter(r => (seen.has(r.id) ? false : (seen.add(r.id), true)));
+  };
+  const reservasToShow = useMemo(() => dedupById([...fetchedReservas, ...filteredReservas]), [fetchedReservas, filteredReservas]);
+  const vuelosToShow = useMemo(() => dedupById([...fetchedVuelos, ...filteredVuelos]), [fetchedVuelos, filteredVuelos]);
+
   return (
     <div className="space-y-6 font-sans">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-zinc-200 pb-4">
@@ -128,13 +143,36 @@ export default function BuscadorGlobalView({
           <h3 className="text-sm font-bold text-zinc-800 flex items-center gap-2">
             <Search className="w-4 h-4 text-indigo-600" /> Búsqueda Avanzada de {activeTab === "reservas" ? "Reservas" : "Vuelos"}
           </h3>
-          <button 
+          <button
             onClick={clearFilters}
             className="text-xs font-bold text-zinc-500 hover:text-zinc-800 transition-colors"
           >
             Limpiar Filtros
           </button>
         </div>
+
+        {/* Buscador por id directo: trae de la base (aunque no esté cargado) y lo abre. */}
+        {activeTab === "reservas" ? (
+          <IdSearchBox
+            label="Traer expediente por ID desde la base"
+            placeholder="Ej. RES-1234"
+            fetcher={getReservationById}
+            onFound={(res: Reservation) => {
+              setFetchedReservas(prev => [res, ...prev.filter(r => r.id !== res.id)]);
+              setSelectedItem({ type: "reserva", data: res });
+            }}
+          />
+        ) : (
+          <IdSearchBox
+            label="Traer boleto por ID desde la base"
+            placeholder="Ej. AER-1234"
+            fetcher={getFlightTicketById}
+            onFound={(bol: FlightTicket) => {
+              setFetchedVuelos(prev => [bol, ...prev.filter(b => b.id !== bol.id)]);
+              setSelectedItem({ type: "vuelo", data: bol });
+            }}
+          />
+        )}
 
         {activeTab === "reservas" ? (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -237,12 +275,12 @@ export default function BuscadorGlobalView({
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
-              {filteredReservas.length === 0 ? (
+              {reservasToShow.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-zinc-400 text-sm">No se encontraron reservas con esos filtros.</td>
                 </tr>
               ) : (
-                filteredReservas.map(res => {
+                reservasToShow.map(res => {
                   const cobro = getClientPaymentStatus(res.id);
                   const pago = getProviderPaymentStatus(res.id);
                   return (
@@ -287,12 +325,12 @@ export default function BuscadorGlobalView({
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-100">
-              {filteredVuelos.length === 0 ? (
+              {vuelosToShow.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-zinc-400 text-sm">No se encontraron vuelos con esos filtros.</td>
                 </tr>
               ) : (
-                filteredVuelos.map(bol => {
+                vuelosToShow.map(bol => {
                   const cobro = getClientPaymentStatus(bol.pnr);
                   return (
                     <tr key={bol.id} onClick={() => setSelectedItem({ type: "vuelo", data: bol })} className="hover:bg-zinc-50 transition-colors cursor-pointer group">

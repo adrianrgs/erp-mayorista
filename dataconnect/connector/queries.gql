@@ -34,6 +34,44 @@ holder
   }
 }
 
+# Point-read por id (buscador directo): trae UN expediente por su clave primaria,
+# sin cargar toda la tabla. Base del buscador por id (módulos + buscador global).
+query GetReservationById($id: String!) @auth(level: PUBLIC) {
+  reservations(where: { id: { eq: $id } }, limit: 1) {
+    id
+    updatedAt
+    holder
+    hotelName
+    checkIn
+    checkOut
+    pax
+    status
+    totalPrice
+    netPrice
+    agenciaName
+    tipo
+    servicios
+    telefono
+    email
+    flightNo
+    specialRequests
+    mercado
+    createdAt
+    comprobanteRef
+    comprobanteMonto
+    comprobanteMetodo
+    facturacionTipo
+    facturacionRechazoMotivo
+    facturacionRechazoArchivos
+    variaciones
+    pasajeros
+    canalVenta
+    clienteDirectoId
+    localizadorProveedor
+    asesor
+  }
+}
+
 query ListClients @auth(level: PUBLIC) {
   b2BClients {
     id
@@ -185,6 +223,37 @@ query ListFlightTickets @auth(level: PUBLIC) {
     id
     updatedAt
 pnr
+    pasajeros
+    segmentos
+    costoNeto
+    precioVenta
+    precioPvp
+    comisionB2B
+    comisionMayorista
+    tipoComision
+    fee
+    vinculadoAExpediente
+    facturarConjunto
+    expedienteId
+    agenteNombre
+    createdAt
+    ticketNumero
+    aerolineaValidadora
+    timeLimit
+    tarifaBase
+    impuestos
+    notas
+    expedienteAereo
+    asesor
+  }
+}
+
+# Point-read por id (buscador directo): trae UN boleto por su clave primaria (= id AER).
+query GetFlightTicketById($id: String!) @auth(level: PUBLIC) {
+  flightTickets(where: { id: { eq: $id } }, limit: 1) {
+    id
+    updatedAt
+    pnr
     pasajeros
     segmentos
     costoNeto
