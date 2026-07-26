@@ -158,6 +158,8 @@ export default function CobranzasB2BPanel({
   // Cobro consolidado: pagar varias facturas bajo un mismo comprobante.
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<Set<string>>(new Set());
   const [showConsolidatedCollectModal, setShowConsolidatedCollectModal] = useState(false);
+  // Distribución manual: abono a aplicar por factura (id → monto en texto). Default = pendiente.
+  const [allocations, setAllocations] = useState<Record<string, string>>({});
   const [consolidatedCollectForm, setConsolidatedCollectForm] = useState({
     method: "Transferencia Bancaria",
     reference: "",
@@ -171,6 +173,20 @@ export default function CobranzasB2BPanel({
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
   });
+  // Al abrir el modal de cobro, precarga el abono de cada factura seleccionada con su pendiente
+  // (default = pagar completo); el trabajador puede reducirlo para distribuir un monto parcial.
+  React.useEffect(() => {
+    if (!showConsolidatedCollectModal) return;
+    const init: Record<string, string> = {};
+    invoices.forEach(inv => {
+      if (selectedInvoiceIds.has(inv.id)) {
+        const rem = Number((netByInvoice[inv.id]?.remaining ?? inv.amount).toFixed(2));
+        if (rem > 0.005) init[inv.id] = String(rem);
+      }
+    });
+    setAllocations(init);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showConsolidatedCollectModal]);
 
   const activeClient = clients.find(c => c.id === selectedClientId);
 
@@ -481,21 +497,30 @@ export default function CobranzasB2BPanel({
     setTimeout(() => setStatusMessage(""), 5000);
   };
 
-  // Cobro consolidado: paga el pendiente completo de cada factura seleccionada bajo un mismo
-  // comprobante. Crea un voucher por factura (para netear cada una) con la misma referencia y un
-  // único recibo consolidado. Para pagos parciales de una sola factura, usar "Registrar Pago".
+  // Abono a aplicar a una factura (clamp 0..pendiente), tomado del input de distribución.
+  const abonoDe = (inv: FinancialInvoice) => {
+    const rem = Number((netByInvoice[inv.id]?.remaining ?? inv.amount).toFixed(2));
+    const raw = parseFloat(allocations[inv.id] ?? String(rem));
+    if (isNaN(raw) || raw < 0) return 0;
+    return Number(Math.min(raw, rem).toFixed(2));
+  };
+
+  // Cobro consolidado con DISTRIBUCIÓN MANUAL: cada factura recibe el abono indicado (parcial o
+  // total). Crea un voucher por factura con ese abono bajo un mismo comprobante; la factura queda
+  // "Pagado" solo si el abono la salda, si no conserva su estado (queda con saldo pendiente).
   const handleConsolidatedCollectSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeClient) return;
     const selected = invoices.filter(i =>
       selectedInvoiceIds.has(i.id) && (netByInvoice[i.id]?.remaining ?? i.amount) > 0.005
     );
-    if (selected.length === 0) { alert("Seleccione al menos una factura pendiente."); return; }
+    const conAbono = selected.filter(i => abonoDe(i) > 0.005);
+    if (conAbono.length === 0) { alert("Asigne un abono mayor a 0 en al menos una factura."); return; }
 
     const isWallet = consolidatedCollectForm.method === "Billetera Virtual B2B";
-    const totalToPay = Number(selected.reduce((s, i) => s + (netByInvoice[i.id]?.remaining ?? i.amount), 0).toFixed(2));
+    const totalToPay = Number(conAbono.reduce((s, i) => s + abonoDe(i), 0).toFixed(2));
     if (isWallet && totalToPay > activeClient.saldoFavor) {
-      alert("El saldo a favor disponible es insuficiente para cubrir las facturas seleccionadas.");
+      alert("El saldo a favor disponible es insuficiente para el total distribuido.");
       return;
     }
 
@@ -506,8 +531,10 @@ export default function CobranzasB2BPanel({
     let nextSaldoDeber = activeClient.saldoDeber;
     let nextSaldoFavor = activeClient.saldoFavor;
 
-    selected.forEach(inv => {
+    conAbono.forEach(inv => {
       const rem = Number((netByInvoice[inv.id]?.remaining ?? inv.amount).toFixed(2));
+      const abono = abonoDe(inv);
+      const saldaCompleta = abono >= rem - 0.005;
       const vId = nextSequentialId("VOU", vouIds); vouIds.push(vId);
       onAddVoucher({
         id: vId,
@@ -517,16 +544,18 @@ export default function CobranzasB2BPanel({
         locatorId: inv.clientName.match(/Localizador\s+(\w+-\d+)/)?.[1] || undefined,
         method: consolidatedCollectForm.method,
         reference,
-        amount: rem,
+        amount: abono,
         date: fecha,
         status: "Verificado",
         bankName: consolidatedCollectForm.bankName || undefined,
-        notes: consolidatedCollectForm.notes || `Cobro consolidado (${selected.length} facturas)`,
+        notes: consolidatedCollectForm.notes || `Cobro distribuido (${conAbono.length} facturas)`,
         attachedFile: consolidatedCollectForm.attachedFile || "comprobante_registrado.jpg"
       });
-      onUpdateInvoice({ ...inv, status: "Pagado" as const });
-      nextSaldoDeber = Math.max(0, Number((nextSaldoDeber - rem).toFixed(2)));
-      if (isWallet) nextSaldoFavor = Number((nextSaldoFavor - rem).toFixed(2));
+      // Solo marcar "Pagado" si el abono salda la factura; si es parcial, conserva su estado
+      // (el pendiente se recalcula solo a partir de los comprobantes en netByInvoice).
+      if (saldaCompleta) onUpdateInvoice({ ...inv, status: "Pagado" as const });
+      nextSaldoDeber = Math.max(0, Number((nextSaldoDeber - abono).toFixed(2)));
+      if (isWallet) nextSaldoFavor = Number((nextSaldoFavor - abono).toFixed(2));
     });
 
     onUpdateClient({ ...activeClient, saldoDeber: nextSaldoDeber, saldoFavor: nextSaldoFavor });
@@ -534,7 +563,7 @@ export default function CobranzasB2BPanel({
     if (onAddInvoice) {
       onAddInvoice({
         id: nextSequentialId("FAC", invoices.map(i => i.id)),
-        clientName: `Recibo de Cobro (Consolidado): ${activeClient.nombre} — ${selected.length} facturas [${selected.map(s => s.id).join(", ")}]`,
+        clientName: `Recibo de Cobro (Distribuido): ${activeClient.nombre} — ${conAbono.length} facturas [${conAbono.map(s => s.id).join(", ")}]`,
         clientId: activeClient.id,
         date: fecha,
         dueDate: fecha,
@@ -547,8 +576,9 @@ export default function CobranzasB2BPanel({
 
     setShowConsolidatedCollectModal(false);
     setSelectedInvoiceIds(new Set());
+    setAllocations({});
     setConsolidatedCollectForm(f => ({ ...f, reference: "", notes: "", attachedFile: "" }));
-    setStatusMessage(`✓ Cobro consolidado de ${formatCurrency(totalToPay, getOperatingCurrency())} registrado sobre ${selected.length} facturas de ${activeClient.nombre}.`);
+    setStatusMessage(`✓ Cobro distribuido de ${formatCurrency(totalToPay, getOperatingCurrency())} registrado sobre ${conAbono.length} factura(s) de ${activeClient.nombre}.`);
     setTimeout(() => setStatusMessage(""), 5000);
   };
 
@@ -1609,35 +1639,68 @@ export default function CobranzasB2BPanel({
       {/* REGISTER PAYMENT MODAL */}
       {showConsolidatedCollectModal && activeClient && (() => {
         const selected = invoices.filter(i => selectedInvoiceIds.has(i.id) && (netByInvoice[i.id]?.remaining ?? i.amount) > 0.005);
-        const total = Number(selected.reduce((s, i) => s + (netByInvoice[i.id]?.remaining ?? i.amount), 0).toFixed(2));
+        // Total en vivo = suma de los abonos asignados (distribución manual).
+        const total = Number(selected.reduce((s, i) => s + abonoDe(i), 0).toFixed(2));
         const isWallet = consolidatedCollectForm.method === "Billetera Virtual B2B";
         const walletInsufficient = isWallet && total > activeClient.saldoFavor;
+        const setAbono = (id: string, v: string) => setAllocations(prev => ({ ...prev, [id]: v }));
         return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 font-sans">
           <div className="bg-white border border-zinc-200 rounded-lg shadow-xl w-full max-w-lg overflow-hidden animate-fade-in flex flex-col max-h-[92vh]">
             <div className="bg-zinc-950 text-white px-5 py-4 flex items-center justify-between shrink-0">
               <div>
                 <h4 className="font-extrabold text-sm uppercase tracking-wider flex items-center gap-2">
-                  <CreditCard className="w-4.5 h-4.5" /> Cobro Consolidado
+                  <CreditCard className="w-4.5 h-4.5" /> Cobro Distribuido
                 </h4>
                 <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">
-                  {selected.length} factura{selected.length > 1 ? "s" : ""} de {activeClient.nombre} bajo un mismo comprobante
+                  Reparte el monto entre las {selected.length} factura{selected.length > 1 ? "s" : ""} de {activeClient.nombre} (edita el abono de cada una)
                 </p>
               </div>
               <button onClick={() => setShowConsolidatedCollectModal(false)} className="text-zinc-400 hover:text-white cursor-pointer text-xl leading-none">×</button>
             </div>
             <form onSubmit={handleConsolidatedCollectSubmit} className="flex-1 overflow-y-auto p-5 space-y-4 text-left">
-              {/* Facturas incluidas */}
-              <div className="border border-zinc-200 rounded-lg divide-y divide-zinc-100 max-h-44 overflow-y-auto">
-                {selected.map(inv => (
-                  <div key={inv.id} className="flex items-center justify-between gap-2 px-3 py-2 text-[11px]">
-                    <span className="font-mono font-bold text-zinc-800 truncate">{inv.id}</span>
-                    <span className="font-mono font-black text-zinc-900 shrink-0">{formatCurrency(Number((netByInvoice[inv.id]?.remaining ?? inv.amount).toFixed(2)), getOperatingCurrency())}</span>
-                  </div>
-                ))}
+              {/* Facturas incluidas: pendiente + abono editable por factura */}
+              <div className="border border-zinc-200 rounded-lg divide-y divide-zinc-100 max-h-56 overflow-y-auto">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-50 text-[8.5px] font-black uppercase tracking-wider text-zinc-400">
+                  <span className="flex-1">Factura</span>
+                  <span className="w-24 text-right">Pendiente</span>
+                  <span className="w-28 text-right">Abono</span>
+                </div>
+                {selected.map(inv => {
+                  const rem = Number((netByInvoice[inv.id]?.remaining ?? inv.amount).toFixed(2));
+                  const ab = abonoDe(inv);
+                  const parcial = ab > 0.005 && ab < rem - 0.005;
+                  return (
+                    <div key={inv.id} className="flex items-center gap-2 px-3 py-2 text-[11px]">
+                      <span className="flex-1 font-mono font-bold text-zinc-800 truncate">
+                        {inv.id}
+                        {parcial && <span className="ml-1.5 text-[8px] font-black uppercase text-amber-600">parcial → queda {formatCurrency(Number((rem - ab).toFixed(2)), getOperatingCurrency())}</span>}
+                      </span>
+                      <span className="w-24 text-right font-mono font-bold text-zinc-500 shrink-0">{formatCurrency(rem, getOperatingCurrency())}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={rem}
+                        step="0.01"
+                        value={allocations[inv.id] ?? String(rem)}
+                        onChange={e => setAbono(inv.id, e.target.value)}
+                        className="w-28 text-right p-1.5 border border-zinc-200 rounded text-[11px] font-mono font-bold text-zinc-900 focus:outline-none focus:border-emerald-500 shrink-0"
+                      />
+                    </div>
+                  );
+                })}
               </div>
               <div className="flex items-center justify-between bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2.5">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Total a cobrar</span>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">Total a cobrar (distribuido)</span>
+                  <button
+                    type="button"
+                    onClick={() => setAllocations(Object.fromEntries(selected.map(i => [i.id, String(Number((netByInvoice[i.id]?.remaining ?? i.amount).toFixed(2)))])))}
+                    className="text-[9px] font-bold text-emerald-600 hover:text-emerald-700 uppercase tracking-wider text-left cursor-pointer mt-0.5"
+                  >
+                    Rellenar todo (pagar completo)
+                  </button>
+                </div>
                 <span className="text-lg font-black font-mono text-zinc-950">{formatCurrency(total, getOperatingCurrency())}</span>
               </div>
 
@@ -1718,7 +1781,7 @@ export default function CobranzasB2BPanel({
                 </button>
                 <button
                   type="submit"
-                  disabled={selected.length === 0 || walletInsufficient}
+                  disabled={selected.length === 0 || total <= 0.005 || walletInsufficient}
                   className="flex-[2] px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-xs font-black uppercase tracking-wider cursor-pointer transition-all"
                 >
                   Registrar cobro de {formatCurrency(total, getOperatingCurrency())}
