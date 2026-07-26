@@ -2,6 +2,10 @@ import React, { useState, useMemo, useEffect } from "react";
 import { PayableObligation, ProviderStatement } from "../types";
 import { TaxJurisdiction, DEFAULT_JURISDICTION, formatCurrency, formatDualCurrency, getOperatingCurrency, getCurrencySymbol } from "../lib/taxEngine";
 import { nextSequentialId } from "../lib/idGenerator";
+import { getPayableObligationsByLocator } from "../lib/dataconnect-shim";
+import { useClientPagination } from "../hooks/useClientPagination";
+import Pagination from "../components/ui/Pagination";
+import IdSearchBox from "../components/ui/IdSearchBox";
 import { parseAttachment, packAttachment, readFileAsDataURL, downloadAttachment, hasDownloadableFile, MAX_ATTACHMENT_BYTES } from "../lib/attachments";
 import {
   TrendingDown,
@@ -33,6 +37,7 @@ interface CuentasPorPagarViewProps {
   onAddStatement: (newDoc: ProviderStatement) => void;
   jurisdiction?: TaxJurisdiction;
   currentExchangeRate?: number;
+  onEnsureObligationsLoaded?: (obs: PayableObligation[]) => void;
 }
 
 export default function CuentasPorPagarView({
@@ -43,6 +48,7 @@ export default function CuentasPorPagarView({
   onAddStatement,
   jurisdiction,
   currentExchangeRate,
+  onEnsureObligationsLoaded = () => {},
 }: CuentasPorPagarViewProps) {
   const jur = jurisdiction ?? DEFAULT_JURISDICTION;
   const { showAlert } = useDialog();
@@ -262,6 +268,18 @@ export default function CuentasPorPagarView({
       return matchesSearch && matchesStatus;
     });
   }, [obligations, searchQuery, statusFilter, activeTab]);
+
+  // Paginación de RENDER: 25 obligaciones por página en la bandeja (DOM acotado = fluidez).
+  const obligacionesPage = useClientPagination<PayableObligation>(filteredObligations, 25, `${searchQuery}|${statusFilter}|${activeTab}`);
+
+  // Buscador por localizador (RES-/AER-): trae de la base las obligaciones del expediente
+  // (aunque no estén cargadas), las fusiona a memoria y filtra la bandeja por ese localizador.
+  const buscarObligacionesPorLocalizador = async (rawId: string): Promise<{ locatorId: string; count: number } | null> => {
+    const obs = await getPayableObligationsByLocator(rawId);
+    if (!obs.length) return null;
+    onEnsureObligationsLoaded(obs);
+    return { locatorId: obs[0].locatorId, count: obs.length };
+  };
 
   // ─── PROVIDER HISTORIES (Libro Mayor) ──────────────────────────────────────
   // Strips reservation-specific passenger data from provider names, e.g.
@@ -704,14 +722,24 @@ export default function CuentasPorPagarView({
       {(activeTab === "obligaciones" || activeTab === "pagadas") && (
         <div className="space-y-6">
           
+          {/* Buscador por localizador (trae de la base las obligaciones del expediente). */}
+          <div className="bg-white p-3 border border-zinc-200 rounded-lg shadow-3xs">
+            <IdSearchBox<{ locatorId: string; count: number }>
+              label="Traer cuentas por pagar de un expediente (RES- o AER-)"
+              placeholder="Ej. RES-1234 o AER-45"
+              fetcher={buscarObligacionesPorLocalizador}
+              onFound={(hit) => { setActiveTab("obligaciones"); setStatusFilter("Todos"); setSearchQuery(hit.locatorId); }}
+            />
+          </div>
+
           {/* Filters Bento Box */}
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white p-4 border border-zinc-200 rounded-lg shadow-3xs">
-            {/* Search Bar */}
+            {/* Search Bar (filtra lo cargado) */}
             <div className="relative w-full md:w-80">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
               <input
                 type="text"
-                placeholder="Buscar por proveedor, ID, localizador..."
+                placeholder="Filtrar por proveedor, ID, localizador..."
                 className="w-full pl-9 pr-4 py-2 border border-zinc-200 rounded text-xs bg-white text-zinc-900 focus:outline-none focus:border-zinc-500 font-semibold"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -766,7 +794,7 @@ export default function CuentasPorPagarView({
                       </td>
                     </tr>
                   ) : (
-                    filteredObligations.map(ob => {
+                    obligacionesPage.pageItems.map(ob => {
                       const remaining = ob.netCost - ob.paidAmount;
                       return (
                         <tr 
@@ -886,6 +914,18 @@ export default function CuentasPorPagarView({
                   )}
                 </tbody>
               </table>
+              {filteredObligations.length > 0 && (
+                <div className="px-4 pb-2">
+                  <Pagination
+                    page={obligacionesPage.page}
+                    hasMore={obligacionesPage.hasMore}
+                    loading={false}
+                    onPrev={obligacionesPage.prev}
+                    onNext={obligacionesPage.next}
+                    count={obligacionesPage.pageItems.length}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

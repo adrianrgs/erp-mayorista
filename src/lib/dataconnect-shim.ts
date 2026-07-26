@@ -256,6 +256,13 @@ export const deleteStopSale = async (_dc: any, vars: { id: string }) => {
 
 // ─── MUTATIONS: FLIGHT TICKETS ────────────────────────────────────────────────
 
+// Buscador por localizador: trae de la base las obligaciones (cuentas por pagar) de un
+// expediente (RES-/AER-). Devuelve [] si no hay ninguna.
+export const getPayableObligationsByLocator = async (locatorId: string): Promise<any[]> => {
+  const r = await api.get(`/finances/obligations/by-locator/${encodeURIComponent(normalizeEntityId(locatorId))}`);
+  return (r.data as any[]) ?? [];
+};
+
 // Buscador por id (point-read): trae UN boleto por su id (= AER), o null si no existe.
 export const getFlightTicketById = async (id: string): Promise<any | null> => {
   try {

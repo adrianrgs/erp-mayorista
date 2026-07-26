@@ -60,6 +60,14 @@ export class FinancesService {
     return data.payableObligations || [];
   }
 
+  // Buscador por localizador (RES-/AER-): trae solo las obligaciones de ese expediente.
+  async findObligationsByLocator(locatorId: string) {
+    const data = await this.dc.executeQuery<{ payableObligations: any[] }>(
+      'GetPayableObligationsByLocator', { locatorId },
+    );
+    return data.payableObligations || [];
+  }
+
   async createObligation(dto: any) {
     await this.dc.executeMutation('InsertPayableObligation', {
       ...dto,

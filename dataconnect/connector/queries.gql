@@ -356,6 +356,28 @@ dueDate
   }
 }
 
+# Buscador por localizador (RES-/AER-): trae de la base las obligaciones de un expediente,
+# sin cargar toda la tabla. Base del buscador de Cuentas por Pagar.
+query GetPayableObligationsByLocator($locatorId: String!) @auth(level: PUBLIC) {
+  payableObligations(where: { locatorId: { eq: $locatorId } }, orderBy: [{ dueDate: ASC }]) {
+    id
+    updatedAt
+    dueDate
+    providerName
+    serviceDetail
+    locatorId
+    netCost
+    paidAmount
+    status
+    paymentMethod
+    reference
+    notes
+    date
+    currency
+    attachedFile
+  }
+}
+
 query ListProviderStatements @auth(level: PUBLIC) {
   providerStatements(orderBy: [{date: DESC}]) {
     id

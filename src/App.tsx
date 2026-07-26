@@ -960,6 +960,16 @@ export default function App() {
       ? prev.map(b => (b.id === bol.id ? bol : b))
       : [bol, ...prev]);
   };
+  // Buscador por localizador en Cuentas por Pagar: fusiona a memoria las obligaciones traídas
+  // de la base (dedup por id) para que aparezcan en la bandeja aunque no estuvieran cargadas.
+  const handleEnsureObligationsLoaded = (obs: PayableObligation[]) => {
+    if (!obs?.length) return;
+    setPayableObligations(prev => {
+      const byId = new Map(prev.map(o => [o.id, o]));
+      for (const o of obs) byId.set(o.id, o);
+      return Array.from(byId.values());
+    });
+  };
 
   // "Abrir registro" desde el buscador global: fusiona el registro traído por id, lo marca
   // como pendiente de abrir y navega a su módulo, que lo abre al recibir el id.
@@ -2395,6 +2405,7 @@ onDeleteStopSale={handleDeleteStopSale}
                     onAddStatement={handleAddStatement}
                     jurisdiction={jurisdiction}
                     currentExchangeRate={todayExchangeRate}
+                    onEnsureObligationsLoaded={handleEnsureObligationsLoaded}
                   />
                 )}
                 {currentSection === ProjectView.CONFIGURACION && esAdministrador && (

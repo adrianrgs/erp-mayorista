@@ -46,6 +46,12 @@ export class FinancesController {
   @Get('obligations')
   findAllObligations() { return this.service.findAllObligations(); }
 
+  // Buscador por localizador (RES-/AER-): obligaciones de un expediente, traídas de la base.
+  @Get('obligations/by-locator/:locatorId')
+  findObligationsByLocator(@Param('locatorId') locatorId: string) {
+    return this.service.findObligationsByLocator(locatorId);
+  }
+
   @Post('obligations')
   @RequierePermiso(Accion.CREAR, Modulo.CUENTAS_PAGAR, Modulo.FACTURACION)
   createObligation(@Body() dto: any) { return this.service.createObligation(dto); }
