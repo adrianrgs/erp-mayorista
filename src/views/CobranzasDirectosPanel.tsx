@@ -231,6 +231,13 @@ export default function CobranzasDirectosPanel({
     setFlashInvoiceIds(new Set(ids));
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
     flashTimerRef.current = setTimeout(() => setFlashInvoiceIds(new Set()), 4500);
+    // Scroll a la primera fila encontrada (tras el re-render), para que el resaltado quede
+    // visible aunque estuviera fuera de pantalla.
+    if (ids[0]) {
+      setTimeout(() => {
+        document.getElementById(`inv-row-${ids[0]}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    }
   };
 
   // Buscador inteligente por id: RES-/AER- trae las facturas del expediente; cualquier otro
@@ -1034,7 +1041,7 @@ export default function CobranzasDirectosPanel({
                                     const locatorMatch = inv.clientName.match(/((?:RES|AER)-\d+)/);
                                     const locator = locatorMatch ? locatorMatch[1] : null;
                                     return (
-                                    <tr key={inv.id} className={`hover:bg-zinc-50/50 transition-colors ${flashInvoiceIds.has(inv.id) ? "bg-amber-100 ring-2 ring-inset ring-amber-400 animate-pulse" : selectedInvoiceIds.has(inv.id) ? "bg-emerald-50/40" : ""}`}>
+                                    <tr key={inv.id} id={`inv-row-${inv.id}`} className={`hover:bg-zinc-50/50 transition-colors ${flashInvoiceIds.has(inv.id) ? "bg-amber-100 ring-2 ring-inset ring-amber-400 animate-pulse" : selectedInvoiceIds.has(inv.id) ? "bg-emerald-50/40" : ""}`}>
                                       <td className="p-3">
                                         <input
                                           type="checkbox"
