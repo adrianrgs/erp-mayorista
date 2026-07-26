@@ -55,6 +55,8 @@ import { useDialog } from "../components/ui/DialogProvider";
 import DateRangePicker from "../components/ui/DateRangePicker";
 import SearchableSelect from "../components/ui/SearchableSelect";
 import ProveedorPicker from "../components/ui/ProveedorPicker";
+import ProveedorPickerModal from "../components/ui/ProveedorPickerModal";
+import PickerModal from "../components/ui/PickerModal";
 import { reconcileDossierUpdate } from "../lib/financialReconciler";
 import { resolveSaleClient, isCreditEligible } from "../lib/clientResolver";
 import { printElementById } from "../lib/print";
@@ -422,7 +424,7 @@ export default function ReservasView({
   const [comisionB2B, setComisionB2B] = useState(10);
   const [comisionPropia, setComisionPropia] = useState(5);
   const [hotelSearchQuery, setHotelSearchQuery] = useState("");
-  const [showHotelDropdown, setShowHotelDropdown] = useState(false);
+  const [showHotelPicker, setShowHotelPicker] = useState(false);
   const [selectedPromoName, setSelectedPromoName] = useState("");
   // Modo "manual" — para agencias minoristas/freelancers sin contrato propio de hotel: cargan
   // solo lo que su propio proveedor mayorista les confirma (hotel, fechas, precio), sin que el
@@ -4729,114 +4731,59 @@ export default function ReservasView({
                 <>
                 {/* Hotel and Rate Plan selection */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5 relative">
+                  <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Establecimiento / Hotel</label>
-                    
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Buscar hotel por nombre o código..."
-                        className="w-full p-2.5 pl-8 border border-zinc-200 bg-white rounded text-xs font-bold text-zinc-900 focus:outline-none"
-                        value={hotelSearchQuery}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setHotelSearchQuery(val);
-                          const matched = detailedProperties.find(p => p.nombre.toLowerCase() === val.toLowerCase() || p.id.toLowerCase() === val.toLowerCase());
-                          if (matched) {
-                            setHotelId(matched.id);
-                            setSelectedPromoName("");
-                            setSelectedRatePlanId("");
-                            const hotelRooms = roomTypes.filter(rt => rt.property_id === matched.id);
-                            const defaultRoomTypeId = hotelRooms[0]?.id || "";
-                            setLodgingRooms(prev => prev.map(room => ({ ...room, roomTypeId: defaultRoomTypeId })));
-                            // Sugiere a quién pagarle a partir del hotel elegido (su proveedor
-                            // mayorista registrado, o el propio hotel si no tiene uno) — el
-                            // vendedor puede cambiarlo después si el pagador real es otro.
-                            const supplier = matched.supplierName || matched.nombre;
-                            const matchedProveedor = proveedores.find(p => p.nombre.toLowerCase() === supplier.toLowerCase());
-                            setAlojProveedorNombre(supplier);
-                            setProveedorId(matchedProveedor?.id);
-                          }
-                          setShowHotelDropdown(true);
-                        }}
-                        onFocus={() => setShowHotelDropdown(true)}
-                      />
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                      {hotelSearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setHotelSearchQuery("");
-                            setHotelId("");
-                            setSelectedPromoName("");
-                            setSelectedRatePlanId("");
-                          }}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 hover:bg-zinc-100 rounded text-zinc-400"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Backdrop */}
-                    {showHotelDropdown && (
-                      <div 
-                        className="fixed inset-0 z-40" 
-                        onClick={() => setShowHotelDropdown(false)}
-                      />
-                    )}
-
-                    {/* Filtered options dropdown */}
-                    {showHotelDropdown && (
-                      <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-md shadow-lg max-h-60 overflow-y-auto divide-y divide-zinc-100">
-                        {detailedProperties.filter(p => 
-                          p.nombre.toLowerCase().includes(hotelSearchQuery.toLowerCase()) ||
-                          p.id.toLowerCase().includes(hotelSearchQuery.toLowerCase())
-                        ).length === 0 ? (
-                          <div className="p-3 text-xs text-zinc-400 italic">
-                            Ningún hotel coincide.
+                    <button
+                      type="button"
+                      onClick={() => setShowHotelPicker(true)}
+                      className="w-full flex items-center justify-between gap-2 p-2.5 border border-zinc-200 bg-white rounded text-xs font-bold hover:border-zinc-400 cursor-pointer text-left"
+                    >
+                      <span className={hotelSearchQuery ? "text-zinc-900 truncate" : "text-zinc-400"}>
+                        {hotelSearchQuery || "Buscar hotel del catálogo…"}
+                      </span>
+                      <Search className="w-4 h-4 text-zinc-400 shrink-0" />
+                    </button>
+                    <PickerModal<Property>
+                      open={showHotelPicker}
+                      onClose={() => setShowHotelPicker(false)}
+                      onSelect={(p) => {
+                        setHotelId(p.id);
+                        setHotelSearchQuery(p.nombre);
+                        setSelectedPromoName("");
+                        setSelectedRatePlanId("");
+                        const hotelRooms = roomTypes.filter(rt => rt.property_id === p.id);
+                        const defaultRoomTypeId = hotelRooms[0]?.id || "";
+                        setLodgingRooms(prev => prev.map(room => ({ ...room, roomTypeId: defaultRoomTypeId })));
+                        // Sugiere a quién pagarle a partir del hotel elegido (su proveedor mayorista
+                        // registrado, o el propio hotel si no tiene uno); el vendedor puede cambiarlo.
+                        const supplier = p.supplierName || p.nombre;
+                        const matchedProveedor = proveedores.find(pr => pr.nombre.toLowerCase() === supplier.toLowerCase());
+                        setAlojProveedorNombre(supplier);
+                        setProveedorId(matchedProveedor?.id);
+                      }}
+                      title="Seleccionar hotel"
+                      placeholder="Buscar hotel por nombre, código o ciudad…"
+                      search={(term) => {
+                        const q = term.trim().toLowerCase();
+                        return detailedProperties
+                          .filter(p => q === "" || p.nombre.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || (p.ciudad || "").toLowerCase().includes(q))
+                          .sort((a, b) => a.nombre.localeCompare(b.nombre));
+                      }}
+                      getKey={(p) => p.id}
+                      renderItem={(p) => (
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <span className="font-bold text-zinc-900 block text-sm">{p.nombre}</span>
+                            <span className="text-[10px] text-zinc-400 font-mono">Cod: {p.id} · {p.ciudad}, {p.pais}</span>
                           </div>
-                        ) : (
-                          detailedProperties.filter(p => 
-                            p.nombre.toLowerCase().includes(hotelSearchQuery.toLowerCase()) ||
-                            p.id.toLowerCase().includes(hotelSearchQuery.toLowerCase())
-                          ).map(p => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => {
-                                setHotelId(p.id);
-                                setHotelSearchQuery(p.nombre);
-
-                                setSelectedPromoName("");
-                                setSelectedRatePlanId("");
-
-                                const hotelRooms = roomTypes.filter(rt => rt.property_id === p.id);
-                                const defaultRoomTypeId = hotelRooms[0]?.id || "";
-
-                                setLodgingRooms(prev => prev.map(room => ({ ...room, roomTypeId: defaultRoomTypeId })));
-                                const supplier = p.supplierName || p.nombre;
-                                const matchedProveedor = proveedores.find(pr => pr.nombre.toLowerCase() === supplier.toLowerCase());
-                                setAlojProveedorNombre(supplier);
-                                setProveedorId(matchedProveedor?.id);
-                                setShowHotelDropdown(false);
-                              }}
-                              className="w-full text-left p-3 hover:bg-zinc-50 flex items-center justify-between text-xs transition-colors cursor-pointer border-none font-sans"
-                            >
-                              <div>
-                                <span className="font-bold text-zinc-900 block">{p.nombre}</span>
-                                <span className="text-[10px] text-zinc-400 font-mono">Cod: {p.id} | {p.ciudad}, {p.pais}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5 flex-shrink-0">
-                                <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-zinc-100 border border-zinc-200 text-zinc-700">
-                                  {p.categoria} Estrellas
-                                </span>
-                              </div>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    )}
+                          <span className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase bg-zinc-100 border border-zinc-200 text-zinc-700 shrink-0">
+                            {p.categoria} ★
+                          </span>
+                        </div>
+                      )}
+                      emptyHint="Sin hoteles en el catálogo."
+                      noResultsHint="Ningún hotel coincide."
+                    />
                   </div>
 
                   <div className="space-y-1.5">
@@ -5372,7 +5319,7 @@ export default function ReservasView({
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Rentadora (Proveedor)</label>
-                    <ProveedorPicker
+                    <ProveedorPickerModal
                       nombre={carSupplier}
                       proveedorId={proveedorId}
                       onChange={(n, id) => { setCarSupplier(n); setProveedorId(id); }}
@@ -5439,13 +5386,12 @@ export default function ReservasView({
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Proveedor Operador</label>
-                    <ProveedorPicker
+                    <ProveedorPickerModal
                       nombre={insSupplier}
                       proveedorId={proveedorId}
                       onChange={(n, id) => { setInsSupplier(n); setProveedorId(id); }}
                       proveedores={proveedores}
                       required
-                      placeholder="Ej. Asistencia Global Travel"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -5487,13 +5433,12 @@ export default function ReservasView({
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Proveedor Local (Supplier)</label>
-                    <ProveedorPicker
+                    <ProveedorPickerModal
                       nombre={manualSupplier}
                       proveedorId={proveedorId}
                       onChange={(n, id) => { setManualSupplier(n); setProveedorId(id); }}
                       proveedores={proveedores}
                       required
-                      placeholder="Ej: Disney Ticket Wholesaler"
                     />
                   </div>
                 </div>
