@@ -22,8 +22,15 @@ export class ReservationsService {
     };
   }
 
-  async findAll() {
-    const data = await this.dc.executeQuery<{ reservations: any[] }>('ListReservations');
+  // Ventana reciente (corte de carga): si viene `since` (fecha ISO), trae solo lo creado desde
+  // esa fecha; si no, trae todo (compatibilidad). Las viejas se traen por id con findOne.
+  async findAll(since?: string, limit?: number) {
+    const data = since
+      ? await this.dc.executeQuery<{ reservations: any[] }>('ListReservationsRecent', {
+          since,
+          limit: Math.max(1, Math.min(limit || 1000, 5000)),
+        })
+      : await this.dc.executeQuery<{ reservations: any[] }>('ListReservations');
     return (data.reservations || []).map((r) => this.parseReservation(r));
   }
 

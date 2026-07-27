@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { FlightsService } from './flights.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -11,7 +11,9 @@ export class FlightsController {
   constructor(private readonly service: FlightsService) {}
 
   @Get('tickets')
-  findAllTickets() { return this.service.findAllTickets(); }
+  findAllTickets(@Query('since') since?: string, @Query('limit') limit?: string) {
+    return this.service.findAllTickets(since, limit ? parseInt(limit, 10) : undefined);
+  }
 
   @Get('legs')
   findAllLegs() { return this.service.findAllLegs(); }

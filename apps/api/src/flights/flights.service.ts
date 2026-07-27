@@ -11,8 +11,13 @@ export class FlightsService {
     private readonly pnrParser: PnrParserService,
   ) {}
 
-  async findAllTickets() {
-    const data = await this.dc.executeQuery<{ flightTickets: any[] }>('ListFlightTickets');
+  async findAllTickets(since?: string, limit?: number) {
+    const data = since
+      ? await this.dc.executeQuery<{ flightTickets: any[] }>('ListFlightTicketsRecent', {
+          since,
+          limit: Math.max(1, Math.min(limit || 1000, 5000)),
+        })
+      : await this.dc.executeQuery<{ flightTickets: any[] }>('ListFlightTickets');
     return (data.flightTickets || []).map((t) => ({
       ...t,
       pasajeros: parseJsonField(t.pasajeros, []),

@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ReservationsService } from './reservations.service';
@@ -22,8 +23,8 @@ export class ReservationsController {
   constructor(private readonly service: ReservationsService) {}
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(@Query('since') since?: string, @Query('limit') limit?: string) {
+    return this.service.findAll(since, limit ? parseInt(limit, 10) : undefined);
   }
 
   @Get(':id')

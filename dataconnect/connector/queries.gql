@@ -34,6 +34,44 @@ holder
   }
 }
 
+# Ventana reciente (corte de carga): reservas creadas desde `since` (fecha ISO), las más
+# nuevas primero, acotadas por `limit`. Las viejas se traen puntualmente por id (buscador).
+query ListReservationsRecent($since: String!, $limit: Int!) @auth(level: PUBLIC) {
+  reservations(where: { createdAt: { ge: $since } }, orderBy: [{ createdAt: DESC }], limit: $limit) {
+    id
+    updatedAt
+    holder
+    hotelName
+    checkIn
+    checkOut
+    pax
+    status
+    totalPrice
+    netPrice
+    agenciaName
+    tipo
+    servicios
+    telefono
+    email
+    flightNo
+    specialRequests
+    mercado
+    createdAt
+    comprobanteRef
+    comprobanteMonto
+    comprobanteMetodo
+    facturacionTipo
+    facturacionRechazoMotivo
+    facturacionRechazoArchivos
+    variaciones
+    pasajeros
+    canalVenta
+    clienteDirectoId
+    localizadorProveedor
+    asesor
+  }
+}
+
 # Point-read por id (buscador directo): trae UN expediente por su clave primaria,
 # sin cargar toda la tabla. Base del buscador por id (módulos + buscador global).
 query GetReservationById($id: String!) @auth(level: PUBLIC) {
@@ -362,6 +400,37 @@ query ListFlightTickets @auth(level: PUBLIC) {
     id
     updatedAt
 pnr
+    pasajeros
+    segmentos
+    costoNeto
+    precioVenta
+    precioPvp
+    comisionB2B
+    comisionMayorista
+    tipoComision
+    fee
+    vinculadoAExpediente
+    facturarConjunto
+    expedienteId
+    agenteNombre
+    createdAt
+    ticketNumero
+    aerolineaValidadora
+    timeLimit
+    tarifaBase
+    impuestos
+    notas
+    expedienteAereo
+    asesor
+  }
+}
+
+# Ventana reciente (corte de carga): boletos creados desde `since`, más nuevos primero.
+query ListFlightTicketsRecent($since: String!, $limit: Int!) @auth(level: PUBLIC) {
+  flightTickets(where: { createdAt: { ge: $since } }, orderBy: [{ createdAt: DESC }], limit: $limit) {
+    id
+    updatedAt
+    pnr
     pasajeros
     segmentos
     costoNeto

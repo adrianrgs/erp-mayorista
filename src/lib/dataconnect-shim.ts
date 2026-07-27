@@ -7,8 +7,9 @@ import { axiosInstance as api } from "./api";
 
 // ─── QUERIES ──────────────────────────────────────────────────────────────────
 
-export const listReservations = async (_dc?: any) => {
-  const r = await api.get("/reservations");
+// opts.since (fecha ISO) + opts.limit → ventana reciente (corte de carga). Sin opts, trae todo.
+export const listReservations = async (_dc?: any, opts?: { since?: string; limit?: number }) => {
+  const r = await api.get("/reservations", { params: opts });
   return { data: { reservations: r.data } };
 };
 
@@ -47,8 +48,8 @@ export const listStopSales = async (_dc?: any) => {
   return { data: { stopSales: r.data } };
 };
 
-export const listFlightTickets = async (_dc?: any) => {
-  const r = await api.get("/flights/tickets");
+export const listFlightTickets = async (_dc?: any, opts?: { since?: string; limit?: number }) => {
+  const r = await api.get("/flights/tickets", { params: opts });
   return { data: { flightTickets: r.data } };
 };
 

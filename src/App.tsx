@@ -629,8 +629,12 @@ export default function App() {
         catch (e) { console.error(`Failed to load ${label}`, e); }
       };
       try {
+        // CORTE DE CARGA (reservas/boletos): ventana reciente (últimos ~6 meses) en vez de TODO.
+        // Los expedientes viejos se traen puntualmente con el buscador por id (se fusionan a
+        // memoria y aparecen también en Facturación). Lo pendiente por facturar es reciente.
+        const ventanaSince = new Date(Date.now() - 190 * 24 * 3600 * 1000).toISOString().slice(0, 10);
         await safe("reservations", async () => {
-          const res = await listReservations(dataConnect);
+          const res = await listReservations(dataConnect, { since: ventanaSince, limit: 3000 });
           if (res.data.reservations.length > 0) setReservations(res.data.reservations);
         });
         // CORTE DE CARGA (clientes): B2B y directos ya NO se cargan al arranque; se cargan al
@@ -645,7 +649,7 @@ export default function App() {
         // (handleEnsureHotelLoaded) y completo, perezosamente, al entrar a Propiedades
         // (loadHotelCatalog). El resto de vistas degrada a los nombres guardados.
         await safe("flight-tickets", async () => {
-          const tickets = await listFlightTickets(dataConnect);
+          const tickets = await listFlightTickets(dataConnect, { since: ventanaSince, limit: 3000 });
           if (tickets.data.flightTickets.length > 0) setBoletos(tickets.data.flightTickets);
         });
         await safe("transfers", async () => {
