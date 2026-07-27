@@ -9,7 +9,7 @@ import {
   listClients, insertClient, deleteClient,
   listDirectClients, insertDirectClient, updateDirectClient, deleteDirectClient,
   listInvoices, insertInvoice, deleteInvoice,
-  listDetailedProperties, insertDetailedProperty, updateDetailedProperty, deleteDetailedProperty,
+  listDetailedProperties, insertDetailedProperty, updateDetailedProperty, deleteDetailedProperty, getPropertyBundle,
   listRoomTypes, insertRoomType, updateRoomType, deleteRoomType,
   listRatePlans, insertRatePlan, updateRatePlan, deleteRatePlan,
   listStopSales, insertStopSale, updateStopSale, deleteStopSale,
@@ -645,38 +645,10 @@ export default function App() {
           const inv = await listInvoices(dataConnect);
           if (inv.data.financialInvoices.length > 0) setInvoices(inv.data.financialInvoices);
         });
-        await safe("detailed-properties", async () => {
-          const props = await listDetailedProperties(dataConnect);
-          if (props.data.detailedProperties.length > 0) setDetailedProperties(props.data.detailedProperties);
-        });
-        await safe("room-types", async () => {
-          const rooms = await listRoomTypes(dataConnect);
-          if (rooms.data.roomTypes.length > 0) {
-            setRoomTypes(rooms.data.roomTypes.map((r: any) => ({
-              ...r,
-              property_id: r.propertyId
-            })));
-          }
-        });
-        await safe("rate-plans", async () => {
-          const rates = await listRatePlans(dataConnect);
-          if (rates.data.ratePlans.length > 0) {
-            setRatePlans(rates.data.ratePlans.map((rp: any) => ({
-              ...rp,
-              property_id: rp.propertyId,
-              roomType_id: rp.roomTypeId
-            })));
-          }
-        });
-        await safe("stop-sales", async () => {
-          const stops = await listStopSales(dataConnect);
-          if (stops.data.stopSales.length > 0) {
-            setStopSales(stops.data.stopSales.map((s: any) => ({
-              ...s,
-              property_id: s.propertyId
-            })));
-          }
-        });
+        // CORTE DE CARGA (hoteles): el catálogo de hoteles + habitaciones + tarifas + stop-sales
+        // YA NO se carga al arranque. Se trae bajo demanda por hotel en Reservas
+        // (handleEnsureHotelLoaded) y completo, perezosamente, al entrar a Propiedades
+        // (loadHotelCatalog). El resto de vistas degrada a los nombres guardados.
         await safe("flight-tickets", async () => {
           const tickets = await listFlightTickets(dataConnect);
           if (tickets.data.flightTickets.length > 0) setBoletos(tickets.data.flightTickets);
@@ -979,6 +951,53 @@ export default function App() {
       return Array.from(byId.values());
     });
   };
+
+  // ── CORTE DE CARGA (hoteles) ────────────────────────────────────────────────
+  const mergeById = <T extends { id: string }>(prev: T[], incoming: T[]): T[] => {
+    if (!incoming?.length) return prev;
+    const byId = new Map(prev.map(x => [x.id, x]));
+    for (const x of incoming) byId.set(x.id, x);
+    return Array.from(byId.values());
+  };
+
+  // Carga bajo demanda de UN hotel (property + rooms + rates + stop-sales) y lo fusiona al
+  // estado. El motor de tarifas de Reservas usa los mismos arrays (mismos campos), solo que
+  // se pueblan por hotel tocado en vez de todo al arranque. Devuelve el bundle mapeado.
+  const handleEnsureHotelLoaded = async (propertyId: string) => {
+    const b = await getPropertyBundle(propertyId);
+    if (b.property) setDetailedProperties(prev => mergeById(prev, [b.property]));
+    setRoomTypes(prev => mergeById(prev, b.roomTypes));
+    setRatePlans(prev => mergeById(prev, b.ratePlans));
+    setStopSales(prev => mergeById(prev, b.stopSales));
+    return b;
+  };
+
+  // Carga perezosa del catálogo COMPLETO de hoteles (para la gestión en Propiedades), una vez.
+  const hotelCatalogLoadedRef = React.useRef(false);
+  const loadHotelCatalog = async () => {
+    if (hotelCatalogLoadedRef.current) return;
+    hotelCatalogLoadedRef.current = true;
+    try {
+      const [props, rooms, rates, stops] = await Promise.all([
+        listDetailedProperties(dataConnect),
+        listRoomTypes(dataConnect),
+        listRatePlans(dataConnect),
+        listStopSales(dataConnect),
+      ]);
+      if (props.data.detailedProperties.length > 0) setDetailedProperties(props.data.detailedProperties);
+      if (rooms.data.roomTypes.length > 0) setRoomTypes(rooms.data.roomTypes.map((r: any) => ({ ...r, property_id: r.propertyId })));
+      if (rates.data.ratePlans.length > 0) setRatePlans(rates.data.ratePlans.map((rp: any) => ({ ...rp, property_id: rp.propertyId, roomType_id: rp.roomTypeId })));
+      if (stops.data.stopSales.length > 0) setStopSales(stops.data.stopSales.map((s: any) => ({ ...s, property_id: s.propertyId })));
+    } catch (e) {
+      hotelCatalogLoadedRef.current = false; // permitir reintento si falló
+      console.error("[hoteles] carga de catálogo falló", e);
+    }
+  };
+  // Carga perezosa del catálogo completo al entrar a Propiedades (gestión).
+  React.useEffect(() => {
+    if (currentSection === ProjectView.PROPIEDADES) loadHotelCatalog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSection]);
 
   // "Abrir registro" desde el buscador global: fusiona el registro traído por id, lo marca
   // como pendiente de abrir y navega a su módulo, que lo abre al recibir el id.
@@ -2257,6 +2276,7 @@ onDeleteStopSale={handleDeleteStopSale}
                       onAddRegistroAuditoria={handleAddRegistroAuditoria}
                       onDeleteReservation={handleDeleteReservation}
                       onEnsureReservationLoaded={handleEnsureReservationLoaded}
+                      onEnsureHotelLoaded={handleEnsureHotelLoaded}
                       openResId={pendingOpenResId}
                       onOpenConsumed={() => setPendingOpenResId(null)}
                     />

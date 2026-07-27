@@ -107,6 +107,8 @@ interface ReservasViewProps {
   onAddRegistroAuditoria?: (registro: Omit<RegistroAuditoria, "createdAt">) => void;
   // Buscador por id: fusiona a memoria un expediente traído de la base (carga perezosa).
   onEnsureReservationLoaded?: (res: Reservation) => void;
+  // Corte de carga: trae bajo demanda todo lo de un hotel (property+rooms+rates+stop-sales).
+  onEnsureHotelLoaded?: (propertyId: string) => Promise<{ property: any; roomTypes: any[]; ratePlans: any[]; stopSales: any[] }>;
   // Abrir un expediente puntual desde afuera (buscador global). Se consume al abrirlo.
   openResId?: string | null;
   onOpenConsumed?: () => void;
@@ -241,6 +243,7 @@ export default function ReservasView({
   onCreateSolicitudAutorizacion = () => {},
   onAddRegistroAuditoria = () => {},
   onEnsureReservationLoaded = () => {},
+  onEnsureHotelLoaded,
   openResId = null,
   onOpenConsumed = () => {},
 }: ReservasViewProps) {
@@ -1758,6 +1761,8 @@ export default function ReservasView({
           setAlojamientoModo("catalogo");
           setHotelId(det.hotelId || "");
           setHotelSearchQuery(det.hotelSearchQuery || "");
+          // Corte de carga: al abrir un expediente con hotel de catálogo, trae ese hotel bajo demanda.
+          if (det.hotelId && onEnsureHotelLoaded) onEnsureHotelLoaded(det.hotelId).catch(() => {});
           setCheckInDate(det.checkInDate || "");
           setCheckOutDate(det.checkOutDate || "");
           setSelectedPromoName(det.selectedPromoName || "");
@@ -4746,13 +4751,15 @@ export default function ReservasView({
                     <PickerModal<Property>
                       open={showHotelPicker}
                       onClose={() => setShowHotelPicker(false)}
-                      onSelect={(p) => {
+                      onSelect={async (p) => {
                         setHotelId(p.id);
                         setHotelSearchQuery(p.nombre);
                         setSelectedPromoName("");
                         setSelectedRatePlanId("");
-                        const hotelRooms = roomTypes.filter(rt => rt.property_id === p.id);
-                        const defaultRoomTypeId = hotelRooms[0]?.id || "";
+                        // Corte de carga: trae bajo demanda las habitaciones/tarifas de ESTE hotel.
+                        const bundle = onEnsureHotelLoaded ? await onEnsureHotelLoaded(p.id) : null;
+                        const rooms = bundle?.roomTypes ?? roomTypes.filter(rt => rt.property_id === p.id);
+                        const defaultRoomTypeId = rooms[0]?.id || "";
                         setLodgingRooms(prev => prev.map(room => ({ ...room, roomTypeId: defaultRoomTypeId })));
                         // Sugiere a quién pagarle a partir del hotel elegido (su proveedor mayorista
                         // registrado, o el propio hotel si no tiene uno); el vendedor puede cambiarlo.
