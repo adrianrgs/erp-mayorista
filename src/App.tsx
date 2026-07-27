@@ -685,10 +685,9 @@ export default function App() {
           const stm = await listProviderStatements(dataConnect);
           if (stm.data.providerStatements.length > 0) setProviderStatements(stm.data.providerStatements);
         });
-        await safe("proveedores", async () => {
-          const provs = await listProveedores(dataConnect);
-          if (provs.data.proveedores.length > 0) setProveedores(provs.data.proveedores);
-        });
+        // CORTE DE CARGA (proveedores): ya NO se cargan al arranque. Los selectores buscan
+        // server-side (Fase 2); el catálogo completo se carga perezosamente al entrar a
+        // Proveedores u Operaciones (loadProveedoresCatalog).
         // Fiscal data — each in its own try so DB failures don't block localStorage state
         try {
           const jur = await listTaxJurisdictions();
@@ -993,9 +992,23 @@ export default function App() {
       console.error("[hoteles] carga de catálogo falló", e);
     }
   };
-  // Carga perezosa del catálogo completo al entrar a Propiedades (gestión).
+  // Carga perezosa del catálogo completo de PROVEEDORES (gestión / desplegable de Operaciones).
+  const proveedoresCatalogLoadedRef = React.useRef(false);
+  const loadProveedoresCatalog = async () => {
+    if (proveedoresCatalogLoadedRef.current) return;
+    proveedoresCatalogLoadedRef.current = true;
+    try {
+      const provs = await listProveedores(dataConnect);
+      if (provs.data.proveedores.length > 0) setProveedores(provs.data.proveedores);
+    } catch (e) {
+      proveedoresCatalogLoadedRef.current = false;
+      console.error("[proveedores] carga de catálogo falló", e);
+    }
+  };
+  // Carga perezosa de los catálogos completos al entrar a sus vistas de gestión.
   React.useEffect(() => {
     if (currentSection === ProjectView.PROPIEDADES) loadHotelCatalog();
+    if (currentSection === ProjectView.PROVEEDORES || currentSection === ProjectView.OPERACIONES) loadProveedoresCatalog();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSection]);
 
