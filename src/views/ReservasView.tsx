@@ -57,6 +57,7 @@ import SearchableSelect from "../components/ui/SearchableSelect";
 import ProveedorPicker from "../components/ui/ProveedorPicker";
 import ProveedorPickerModal from "../components/ui/ProveedorPickerModal";
 import PickerModal from "../components/ui/PickerModal";
+import ServicioPicker from "../components/ui/ServicioPicker";
 import { reconcileDossierUpdate } from "../lib/financialReconciler";
 import { resolveSaleClient, isCreditEligible } from "../lib/clientResolver";
 import { printElementById } from "../lib/print";
@@ -5084,23 +5085,22 @@ export default function ReservasView({
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block flex items-center gap-1">
                       <Search className="w-3 h-3" /> Seleccionar del Catálogo
                     </label>
-                    <SearchableSelect
+                    <ServicioPicker
                       value={svExtraServiceId}
-                      onChange={(val) => {
-                        setSvExtraServiceId(val);
+                      extraServices={extraServices || []}
+                      category="Traslado"
+                      placeholder="-- Seleccione un Traslado (Opcional) --"
+                      onSelect={(s) => {
+                        setSvExtraServiceId(s?.id || "");
                         setSvRateId("");
-                        const selected = extraServices?.find(s => s.id === val);
-                        if (selected) {
+                        if (s) {
                           // Un traslado del catálogo siempre implica un proveedor tercero.
                           setTransEsPropio(false);
-                          setTransSupplier(selected.providerName);
+                          setTransSupplier(s.providerName);
                         } else {
                           setTransSupplier("");
                         }
                       }}
-                      options={(extraServices || []).filter(s => s.category === "Traslado").map(s => ({ value: s.id, label: s.nombre, sublabel: s.providerName }))}
-                      placeholder="-- Seleccione un Traslado (Opcional) --"
-                      emptyLabel="Ningún traslado coincide."
                     />
                   </div>
 
@@ -5461,22 +5461,20 @@ export default function ReservasView({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Seleccionar Servicio del Catálogo</label>
-                    <SearchableSelect
+                    <ServicioPicker
                       value={svExtraServiceId}
-                      onChange={(val) => {
-                        setSvExtraServiceId(val);
+                      extraServices={extraServices || []}
+                      placeholder="-- Seleccione un Servicio --"
+                      onSelect={(s) => {
+                        setSvExtraServiceId(s?.id || "");
                         setSvRateId("");
-                        const selected = (extraServices || []).find(s => s.id === val);
-                        if (selected) {
-                          setSvSupplier(selected.providerName);
+                        if (s) {
+                          setSvSupplier(s.providerName);
                           setProveedorId(undefined);
                         } else {
                           setSvSupplier("");
                         }
                       }}
-                      options={(extraServices || []).map(s => ({ value: s.id, label: s.nombre, sublabel: s.providerName }))}
-                      placeholder="-- Seleccione un Servicio --"
-                      emptyLabel="Ningún servicio coincide."
                     />
                   </div>
 
