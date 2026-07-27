@@ -633,14 +633,9 @@ export default function App() {
           const res = await listReservations(dataConnect);
           if (res.data.reservations.length > 0) setReservations(res.data.reservations);
         });
-        await safe("clients", async () => {
-          const cli = await listClients(dataConnect);
-          if (cli.data.b2BClients.length > 0) setClients(cli.data.b2BClients);
-        });
-        await safe("direct-clients", async () => {
-          const dcli = await listDirectClients(dataConnect);
-          if (dcli.data.directClients.length > 0) setDirectClients(dcli.data.directClients);
-        });
+        // CORTE DE CARGA (clientes): B2B y directos ya NO se cargan al arranque; se cargan al
+        // entrar a Reservas/Facturación/Cobranzas/Clientes (loadClientsCatalog), antes de
+        // cualquier operación financiera de esos módulos.
         await safe("invoices", async () => {
           const inv = await listInvoices(dataConnect);
           if (inv.data.financialInvoices.length > 0) setInvoices(inv.data.financialInvoices);
@@ -669,14 +664,8 @@ export default function App() {
           const vou = await listPaymentVouchers(dataConnect);
           if (vou.data.paymentVouchers.length > 0) setVouchers(vou.data.paymentVouchers);
         });
-        await safe("extra-services", async () => {
-          const ext = await listExtraServices(dataConnect);
-          if (ext.data.extraServices.length > 0) setExtraServices(ext.data.extraServices);
-        });
-        await safe("service-rates", async () => {
-          const srv = await listServiceRates(dataConnect);
-          if (srv.data.serviceRates.length > 0) setServiceRates(srv.data.serviceRates);
-        });
+        // CORTE DE CARGA (servicios): el catálogo de servicios + tarifas ya NO se carga al
+        // arranque; se carga al entrar a Reservas o Servicios (loadServicesCatalog).
         await safe("payable-obligations", async () => {
           const obs = await listPayableObligations(dataConnect);
           if (obs.data.payableObligations.length > 0) setPayableObligations(obs.data.payableObligations);
@@ -1005,10 +994,48 @@ export default function App() {
       console.error("[proveedores] carga de catálogo falló", e);
     }
   };
-  // Carga perezosa de los catálogos completos al entrar a sus vistas de gestión.
+  // Catálogo de servicios + tarifas (usado por el configurador de Reservas y su gestión).
+  const servicesCatalogLoadedRef = React.useRef(false);
+  const loadServicesCatalog = async () => {
+    if (servicesCatalogLoadedRef.current) return;
+    servicesCatalogLoadedRef.current = true;
+    try {
+      const [ext, srv] = await Promise.all([listExtraServices(dataConnect), listServiceRates(dataConnect)]);
+      if (ext.data.extraServices.length > 0) setExtraServices(ext.data.extraServices);
+      if (srv.data.serviceRates.length > 0) setServiceRates(srv.data.serviceRates);
+    } catch (e) {
+      servicesCatalogLoadedRef.current = false;
+      console.error("[servicios] carga de catálogo falló", e);
+    }
+  };
+  // Catálogo de clientes (B2B + directos) — financiero: se carga antes de operar esos módulos.
+  const clientsCatalogLoadedRef = React.useRef(false);
+  const loadClientsCatalog = async () => {
+    if (clientsCatalogLoadedRef.current) return;
+    clientsCatalogLoadedRef.current = true;
+    try {
+      const [cli, dcli] = await Promise.all([listClients(dataConnect), listDirectClients(dataConnect)]);
+      if (cli.data.b2BClients.length > 0) setClients(cli.data.b2BClients);
+      if (dcli.data.directClients.length > 0) setDirectClients(dcli.data.directClients);
+    } catch (e) {
+      clientsCatalogLoadedRef.current = false;
+      console.error("[clientes] carga de catálogo falló", e);
+    }
+  };
+  // Carga perezosa de los catálogos completos al entrar a sus vistas.
   React.useEffect(() => {
+    if (!authenticated) return;
     if (currentSection === ProjectView.PROPIEDADES) loadHotelCatalog();
     if (currentSection === ProjectView.PROVEEDORES || currentSection === ProjectView.OPERACIONES) loadProveedoresCatalog();
+    if (currentSection === ProjectView.RESERVAS || currentSection === ProjectView.SERVICIOS_VARIOS) loadServicesCatalog();
+    if (
+      currentSection === ProjectView.RESERVAS ||
+      currentSection === ProjectView.FACTURACION ||
+      currentSection === ProjectView.COBRANZAS ||
+      currentSection === ProjectView.CLIENTES ||
+      currentSection === ProjectView.ADMINISTRACION ||
+      currentSection === ProjectView.CONTABILIDAD
+    ) loadClientsCatalog();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSection]);
 
