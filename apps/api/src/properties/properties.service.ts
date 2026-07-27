@@ -36,6 +36,23 @@ export class PropertiesService implements OnModuleInit {
     return data.detailedProperties || [];
   }
 
+  // Groundwork corte de carga: todo lo de UN hotel en un solo round-trip (property + rooms +
+  // rates + stop-sales), traído server-side por propiedad. Base de la carga bajo demanda.
+  async getBundle(id: string) {
+    const [prop, rooms, rates, stops] = await Promise.all([
+      this.dc.executeQuery<{ detailedProperties: any[] }>('GetDetailedPropertyById', { id }),
+      this.dc.executeQuery<{ roomTypes: any[] }>('RoomTypesByProperty', { propertyId: id }),
+      this.dc.executeQuery<{ ratePlans: any[] }>('RatePlansByProperty', { propertyId: id }),
+      this.dc.executeQuery<{ stopSales: any[] }>('StopSalesByProperty', { propertyId: id }),
+    ]);
+    return {
+      property: (prop.detailedProperties || [])[0] ?? null,
+      roomTypes: rooms.roomTypes || [],
+      ratePlans: rates.ratePlans || [],
+      stopSales: stops.stopSales || [],
+    };
+  }
+
   async findAll() {
     const [detailed, simple] = await Promise.all([
       this.dc.executeQuery<{ detailedProperties: any[] }>('ListDetailedProperties'),

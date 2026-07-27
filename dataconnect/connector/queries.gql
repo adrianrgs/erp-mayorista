@@ -259,11 +259,45 @@ propertyId
   }
 }
 
+# Groundwork corte de carga: habitaciones de UN hotel (server-side por propiedad).
+query RoomTypesByProperty($propertyId: String!) @auth(level: PUBLIC) {
+  roomTypes(where: { propertyId: { eq: $propertyId } }) {
+    id
+    updatedAt
+    propertyId
+    nombre
+    regimenAlimentacion
+    capacidadMax
+    ocupacionBase
+  }
+}
+
 query ListRatePlans @auth(level: PUBLIC) {
   ratePlans {
     id
     updatedAt
 propertyId
+    roomTypeId
+    nombrePromocion
+    fechaInicio
+    fechaFin
+    tipoCobro
+    tarifaBase
+    tarifaExtraAdulto
+    tarifaExtraNino
+    politicasCancelacion
+    mercado
+    comisionCedidaB2B
+    tratamientoIVA
+  }
+}
+
+# Groundwork corte de carga: planes de tarifa de UN hotel (server-side por propiedad).
+query RatePlansByProperty($propertyId: String!) @auth(level: PUBLIC) {
+  ratePlans(where: { propertyId: { eq: $propertyId } }) {
+    id
+    updatedAt
+    propertyId
     roomTypeId
     nombrePromocion
     fechaInicio
@@ -288,6 +322,38 @@ propertyId
     fechaFin
     motivo
     tipo
+  }
+}
+
+# Groundwork corte de carga: stop-sales de UN hotel (server-side por propiedad).
+query StopSalesByProperty($propertyId: String!) @auth(level: PUBLIC) {
+  stopSales(where: { propertyId: { eq: $propertyId } }) {
+    id
+    updatedAt
+    propertyId
+    fechaInicio
+    fechaFin
+    motivo
+    tipo
+  }
+}
+
+# Groundwork corte de carga: un hotel por id (para cargarlo bajo demanda al abrir/elegir).
+query GetDetailedPropertyById($id: String!) @auth(level: PUBLIC) {
+  detailedProperties(where: { id: { eq: $id } }, limit: 1) {
+    id
+    updatedAt
+    nombre
+    nombreLower
+    pais
+    estado
+    ciudad
+    categoria
+    status
+    politicasGenerales
+    imagen
+    supplierName
+    comisionBruta
   }
 }
 

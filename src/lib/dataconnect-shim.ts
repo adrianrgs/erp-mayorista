@@ -124,6 +124,19 @@ export const searchProperties = async (term: string, limit = 25): Promise<any[]>
   return (r.data as any[]) ?? [];
 };
 
+// Groundwork corte de carga: todo lo de UN hotel en un round-trip (property + rooms + rates +
+// stop-sales), server-side por propiedad. Mapea propertyId→property_id como hace App al cargar.
+export const getPropertyBundle = async (id: string): Promise<{ property: any | null; roomTypes: any[]; ratePlans: any[]; stopSales: any[] }> => {
+  const r = await api.get(`/properties/${encodeURIComponent(id)}/bundle`);
+  const d = (r.data || {}) as any;
+  return {
+    property: d.property ?? null,
+    roomTypes: (d.roomTypes || []).map((rt: any) => ({ ...rt, property_id: rt.propertyId })),
+    ratePlans: (d.ratePlans || []).map((rp: any) => ({ ...rp, property_id: rp.propertyId, roomType_id: rp.roomTypeId })),
+    stopSales: (d.stopSales || []).map((s: any) => ({ ...s, property_id: s.propertyId })),
+  };
+};
+
 export const insertReservation = async (_dc: any, vars: any) => {
   // El backend asigna el id de forma atómica (anti-colisión) y lo devuelve; puede diferir
   // del propuesto si otro asesor tomó ese RES-N. Se retorna para que el cliente reconcilie.

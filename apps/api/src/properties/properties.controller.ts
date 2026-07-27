@@ -19,6 +19,10 @@ export class PropertiesController {
     return this.service.searchProperties(q, parseInt(limit, 10) || 25);
   }
 
+  // Groundwork corte de carga: todo lo de un hotel (property + rooms + rates + stop-sales).
+  @Get(':id/bundle')
+  getBundle(@Param('id') id: string) { return this.service.getBundle(id); }
+
   @Get('room-types')
   findRoomTypes(@Query('propertyId') propertyId?: string) { return this.service.findRoomTypes(propertyId); }
 
