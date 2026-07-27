@@ -226,15 +226,15 @@ mutation InsertInvoice(
   })
 }
 
-mutation InsertDetailedProperty($id: String!, $nombre: String!, $pais: String!, $estado: String!, $ciudad: String!, $categoria: Int!, $status: String!, $politicasGenerales: String!, $imagen: String, $supplierName: String, $comisionBruta: Float, $updatedAt: String) @auth(level: PUBLIC) {
+mutation InsertDetailedProperty($id: String!, $nombre: String!, $nombreLower: String, $pais: String!, $estado: String!, $ciudad: String!, $categoria: Int!, $status: String!, $politicasGenerales: String!, $imagen: String, $supplierName: String, $comisionBruta: Float, $updatedAt: String) @auth(level: PUBLIC) {
   detailedProperty_insert(data: { id: $id,
-    updatedAt: $updatedAt, nombre: $nombre, pais: $pais, estado: $estado, ciudad: $ciudad, categoria: $categoria, status: $status, politicasGenerales: $politicasGenerales, imagen: $imagen, supplierName: $supplierName, comisionBruta: $comisionBruta })
+    updatedAt: $updatedAt, nombre: $nombre, nombreLower: $nombreLower, pais: $pais, estado: $estado, ciudad: $ciudad, categoria: $categoria, status: $status, politicasGenerales: $politicasGenerales, imagen: $imagen, supplierName: $supplierName, comisionBruta: $comisionBruta })
 }
 
-mutation UpdateDetailedProperty($id: String!, $nombre: String, $pais: String, $estado: String, $ciudad: String, $categoria: Int, $status: String, $politicasGenerales: String, $imagen: String, $supplierName: String, $comisionBruta: Float, $updatedAt: String) @auth(level: PUBLIC) {
+mutation UpdateDetailedProperty($id: String!, $nombre: String, $nombreLower: String, $pais: String, $estado: String, $ciudad: String, $categoria: Int, $status: String, $politicasGenerales: String, $imagen: String, $supplierName: String, $comisionBruta: Float, $updatedAt: String) @auth(level: PUBLIC) {
   detailedProperty_update(id: $id,
     data: {
-    updatedAt: $updatedAt, nombre: $nombre, pais: $pais, estado: $estado, ciudad: $ciudad, categoria: $categoria, status: $status, politicasGenerales: $politicasGenerales, imagen: $imagen, supplierName: $supplierName, comisionBruta: $comisionBruta })
+    updatedAt: $updatedAt, nombre: $nombre, nombreLower: $nombreLower, pais: $pais, estado: $estado, ciudad: $ciudad, categoria: $categoria, status: $status, politicasGenerales: $politicasGenerales, imagen: $imagen, supplierName: $supplierName, comisionBruta: $comisionBruta })
 }
 
 mutation InsertRoomType($id: String!, $propertyId: String!, $nombre: String!, $regimenAlimentacion: String!, $capacidadMax: Int!, $ocupacionBase: Int, $updatedAt: String) @auth(level: PUBLIC) {

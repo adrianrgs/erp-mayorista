@@ -1,6 +1,8 @@
 type DetailedProperty @table {
   id: String! @col(dataType: "varchar(50)")
   nombre: String!
+  # Nombre en minúsculas para búsqueda server-side insensible a mayúsculas (Fase 2 del picker).
+  nombreLower: String
   pais: String!
   estado: String!
   ciudad: String!

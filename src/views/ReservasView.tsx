@@ -63,7 +63,7 @@ import { printElementById } from "../lib/print";
 import { getReservationReceivable } from "../lib/receivables";
 import EstadoCuentaReservaPDF from "../components/EstadoCuentaReservaPDF";
 import { nextSequentialId, seqNum } from "../lib/idGenerator";
-import { listRegistrosAuditoriaByEntidad, getReservationById } from "../lib/dataconnect-shim";
+import { listRegistrosAuditoriaByEntidad, getReservationById, searchProperties } from "../lib/dataconnect-shim";
 import { useClientPagination } from "../hooks/useClientPagination";
 import Pagination from "../components/ui/Pagination";
 import IdSearchBox from "../components/ui/IdSearchBox";
@@ -4762,13 +4762,8 @@ export default function ReservasView({
                         setProveedorId(matchedProveedor?.id);
                       }}
                       title="Seleccionar hotel"
-                      placeholder="Buscar hotel por nombre, código o ciudad…"
-                      search={(term) => {
-                        const q = term.trim().toLowerCase();
-                        return detailedProperties
-                          .filter(p => q === "" || p.nombre.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) || (p.ciudad || "").toLowerCase().includes(q))
-                          .sort((a, b) => a.nombre.localeCompare(b.nombre));
-                      }}
+                      placeholder="Buscar hotel por nombre…"
+                      search={async (term) => (await searchProperties(term, 40)) as Property[]}
                       getKey={(p) => p.id}
                       renderItem={(p) => (
                         <div className="flex items-center justify-between gap-2">

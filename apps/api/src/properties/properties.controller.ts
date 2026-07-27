@@ -13,6 +13,12 @@ export class PropertiesController {
   @Get()
   findAll() { return this.service.findAll(); }
 
+  // Búsqueda server-side de hoteles por nombre (Fase 2 del selector modal en Reservas).
+  @Get('search')
+  search(@Query('q') q = '', @Query('limit') limit = '25') {
+    return this.service.searchProperties(q, parseInt(limit, 10) || 25);
+  }
+
   @Get('room-types')
   findRoomTypes(@Query('propertyId') propertyId?: string) { return this.service.findRoomTypes(propertyId); }
 

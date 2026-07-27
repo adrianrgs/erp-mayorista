@@ -215,6 +215,26 @@ query ListDetailedProperties @auth(level: PUBLIC) {
     id
     updatedAt
 nombre
+    nombreLower
+    pais
+    estado
+    ciudad
+    categoria
+    status
+    politicasGenerales
+    imagen
+    supplierName
+    comisionBruta
+  }
+}
+
+# Búsqueda server-side de hoteles/propiedades por nombre (insensible a mayúsculas vía
+# nombreLower). Fase 2 del selector modal de hotel en Reservas (alojamiento).
+query SearchProperties($term: String!, $limit: Int!) @auth(level: PUBLIC) {
+  detailedProperties(where: { nombreLower: { contains: $term } }, orderBy: [{ nombre: ASC }], limit: $limit) {
+    id
+    updatedAt
+    nombre
     pais
     estado
     ciudad

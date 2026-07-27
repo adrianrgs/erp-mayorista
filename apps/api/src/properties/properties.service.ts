@@ -1,9 +1,40 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { DataConnectService } from '../shared/dataconnect/dataconnect.service';
 
 @Injectable()
-export class PropertiesService {
+export class PropertiesService implements OnModuleInit {
+  private readonly logger = new Logger(PropertiesService.name);
   constructor(private readonly dc: DataConnectService) {}
+
+  // Backfill idempotente al arrancar: rellena nombreLower en hoteles existentes (Fase 2).
+  async onModuleInit() {
+    try {
+      const data = await this.dc.executeQuery<{ detailedProperties: any[] }>('ListDetailedProperties');
+      const faltantes = (data.detailedProperties || []).filter(
+        (p) => p.nombre && (!p.nombreLower || p.nombreLower !== p.nombre.toLowerCase()),
+      );
+      for (const p of faltantes) {
+        await this.dc.executeMutation('UpdateDetailedProperty', {
+          id: p.id,
+          nombreLower: p.nombre.toLowerCase(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      if (faltantes.length) this.logger.log(`Backfill nombreLower (hoteles): ${faltantes.length}.`);
+    } catch (e) {
+      this.logger.error(`Backfill nombreLower hoteles falló (no crítico): ${(e as any)?.message || e}`);
+    }
+  }
+
+  // Búsqueda server-side de hoteles por nombre (insensible a mayúsculas). Fase 2.
+  async searchProperties(term: string, limit = 25) {
+    const t = (term || '').trim().toLowerCase();
+    const data = await this.dc.executeQuery<{ detailedProperties: any[] }>('SearchProperties', {
+      term: t,
+      limit: Math.max(1, Math.min(limit, 100)),
+    });
+    return data.detailedProperties || [];
+  }
 
   async findAll() {
     const [detailed, simple] = await Promise.all([
@@ -86,13 +117,15 @@ export class PropertiesService {
 
   async create(dto: any) {
     const now = new Date().toISOString();
-    await this.dc.executeMutation('InsertDetailedProperty', { ...dto, updatedAt: now });
+    const nombreLower = (dto.nombre || '').toLowerCase();
+    await this.dc.executeMutation('InsertDetailedProperty', { ...dto, nombreLower, updatedAt: now });
     return { success: true, id: dto.id };
   }
 
   async update(id: string, dto: any) {
     const now = new Date().toISOString();
-    await this.dc.executeMutation('UpdateDetailedProperty', { id, ...dto, updatedAt: now });
+    const nombreLower = dto.nombre != null ? String(dto.nombre).toLowerCase() : undefined;
+    await this.dc.executeMutation('UpdateDetailedProperty', { id, ...dto, nombreLower, updatedAt: now });
     return { success: true };
   }
 
