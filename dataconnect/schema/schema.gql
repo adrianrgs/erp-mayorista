@@ -343,6 +343,9 @@ type ServiceRate @table {
 type Proveedor @table {
   id: String! @col(dataType: "varchar(50)")
   nombre: String!
+  # Nombre en minúsculas para búsqueda server-side insensible a mayúsculas (Data Connect solo
+  # ofrece `contains` sensible a mayúsculas). Se setea en cada alta/edición y por backfill.
+  nombreLower: String
   tipo: String!
   contactoPrincipal: String!
   telefono: String!

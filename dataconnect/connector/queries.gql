@@ -485,6 +485,29 @@ query ListProveedores @auth(level: PUBLIC) {
     id
     updatedAt
     nombre
+    nombreLower
+    tipo
+    contactoPrincipal
+    telefono
+    email
+    rif
+    ubicacion
+    pais
+    comision
+    condicionesPago
+    datosBancarios
+    status
+    notas
+  }
+}
+
+# Búsqueda server-side de proveedores por nombre (insensible a mayúsculas vía nombreLower).
+# Fase 2 del selector modal: no requiere tener el catálogo completo en memoria.
+query SearchProveedores($term: String!, $limit: Int!) @auth(level: PUBLIC) {
+  proveedors(where: { nombreLower: { contains: $term } }, orderBy: [{ nombre: ASC }], limit: $limit) {
+    id
+    updatedAt
+    nombre
     tipo
     contactoPrincipal
     telefono

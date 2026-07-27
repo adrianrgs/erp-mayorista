@@ -855,6 +855,7 @@ mutation DeleteServiceRate($id: String!) @auth(level: PUBLIC) {
 mutation InsertProveedor(
   $id: String!
   $nombre: String!
+  $nombreLower: String
   $tipo: String!
   $contactoPrincipal: String!
   $telefono: String!
@@ -873,6 +874,7 @@ mutation InsertProveedor(
     id: $id
     updatedAt: $updatedAt
     nombre: $nombre
+    nombreLower: $nombreLower
     tipo: $tipo
     contactoPrincipal: $contactoPrincipal
     telefono: $telefono
@@ -891,6 +893,7 @@ mutation InsertProveedor(
 mutation UpdateProveedor(
   $id: String!
   $nombre: String
+  $nombreLower: String
   $tipo: String
   $contactoPrincipal: String
   $telefono: String
@@ -908,6 +911,7 @@ mutation UpdateProveedor(
   proveedor_update(id: $id data: {
     updatedAt: $updatedAt
     nombre: $nombre
+    nombreLower: $nombreLower
     tipo: $tipo
     contactoPrincipal: $contactoPrincipal
     telefono: $telefono

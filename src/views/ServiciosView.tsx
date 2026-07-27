@@ -11,6 +11,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { useClientPagination } from "../hooks/useClientPagination";
 import Pagination from "../components/ui/Pagination";
 import PickerModal from "../components/ui/PickerModal";
+import { searchProveedores } from "../lib/dataconnect-shim";
 
 interface ServiciosViewProps {
   extraServices: ExtraService[];
@@ -341,11 +342,9 @@ export default function ServiciosView({
                       onSelect={(p) => setServiceForm({ ...serviceForm, providerId: p.id, providerName: p.nombre })}
                       title="Seleccionar proveedor"
                       placeholder="Buscar proveedor por nombre…"
-                      search={(term) => {
-                        const q = term.trim().toLowerCase();
-                        return proveedores
-                          .filter(p => p.status === "Activo" && (q === "" || p.nombre.toLowerCase().includes(q)))
-                          .sort((a, b) => a.nombre.localeCompare(b.nombre));
+                      search={async (term) => {
+                        const res = await searchProveedores(term, 40);
+                        return (res as Proveedor[]).filter(p => p.status === "Activo");
                       }}
                       getKey={(p) => p.id}
                       renderItem={(p) => (

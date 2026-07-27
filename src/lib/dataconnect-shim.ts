@@ -110,6 +110,13 @@ export const getReservationById = async (id: string): Promise<any | null> => {
   }
 };
 
+// Búsqueda server-side de proveedores por nombre (Fase 2 del selector modal, insensible a
+// mayúsculas). Devuelve las coincidencias de la base (no requiere el catálogo completo en memoria).
+export const searchProveedores = async (term: string, limit = 25): Promise<any[]> => {
+  const r = await api.get("/proveedores/search", { params: { q: term, limit } });
+  return (r.data as any[]) ?? [];
+};
+
 export const insertReservation = async (_dc: any, vars: any) => {
   // El backend asigna el id de forma atómica (anti-colisión) y lo devuelve; puede diferir
   // del propuesto si otro asesor tomó ese RES-N. Se retorna para que el cliente reconcilie.

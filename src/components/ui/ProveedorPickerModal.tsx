@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { Proveedor } from "../../types/producto";
 import PickerModal from "./PickerModal";
+import { searchProveedores } from "../../lib/dataconnect-shim";
 
 /**
  * Selector de proveedor por MODAL buscador, forzando elegir uno del catálogo (sin texto libre).
@@ -9,14 +10,14 @@ import PickerModal from "./PickerModal";
  * onChange(nombre, proveedorId) — proveedorId SIEMPRE definido (viene del catálogo).
  */
 export default function ProveedorPickerModal({
-  nombre, onChange, proveedores,
+  nombre, onChange,
   placeholder = "Seleccionar proveedor del catálogo…",
   className = "",
 }: {
   nombre: string;
   proveedorId?: string; // aceptado por compatibilidad (no se usa)
   onChange: (nombre: string, proveedorId: string | undefined) => void;
-  proveedores: Proveedor[];
+  proveedores?: Proveedor[]; // Fase 2: la búsqueda es server-side; el prop ya no se usa.
   placeholder?: string;
   required?: boolean;
   className?: string;
@@ -38,11 +39,9 @@ export default function ProveedorPickerModal({
         onSelect={(p) => onChange(p.nombre, p.id)}
         title="Seleccionar proveedor"
         placeholder="Buscar proveedor por nombre…"
-        search={(term) => {
-          const q = term.trim().toLowerCase();
-          return proveedores
-            .filter(p => p.status === "Activo" && (q === "" || p.nombre.toLowerCase().includes(q)))
-            .sort((a, b) => a.nombre.localeCompare(b.nombre));
+        search={async (term) => {
+          const res = await searchProveedores(term, 40);
+          return (res as Proveedor[]).filter(p => p.status === "Activo");
         }}
         getKey={(p) => p.id}
         renderItem={(p) => (
