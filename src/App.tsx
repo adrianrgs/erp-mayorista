@@ -629,10 +629,11 @@ export default function App() {
         catch (e) { console.error(`Failed to load ${label}`, e); }
       };
       try {
-        // CORTE DE CARGA (reservas/boletos): ventana reciente (últimos ~6 meses) en vez de TODO.
-        // Los expedientes viejos se traen puntualmente con el buscador por id (se fusionan a
-        // memoria y aparecen también en Facturación). Lo pendiente por facturar es reciente.
-        const ventanaSince = new Date(Date.now() - 190 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+        // CORTE DE CARGA (reservas/boletos): ventana reciente (últimos ~3 meses) en vez de TODO.
+        // Lo pendiente por facturar es reciente (se factura al salir de Reservas), así que la
+        // ventana lo captura completo; lo viejo/facturado cae de la vista (menos ruido) y se
+        // trae puntualmente con el buscador por id (se fusiona a memoria y aparece en Facturación).
+        const ventanaSince = new Date(Date.now() - 95 * 24 * 3600 * 1000).toISOString().slice(0, 10);
         await safe("reservations", async () => {
           const res = await listReservations(dataConnect, { since: ventanaSince, limit: 3000 });
           if (res.data.reservations.length > 0) setReservations(res.data.reservations);
